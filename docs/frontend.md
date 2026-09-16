@@ -23,6 +23,24 @@ API Gateway
 
 ---
 
+## 配信
+
+ビルド成果物(`front/dist`)を S3 の frontend バケットに置き、CloudFront から OAC で配信する。詳細は [インフラ設計](./infrastructure.md#cloudfront)。
+
+```text
+npm run build
+  |
+  v
+task front:push   S3 sync + CloudFront キャッシュ無効化
+  |
+  v
+https://{distribution}.cloudfront.net
+```
+
+SPA のルーティングは CloudFront のエラー応答(403 / 404 → `/index.html`)で吸収する。
+
+---
+
 ## 画面構成
 
 画面ごとの詳細は `docs/screens` 配下に置く。

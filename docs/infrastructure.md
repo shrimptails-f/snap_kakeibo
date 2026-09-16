@@ -4,6 +4,8 @@
 
 * AWS CDK for Go
 * S3
+* CloudFront
+* ECR
 * API Gateway
 * Lambda
 * DynamoDB
@@ -19,8 +21,12 @@
 ## 最終構成
 
 ```text
-React
+ブラウザ
   |
+  v
+CloudFront (OAC) ----> S3 (frontend bucket, React ビルド成果物)
+  |
+  | React から HTTPS
   v
 API Gateway
   |
@@ -92,7 +98,86 @@ SNS (通知用トピック)
 
 ---
 
+## CDK スタック
+
+失うと困るものと作り直せるものでスタックを分ける。依存は `app -> storage` の一方向のみ。
+
+| スタック | 中身 | 備考 |
+| --- | --- | --- |
+| `{stage}-snap-kakeibo-storage` | ECR(関数ごと)、S3(receipts / frontend)、DynamoDB、SQS + DLQ、SNS、Textract 用ロール、DLQ アラーム | 人間が成果物を push する先。stage の `RemovalPolicy` で残すかを決める |
+| `{stage}-snap-kakeibo-app` | Lambda、API Gateway、CloudFront、イベントソースマッピング、ロググループ | destroy して作り直せる |
+
+SQS / SNS を storage 側に置くのは、S3 → SQS の通知設定がバケット側のスタックに生成されるため(app 側に置くと循環参照になる)と、DLQ のメッセージとメール購読の確認状態を失いたくないため。
+
+### デプロイ手順
+
+```text
+1. task infra:deploy:storage   SSM パラメータ作成 + storage スタック
+2. 人間が成果物を push
+     Lambda イメージ  -> task image:push(関数ごとに arm64 でビルド、git SHA タグで専用 ECR へ、SSM のタグを更新)
+     React ビルド     -> task front:push(S3 sync + CloudFront 無効化)
+3. task infra:deploy:app       app スタック(各 Lambda は SSM のタグを deploy 時に解決)
+```
+
+CDK の `BucketDeployment` や Docker アセットは使わない。成果物の配置は CDK の外で人間(または CI)が行う。
+
+### Lambda のデプロイ単位
+
+関数ごとに ECR リポジトリと「デプロイ中のイメージタグ」を持つ SSM パラメータを持ち、関数単位でデプロイのタイミングを分けられる。
+
+```text
+ECR  {stage}-snap-kakeibo-{function}:{git sha}
+SSM  /{stage}/snap-kakeibo/functions/{function}/image-tag = {git sha}
+```
+
+`image:push` が push 後に SSM を更新し、App スタックは `AWS::SSM::Parameter::Value` 型の CloudFormation パラメータでタグを deploy 時に解決する。
+CDK CLI は SSM 由来のパラメータがあるとテンプレートに差分が無くても deploy をスキップしないため、タグの更新だけで反映される。
+
+---
+
+## CloudFront
+
+React のビルド成果物を S3 の frontend バケットに置き、CloudFront から OAC で配信する。
+
+```text
+ブラウザ
+  |
+  | HTTPS
+  v
+CloudFront
+  |
+  | OAC (SigV4)
+  v
+S3 frontend bucket (公開アクセスはブロック)
+```
+
+| 項目 | 値 | 理由 |
+| --- | --- | --- |
+| オリジンアクセス | OAC | バケットを公開しない。OAI は非推奨 |
+| バケットポリシー | `cloudfront.amazonaws.com` に `s3:GetObject`、`AWS:SourceArn` を自アカウントの `distribution/*` で制限 | Distribution は app スタック側にあり、ARN を storage 側から参照すると循環するため |
+| エラー応答 | 403 / 404 → `/index.html` (200) | SPA のルーティング。OAC 経由で存在しないキーは 403 になる |
+| 価格クラス | PriceClass_200 | 日本を含む。PriceClass_100 は北米・欧州のみ |
+| 独自ドメイン | 使わない | `*.cloudfront.net` で運用する |
+
+キャッシュの無効化は `task front:push` が `/*` で行う。
+
+### コスト
+
+```text
+CloudFront  月 1TB 転送、1,000 万リクエストまで無料
+S3          数円
+```
+
+---
+
 ## S3
+
+### バケット
+
+| バケット | 用途 | スタック |
+| --- | --- | --- |
+| `{stage}-snap-kakeibo-receipts` | レシート画像(`receipts/`)と Textract 結果 JSON(`textract-results/`) | storage |
+| `{stage}-snap-kakeibo-frontend` | React のビルド成果物。CloudFront から配信 | storage |
 
 ### Object Key
 
@@ -356,7 +441,11 @@ String
 
 ティアはStandardを使う(4KB以内、無料)。Secrets Managerは固定費がかかるため使わない。
 
-パラメータの値はCDKで作らず、手動で投入する。CDKはパラメータ名を環境変数としてLambdaへ渡し、Lambdaに `ssm:GetParameter` の権限を付ける。
+パラメータ名は stage を含めて `/{stage}/snap-kakeibo/auth/password-pepper` のようにする。
+
+CloudFormation は SecureString を作れないため、CDK ではなく `infra/cmd/ensure-parameters` が storage スタックの deploy 前に「無ければ作る」。Pepper と JWT 署名鍵は乱数で生成し、OpenAI の API キーとモデル名は環境変数 `OPENAI_API_KEY` / `OPENAI_MODEL` があればその値、無ければ `UNSET` で作る。既存の値は上書きしない。
+
+CDKはパラメータ名を環境変数としてLambdaへ渡し、Lambdaに `ssm:GetParameter` の権限を付ける。
 
 ---
 

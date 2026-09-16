@@ -6,3 +6,5 @@ dist/
 .claude/
 .codex/
 tmp/*
+cdk.out/
+cdk.context.json
