@@ -1,0 +1,38 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    user: "1000:1000"
+    init: true
+    tty: true
+    working_dir: /workspace/snap_kakeibo
+    depends_on:
+      - floci
+    environment:
+      AWS_PROFILE: ${AWS_PROFILE:-default}
+      AWS_REGION: ${AWS_REGION:-ap-northeast-1}
+      AWS_DEFAULT_REGION: ${AWS_REGION:-ap-northeast-1}
+      AWS_ENDPOINT_URL: http://floci:4566
+    volumes:
+      - ..:/workspace/snap_kakeibo
+      - ${HOME}/.aws:/home/dev/.aws:ro
+      - codex-home:/home/dev/.codex
+      - claude-home:/home/dev/.claude
+      - go-modules:/home/dev/go/pkg/mod
+  floci:
+    image: floci/floci:latest
+    environment:
+      FLOCI_HOSTNAME: floci
+      FLOCI_STORAGE_MODE: persistent
+      FLOCI_STORAGE_PERSISTENT_PATH: /app/data
+    volumes:
+      - floci-data:/app/data
+    ports:
+      - "127.0.0.1:4566:4566"
+
+volumes:
+  codex-home:
+  claude-home:
+  go-modules:
+  floci-data:

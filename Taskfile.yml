@@ -1,0 +1,86 @@
+version: '3'
+
+tasks:
+  setup:
+    desc: Check the development tools and install dependencies when manifests exist
+    cmds:
+      - task: doctor
+      - task: backend:setup
+      - task: front:setup
+
+  backend:setup:
+    desc: Download Go dependencies when backend/go.mod exists
+    cmds:
+      - |
+        if [ -f backend/go.mod ]; then
+          cd backend
+          go mod download
+        fi
+
+  front:setup:
+    desc: Install React dependencies when front/package.json exists
+    cmds:
+      - |
+        if [ -f front/package-lock.json ]; then
+          cd front
+          npm ci
+        elif [ -f front/package.json ]; then
+          cd front
+          npm install
+        fi
+
+  floci:check:
+    desc: Check local DynamoDB and S3 through Floci
+    env:
+      AWS_ENDPOINT_URL: http://floci:4566
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_PROFILE: default
+    cmds:
+      - aws dynamodb list-tables
+      - aws s3 ls
+
+  doctor:
+    desc: Check tool versions and ensure the container is running as dev
+    cmds:
+      - |
+        test "$(id -u)" -ne 0
+        test "$(id -un)" = dev
+        go version
+        node --version
+        npm --version
+        task --version
+        aws --version
+        codex --version
+        claude --version
+
+  go:test:
+    desc: Run Go tests when the module exists
+    dir: backend
+    cmds:
+      - test -f go.mod
+      - go test ./...
+
+  web:dev:
+    desc: Start the React development server on the forwarded port
+    dir: front
+    cmds:
+      - npm run dev -- --host 0.0.0.0
+
+  web:build:
+    desc: Build the React app
+    dir: front
+    cmds:
+      - npm run build
+
+  codex:
+    desc: Codex を起動（コンテナ内）
+    interactive: true
+    cmds:
+      - codex --dangerously-bypass-approvals-and-sandbox
+
+  claude:
+    desc: Claude Code を起動（コンテナ内）
+    interactive: true
+    cmds:
+      - claude --dangerously-skip-permissions

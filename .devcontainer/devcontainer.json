@@ -1,0 +1,24 @@
+{
+  "name": "snap_kakeibo DevContainer",
+  "dockerComposeFile": "compose.yaml",
+  "service": "app",
+  "workspaceFolder": "/workspace/snap_kakeibo",
+  "remoteUser": "dev",
+  "postCreateCommand": "task setup",
+  "forwardPorts": [5173, 8080],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+        "redhat.vscode-yaml"
+      ],
+      "settings": {
+        "files.eol": "\n",
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  }
+}
