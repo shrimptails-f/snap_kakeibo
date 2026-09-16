@@ -432,6 +432,16 @@ PepperはSSM Parameter Storeに保存する。
 /app/auth/password-pepper
 ```
 
+### JWT署名鍵
+
+JWTはHS256で署名する。署名鍵はSSM Parameter Store(SecureString、Standard)に保存する。
+
+```text
+/app/auth/jwt-secret
+```
+
+Lambdaは起動時にSSMから取得し、コンテナが生きている間はメモリに保持する。
+
 ---
 
 ## ログイン

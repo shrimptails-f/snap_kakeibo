@@ -220,7 +220,7 @@ APIキーとモデル名はSSM Parameter Storeから取得する。
 /app/openai/model
 ```
 
-APIキーはSecureString、モデル名はStringとして保存する。
+APIキーはSecureString(Standard)、モデル名はStringとして保存する。
 
 ---
 
@@ -340,26 +340,23 @@ SNS               メール通知は月1,000件まで無料
 
 ## SSM Parameter Store
 
-認証用PepperとOpenAI APIキーをSecureStringとして保存する。
+認証用Pepper、JWT署名鍵、OpenAI APIキーをSecureStringとして保存する。
 
 OpenAIのモデル名は通常のStringとして保存する。
 
 ```text
 SecureString
   /app/auth/password-pepper
+  /app/auth/jwt-secret
   /app/openai/api-key
 
 String
   /app/openai/model
 ```
 
-例:
+ティアはStandardを使う(4KB以内、無料)。Secrets Managerは固定費がかかるため使わない。
 
-```text
-/app/auth/password-pepper
-/app/openai/api-key
-/app/openai/model
-```
+パラメータの値はCDKで作らず、手動で投入する。CDKはパラメータ名を環境変数としてLambdaへ渡し、Lambdaに `ssm:GetParameter` の権限を付ける。
 
 ---
 
