@@ -9,8 +9,7 @@
 * API Gateway
 * Lambda
 * DynamoDB
-* Amazon Textract
-* OpenAI API
+* OpenAI API(画像入力 + Structured Outputs)
 * SNS
 * SQS
 * CloudWatch Alarm
@@ -45,7 +44,7 @@ API Gateway
   |      |
   |      +--> upload_histories Update
   |      |
-  |      +--> StartExpenseAnalysis
+  |      +--> Analyze Queue へ送信
   |
   +--> Recalculate Lambda
   |      |
@@ -55,26 +54,16 @@ API Gateway
 S3
   |
   v
-StartTextract Queue (SQS) ----> StartTextract DLQ
+Analyze Queue (SQS) ----> Analyze DLQ
   |
   v
-StartTextract Lambda
+Analyze Lambda
   |
-  v
-Textract
-  |
-  v
-SNS
-  |
-  v
-ResultHandler Queue (SQS) ----> ResultHandler DLQ
-  |
-  v
-ResultHandler Lambda
+  +--> S3 から画像取得
   |
   +--> OpenAI API
   |      |
-  |      +--> 明細カテゴリ分類
+  |      +--> 店名 / 購入日 / 合計 / 明細 / カテゴリを1回で読み取る
   |
   +--> upload_histories Update
   |
@@ -104,10 +93,14 @@ SNS (通知用トピック)
 
 | スタック | 中身 | 備考 |
 | --- | --- | --- |
-| `{stage}-snap-kakeibo-storage` | ECR(関数ごと)、S3(receipts / frontend)、DynamoDB、SQS + DLQ、SNS、Textract 用ロール、DLQ アラーム、Lambda のロググループ | 人間が成果物を push する先。stage の `RemovalPolicy` で残すかを決める |
+| `{stage}-snap-kakeibo-storage` | ECR(関数ごと)、S3(receipt / front)、DynamoDB、SQS + DLQ、SNS(アラート)、DLQ アラーム、Lambda のロググループ | 人間が成果物を push する先。stage の `RemovalPolicy` で残すかを決める |
 | `{stage}-snap-kakeibo-app` | Lambda、API Gateway、CloudFront、イベントソースマッピング | destroy して作り直せる |
 
 SQS / SNS を storage 側に置くのは、S3 → SQS の通知設定がバケット側のスタックに生成されるため(app 側に置くと循環参照になる)と、DLQ のメッセージとメール購読の確認状態を失いたくないため。
+
+### リージョン
+
+`ap-northeast-2`(ソウル)を使う(`infra/common/const.go` の `AWSRegion`)。当初 Textract を使う予定で、Textract が東京に無かったためソウルにした。Textract を使わなくなった後もリージョンにこだわりが無いため据え置いている。東京に戻す場合は定数を変えて storage から作り直す。
 
 ### デプロイ手順
 
@@ -176,160 +169,144 @@ S3          数円
 
 | バケット | 用途 | スタック |
 | --- | --- | --- |
-| `{stage}-snap-kakeibo-receipt` | レシート画像(`receipts/`)と Textract 結果 JSON(`textract-results/`) | storage |
+| `{stage}-snap-kakeibo-receipt` | レシート画像(`receipts/`)と OpenAI の生レスポンス JSON(`analysis-results/`) | storage |
 | `{stage}-snap-kakeibo-front` | React のビルド成果物。CloudFront から配信 | storage |
 
 ### Object Key
 
 ```text
 receipts/{user_id}/{upload_id}/original.jpg
+analysis-results/{user_id}/{upload_id}/{attempt}.json
 ```
 
 例:
 
 ```text
 receipts/01JUSERXXX/01JUPLOADXXX/original.jpg
+analysis-results/01JUSERXXX/01JUPLOADXXX/1.json
 ```
 
-S3キーはクライアントから指定させず、Lambda側で生成する。
+S3キーはクライアントから指定させず、Lambda側で生成する。`analysis-results/` は読み取り結果をあとから検証するための生レスポンスで、業務処理からは参照しない。
 
 ---
 
 ## S3イベント
 
-画像アップロード完了後、S3 ObjectCreatedイベントをSQSへ送り、StartTextract Lambdaを起動する。
+画像アップロード完了後、S3 ObjectCreatedイベント(`receipts/` プレフィックス)をSQSへ送り、Analyze Lambdaを起動する。
 
 ```text
 S3
   |
-  | ObjectCreated
+  | ObjectCreated (receipts/*)
   v
-StartTextract Queue (SQS)
+Analyze Queue (SQS)
   |
   v
-StartTextract Lambda
+Analyze Lambda
 ```
 
 S3イベント通知はFIFOキューに送れないため、標準キューを使う。重複配信はLambda側の冪等性で吸収する。
 
 ---
 
-## Textract
+## レシート解析(OpenAI API)
 
-レシート・請求書解析には以下を使用する。
+レシートの読み取りと明細カテゴリ分類は、OpenAI Responses API に画像を直接渡して1回の呼び出しで行う。OCR サービスは使わない。
 
-Textract は東京リージョン(ap-northeast-1)では提供されていないため、全リソースを対応リージョンで最も近いソウル(ap-northeast-2)に置く(`infra/common/const.go` の `AWSRegion`)。非同期 API は S3 バケット・SNS トピックが Textract と同じリージョンにある必要があるので、Textract だけ別リージョンにする構成は取らない。
-
-```text
-StartExpenseAnalysis
-```
-
-処理フロー:
+Textract を使わない理由: Textract の対応言語は英語・フランス語・ドイツ語・イタリア語・ポルトガル語・スペイン語のみで日本語に対応しておらず、日本のレシートでは品目が読めない。
 
 ```text
 S3
  |
+ | ObjectCreated
  v
-SQS
+Analyze Queue (SQS)
  |
  v
-Lambda
+Analyze Lambda
  |
- | StartExpenseAnalysis
- | DocumentLocation.S3Object.Bucket = 画像保存S3バケット
- | DocumentLocation.S3Object.Name = receipts/{user_id}/{upload_id}/original.jpg
- | ClientRequestToken = {upload_id}_{attempt}
- | JobTag = {user_id}_{upload_id}_{attempt}
+ | 1. upload_histories を ANALYZING に更新
+ | 2. S3 から画像取得、長辺 2048px に縮小、JPEG で Base64
+ | 3. Responses API
+ |      input_image(Base64) + 指示文
+ |      Structured Outputs(JSON Schema)
+ |      → 店名 / 購入日 / 合計金額 / 明細(品目・金額・数量・カテゴリ)
+ | 4. 生レスポンスを S3 analysis-results/ に保存
+ | 5. 検証(合計・購入日・明細件数)
  v
-Textract
- |
- v
-SNS
- |
- v
-SQS
- |
- v
-Lambda
-  |
-  | GetExpenseAnalysis
-  | OpenAI APIで明細カテゴリ分類
-  v
-DynamoDB
-```
-
-S3からTextractを直接起動するのではなく、LambdaからStartExpenseAnalysisを実行する。
-
-TextractにはS3のバケット名とオブジェクトキーを渡す。アップロード済み画像は `DocumentLocation.S3Object.Bucket` と `DocumentLocation.S3Object.Name` で指定する。
-
-`ClientRequestToken` に `upload_id` と `attempt` を含めることで、同一画像・同一試行に対する重複起動では同じJobIdが返り、二重解析にならない。再実行時は `attempt` が変わるため新しいジョブが起動する。
-
-Textractジョブが `FAILED` または `PARTIAL_SUCCESS` で完了した場合、ResultHandler Lambda は初回を含め最大3回まで自動再実行する。3回使い切った後も、手動再実行APIによる再実行は上限なしで許可する。
-
-`JobTag` には `user_id`、`upload_id`、`attempt` を含める。ResultHandler Lambda は完了通知の `JobTag` から対象の履歴と試行回数を復元し、`status = ANALYZING AND attempt = :attempt` の条件で更新する。古いジョブの遅延通知や重複通知は条件失敗として正常終了する。
-
-Textractの解析結果は完了後7日間 `GetExpenseAnalysis` で取得できる。
-
----
-
-## OpenAI API
-
-Textract解析後の明細カテゴリ分類に使用する。
-
-呼び出し元は `ResultHandler Lambda` とし、DynamoDB登録前にOpenAI APIを呼び出す。別Lambdaには分けない。
-
-```text
-ResultHandler Lambda
-  |
-  | GetExpenseAnalysis
-  v
-Textract結果を正規化
-  |
-  | Responses API
-  | Structured Outputs(JSON Schema)
-  v
-カテゴリ分類結果
-  |
-  v
 DynamoDB TransactWriteItems
 ```
 
-OpenAI APIの失敗はアップロード全体の失敗にしない。分類できなかった明細は `category = unknown` として登録し、SQSリトライでOpenAI APIだけを再試行する設計にはしない。
+### 呼び出しパラメータ
 
-ResultHandler Lambdaのタイムアウトは15分とする。
+| 項目 | 値 | 理由 |
+| --- | --- | --- |
+| モデル | SSM `/{stage}/snap-kakeibo/openai/model`(初期値 `gpt-5-mini`) | デプロイなしで切り替える。精度が足りなければ `gpt-5` |
+| reasoning.effort | SSM `/{stage}/snap-kakeibo/openai/reasoning-effort`(初期値 `low`) | 思考トークンは出力扱いで課金されるため抑える。読み取りタスクは `minimal` でも成立する |
+| 画像 | 長辺 2048px を上限に縮小した JPEG(拡大はしない)を Base64 の data URL で渡す。上限は環境変数 `IMAGE_MAX_EDGE` で変更可 | パッチ方式のモデルは原寸でトークンを数えるため、縮小の効果が大きい。S3 の URL を渡すと Presigned URL の発行と公開範囲の管理が要る。細長いレシートは縮小で文字が潰れやすいので、実画像で読み取り精度を評価してから値を決める |
+| input_image.detail | `high` を明示 | `auto` に任せない。tile 方式のモデルで `low` に落ちると品目が読めない |
+| 出力 | `text.format = json_schema`、`strict = true`、`max_output_tokens = 4096` | 自由文を禁止する。それでも refusal / incomplete は返り得るので、判定は `docs/backend.md` の「レスポンスの判定」に従う |
+| store | `false` を明示 | 省略時は OpenAI 側に 30 日保存される。レシートは個人情報なので保存させない。`previous_response_id` は使わないので困らない |
+| 指示文 | 固定文を先頭に置く | cached input(通常の 1/10)を効かせる |
 
-OpenAI API呼び出しは、初期構成では合計60秒を上限にする。60秒の中でエクスポネンシャルバックオフ付きリトライを行う。
+### データの保持
 
-APIキーとモデル名はSSM Parameter Storeから取得する。
+| 場所 | 内容 | 保持 |
+| --- | --- | --- |
+| OpenAI | リクエストとレスポンス | `store: false` で保存させない。不正利用監視のためのログは OpenAI 側のポリシーで最大 30 日保持される場合がある(ZDR は個人利用では申請しない) |
+| S3 `receipts/` | 元画像 | 削除しない。請求詳細画面のプレビューで使う |
+| S3 `analysis-results/` | OpenAI の生レスポンス JSON | ライフサイクルルールで 90 日後に削除。検証用途なので長期保持しない |
+| CloudWatch Logs | Lambda のログ | 30 日。画像や生レスポンスの本文はログに出さない(`usage` と件数のみ) |
+
+### コスト目安
+
+スマホ写真 1 枚(1080×2400)あたり。
+
+| モデル | 1枚 | 月100枚 |
+| --- | --- | --- |
+| gpt-5-mini | ≈ ¥0.4〜0.6 | ≈ ¥40〜60 |
+| gpt-5 | ≈ ¥1.5 | ≈ ¥150 |
+
+参考: Textract AnalyzeExpense は $0.01/ページ ≈ ¥1.5/枚。
+
+### タイムアウトとリトライ
+
+| 項目 | 値 |
+| --- | --- |
+| Analyze Lambda タイムアウト | 3分 |
+| OpenAI 呼び出しの合計上限 | 120秒。その中でエクスポネンシャルバックオフ付きリトライ |
+| リトライ対象 | 429 / 500 / 502 / 503 / 504 / ネットワーク一時エラー |
+| リトライしない | 400系の恒久エラー、JSON Schema 不一致 |
+
+120秒以内に成功しなければエラーを返して SQS のリトライに任せる。`maxReceiveCount` 回失敗すると DLQ に入り、メールで通知される。恒久エラーは `FAILED`(`ANALYSIS_FAILED`)を記録して正常終了する。
+
+### SSM パラメータ
 
 ```text
-/app/openai/api-key
-/app/openai/model
+/{stage}/snap-kakeibo/openai/api-key           SecureString
+/{stage}/snap-kakeibo/openai/model             String
+/{stage}/snap-kakeibo/openai/reasoning-effort  String
 ```
 
-APIキーはSecureString(Standard)、モデル名はStringとして保存する。
+Lambda は起動時に SSM から取得し、コンテナが生きている間はメモリに保持する。
 
 ---
 
 ## SNS
 
-Textractの非同期解析完了通知をSNSで受け、SQSへ送る。
+DLQ アラームのメール通知にだけ使う。Textract 完了通知用のトピックは持たない。
 
 ```text
-Textract
-  |
-  | 完了通知
-  v
-SNS
+CloudWatch Alarm
   |
   v
-ResultHandler Queue (SQS)
+SNS (alert トピック)
   |
   v
-ResultHandler Lambda
+メール
 ```
 
-Textractの通知先は標準SNSトピックのみのため、後段も標準キューを使う。
+メール購読の確認状態を失わないよう、トピックは storage スタックに置く。
 
 ---
 
@@ -341,8 +318,16 @@ Textractの通知先は標準SNSトピックのみのため、後段も標準キ
 
 | キュー | 起動元 | 起動先 | DLQ |
 | --- | --- | --- | --- |
-| StartTextract Queue | S3 ObjectCreated | StartTextract Lambda | StartTextract DLQ |
-| ResultHandler Queue | SNS (Textract完了通知) | ResultHandler Lambda | ResultHandler DLQ |
+| Analyze Queue | S3 ObjectCreated、再実行 API | Analyze Lambda | Analyze DLQ |
+
+メッセージは2種類あり、Analyze Lambda はどちらも `user_id + upload_id` に解決してから同じ処理を呼ぶ。
+
+```text
+S3 イベント通知     S3 のキーから user_id / upload_id を取り出す。attempt = 1
+再実行 API          {"user_id": "...", "upload_id": "...", "attempt": 2, "trigger": "RETRY"}
+```
+
+`attempt` はメッセージ側で固定する。DynamoDB の現在値を使うと、遅れて届いた古いメッセージが新しい試行として処理される。
 
 ### SQSを挟む理由
 
@@ -353,7 +338,7 @@ Textractの通知先は標準SNSトピックのみのため、後段も標準キ
 失敗イベントがDLQに残り、redriveで再処理できる
   (追加コード不要、Lambdaが冪等なので戻すだけで安全)
 
-Lambdaの同時実行数を絞ることでTextractの同時ジョブ数を抑えられる
+Lambdaの同時実行数を絞ることでOpenAI APIのレート制限に当たりにくくする
   (一括アップロード時のスロットリング対策)
 
 Lambda自体が停止していてもメッセージがキューに残る
@@ -366,10 +351,10 @@ API Gateway経由の同期APIには挟まない。ユーザーが結果を待つ
 | 項目 | 値 | 理由 |
 | --- | --- | --- |
 | バッチサイズ | 1 | 1メッセージ = 1画像にし、部分失敗の扱いを不要にする |
-| 可視性タイムアウト | Lambdaタイムアウトの6倍 | AWS推奨。Lambda 60秒なら360秒 |
-| maxReceiveCount | 3〜5 | 一時エラーの再試行として十分。それ以上は永久失敗の可能性が高い |
+| 可視性タイムアウト | Lambdaタイムアウトの6倍 | AWS推奨。Lambda 3分なら18分 |
+| maxReceiveCount | 3 | 一時エラーの再試行として十分。それ以上は永久失敗の可能性が高い |
 | DLQ保持期間 | 14日(最大) | 気づくまでの猶予を最大に取る |
-| StartTextract Lambda同時実行数 | 5程度 | Textractの同時ジョブ数を抑える |
+| Analyze Lambda同時実行数 | 5 | OpenAI APIのレート制限を避ける |
 
 ### Lambdaの戻り値
 
@@ -392,11 +377,8 @@ SQS起動のLambdaでは「正常終了 = メッセージ削除」「エラー =
 
 ```text
 SQS標準キューも at-least-once
-  ClientRequestToken と status 条件による冪等性は引き続き必要
-
-Textractの結果は7日で消える
-  ResultHandler DLQ を8日後に redrive しても GetExpenseAnalysis は失敗する
-  → 再実行APIで StartTextract からやり直す
+  重複配信では OpenAI を二重に呼ぶことがある(1枚 ¥1 未満なので許容)
+  DynamoDB 側は status / attempt 条件で二重登録を防ぐ
 
 DLQで拾えるのはLambdaが失敗したケースのみ
   イベント自体が届かない、ユーザーがPUTしない、は拾えない
@@ -410,9 +392,7 @@ DLQで拾えるのはLambdaが失敗したケースのみ
 各DLQの `ApproximateNumberOfMessagesVisible > 0` を監視し、通知用SNSトピック経由でメール通知する。
 
 ```text
-StartTextract DLQ ----+
-                      |
-ResultHandler DLQ ----+--> CloudWatch Alarm --> SNS --> メール
+Analyze DLQ --> CloudWatch Alarm --> SNS --> メール
 ```
 
 ### コスト
@@ -433,19 +413,18 @@ OpenAIのモデル名は通常のStringとして保存する。
 
 ```text
 SecureString
-  /app/auth/password-pepper
-  /app/auth/jwt-secret
-  /app/openai/api-key
+  /{stage}/snap-kakeibo/auth/password-pepper
+  /{stage}/snap-kakeibo/auth/jwt-secret
+  /{stage}/snap-kakeibo/openai/api-key
 
 String
-  /app/openai/model
+  /{stage}/snap-kakeibo/openai/model
+  /{stage}/snap-kakeibo/openai/reasoning-effort
 ```
 
 ティアはStandardを使う(4KB以内、無料)。Secrets Managerは固定費がかかるため使わない。
 
-パラメータ名は stage を含めて `/{stage}/snap-kakeibo/auth/password-pepper` のようにする。
-
-CloudFormation は SecureString を作れないため、CDK ではなく `infra/cmd/ensure-parameters` が storage スタックの deploy 前に「無ければ作る」。Pepper と JWT 署名鍵は乱数で生成し、OpenAI の API キーとモデル名は環境変数 `OPENAI_API_KEY` / `OPENAI_MODEL` があればその値、無ければ `UNSET` で作る。既存の値は上書きしない。
+CloudFormation は SecureString を作れないため、CDK ではなく `infra/cmd/ensure-parameters` が storage スタックの deploy 前に「無ければ作る」。Pepper と JWT 署名鍵は乱数で生成し、OpenAI の API キーは環境変数 `OPENAI_API_KEY` があればその値、無ければ `UNSET` で作る。モデル名と reasoning effort は環境変数 `OPENAI_MODEL` / `OPENAI_REASONING_EFFORT` があればその値、無ければ `gpt-5-mini` / `low` で作る。既存の値は上書きしない。
 
 CDKはパラメータ名を環境変数としてLambdaへ渡し、Lambdaに `ssm:GetParameter` の権限を付ける。
 
@@ -461,6 +440,7 @@ Step Functions
 RDS
 ECS
 EventBridge Scheduler
+Amazon Textract(日本語非対応)
 ```
 
 理由:

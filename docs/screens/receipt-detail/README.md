@@ -26,7 +26,7 @@
 数量
 ```
 
-画像プレビューを表示できると、Textract結果の確認と修正がしやすい。
+画像プレビューを表示できると、AIの読み取り結果の確認と修正がしやすい。
 
 ---
 
@@ -72,7 +72,7 @@ Response:
     "original_amount": 3280,
     "discount_amount": 500,
     "final_amount": 2780,
-    "source": "TEXTRACT",
+    "source": "AI",
     "is_edited": false,
     "image_url": "https://example.com/presigned-get-url",
     "updated_at": "2026-09-15T12:01:00Z"
@@ -83,7 +83,7 @@ Response:
       "name": "牛乳",
       "amount": 281,
       "quantity": 1,
-      "source": "TEXTRACT",
+      "source": "AI",
       "is_edited": false
     }
   ]

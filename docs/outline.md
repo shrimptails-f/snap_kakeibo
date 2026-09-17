@@ -57,7 +57,6 @@
 * API Gateway
 * Lambda
 * DynamoDB
-* Amazon Textract
 * SNS
 * SQS
 * CloudWatch Alarm
@@ -85,28 +84,12 @@ S3                         DynamoDB
   |
   | ObjectCreated
   v
-SQS (StartTextract Queue) ----> DLQ
+SQS (Analyze Queue) ----> DLQ
   |
   v
-StartTextract Lambda
+Analyze Lambda
   |
-  | StartExpenseAnalysis
-  v
-Textract
-  |
-  | 完了通知
-  v
-SNS
-  |
-  v
-SQS (ResultHandler Queue) ----> DLQ
-  |
-  v
-ResultHandler Lambda
-  |
-  | GetExpenseAnalysis
-  |
-  | 明細カテゴリ分類
+  | 画像を渡して読み取り + 明細カテゴリ分類
   v
 OpenAI API
   |
