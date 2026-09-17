@@ -114,9 +114,10 @@ CloudFormation は SecureString を作れないため、CDK ではなく `cmd/en
 | `/{stage}/snap-kakeibo/auth/password-pepper` | SecureString | 32 バイトの乱数 |
 | `/{stage}/snap-kakeibo/auth/jwt-secret` | SecureString | 32 バイトの乱数 |
 | `/{stage}/snap-kakeibo/openai/api-key` | SecureString | 環境変数 `OPENAI_API_KEY`、無ければ `UNSET` |
-| `/{stage}/snap-kakeibo/openai/model` | String | 環境変数 `OPENAI_MODEL`、無ければ `UNSET` |
 
 既存のパラメータは値・型とも上書きしない。値を変えるときは手動で更新する。
+
+OpenAI のモデルと reasoning effort は非機密値のため、`config/dev.go` から Analyze Lambda の `OPENAI_MODEL` / `OPENAI_REASONING_EFFORT` 環境変数へ渡す。
 
 ```sh
 env -u AWS_ENDPOINT_URL aws ssm put-parameter --overwrite \

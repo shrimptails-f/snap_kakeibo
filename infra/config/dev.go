@@ -47,12 +47,11 @@ func Dev() Config {
 			Alert: common.AlertTopicName.Dev(),
 		},
 		Parameters: Parameters{
-			PasswordPepper:        common.PasswordPepperParameterName.Dev(),
-			JWTSecret:             common.JWTSecretParameterName.Dev(),
-			OpenAIAPIKey:          common.OpenAIAPIKeyParameterName.Dev(),
-			OpenAIModel:           common.OpenAIModelParameterName.Dev(),
-			OpenAIReasoningEffort: common.OpenAIReasoningEffortParameterName.Dev(),
+			PasswordPepper: common.PasswordPepperParameterName.Dev(),
+			JWTSecret:      common.JWTSecretParameterName.Dev(),
+			OpenAIAPIKey:   common.OpenAIAPIKeyParameterName.Dev(),
 		},
+		OpenAI: OpenAIConfig{Model: "gpt-5-mini", ReasoningEffort: "low"},
 		Timeouts: Timeouts{
 			Analyze: awscdk.Duration_Minutes(jsii.Number(3)),
 			API:     awscdk.Duration_Seconds(jsii.Number(29)),

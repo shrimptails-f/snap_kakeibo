@@ -40,7 +40,7 @@ func TestEnsureAllCreatesOnlyMissing(t *testing.T) {
 	}
 
 	// API key 以外の共通パラメータ + 関数ごとのイメージタグ
-	if want := 4 + len(cfg.Functions); len(store.puts) != want {
+	if want := 2 + len(cfg.Functions); len(store.puts) != want {
 		t.Fatalf("expected %d puts, got %d", want, len(store.puts))
 	}
 	for _, f := range cfg.Functions {
@@ -59,21 +59,13 @@ func TestEnsureAllCreatesOnlyMissing(t *testing.T) {
 			t.Errorf("%s: Tier = %v, want Standard", *p.Name, p.Tier)
 		}
 	}
-	if got := store.existing[cfg.Parameters.OpenAIModel]; got != "gpt-5-mini" {
-		t.Errorf("OpenAIModel = %q, want gpt-5-mini", got)
-	}
-	if got := store.existing[cfg.Parameters.OpenAIReasoningEffort]; got != "low" {
-		t.Errorf("OpenAIReasoningEffort = %q, want low", got)
-	}
 	if len(store.existing[cfg.Parameters.PasswordPepper]) < 40 {
 		t.Errorf("PasswordPepper looks too short: %q", store.existing[cfg.Parameters.PasswordPepper])
 	}
 }
 
-func TestParametersForUsesOpenAIEnv(t *testing.T) {
+func TestParametersForUsesOpenAIAPIKeyEnv(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "sk-test")
-	t.Setenv("OPENAI_MODEL", "gpt-test")
-	t.Setenv("OPENAI_REASONING_EFFORT", "minimal")
 
 	byName := map[string]parameter{}
 	for _, p := range parametersFor(config.Dev()) {
@@ -82,11 +74,5 @@ func TestParametersForUsesOpenAIEnv(t *testing.T) {
 	cfg := config.Dev()
 	if got := byName[cfg.Parameters.OpenAIAPIKey].Value; got != "sk-test" {
 		t.Errorf("OpenAIAPIKey = %q", got)
-	}
-	if got := byName[cfg.Parameters.OpenAIModel]; got.Value != "gpt-test" || got.Type != types.ParameterTypeString {
-		t.Errorf("OpenAIModel = %+v", got)
-	}
-	if got := byName[cfg.Parameters.OpenAIReasoningEffort].Value; got != "minimal" {
-		t.Errorf("OpenAIReasoningEffort = %q", got)
 	}
 }

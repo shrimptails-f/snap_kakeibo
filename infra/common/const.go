@@ -103,26 +103,24 @@ const (
 
 // SSM Parameter Store。値は CDK で作らず手動投入する
 const (
-	PasswordPepperParameterName        ParameterName = "auth/password-pepper"
-	JWTSecretParameterName             ParameterName = "auth/jwt-secret"
-	OpenAIAPIKeyParameterName          ParameterName = "openai/api-key"
-	OpenAIModelParameterName           ParameterName = "openai/model"
-	OpenAIReasoningEffortParameterName ParameterName = "openai/reasoning-effort"
+	PasswordPepperParameterName ParameterName = "auth/password-pepper"
+	JWTSecretParameterName      ParameterName = "auth/jwt-secret"
+	OpenAIAPIKeyParameterName   ParameterName = "openai/api-key"
 )
 
 // Lambda 環境変数名。backend の実装と揃える
 const (
-	EnvUsersTable               = "USERS_TABLE"
-	EnvMonthlySummariesTable    = "MONTHLY_SUMMARIES_TABLE"
-	EnvUploadHistoriesTable     = "UPLOAD_HISTORIES_TABLE"
-	EnvBillingsTable            = "BILLINGS_TABLE"
-	EnvBillingDetailsTable      = "BILLING_DETAILS_TABLE"
-	EnvReceiptBucket            = "RECEIPT_BUCKET"
-	EnvAnalyzeQueueURL          = "ANALYZE_QUEUE_URL"
-	EnvImageMaxEdge             = "IMAGE_MAX_EDGE"
-	EnvSSMPasswordPepper        = "SSM_PASSWORD_PEPPER"
-	EnvSSMJWTSecret             = "SSM_JWT_SECRET"
-	EnvSSMOpenAIAPIKey          = "SSM_OPENAI_API_KEY"
-	EnvSSMOpenAIModel           = "SSM_OPENAI_MODEL"
-	EnvSSMOpenAIReasoningEffort = "SSM_OPENAI_REASONING_EFFORT"
+	EnvUsersTable            = "USERS_TABLE"
+	EnvMonthlySummariesTable = "MONTHLY_SUMMARIES_TABLE"
+	EnvUploadHistoriesTable  = "UPLOAD_HISTORIES_TABLE"
+	EnvBillingsTable         = "BILLINGS_TABLE"
+	EnvBillingDetailsTable   = "BILLING_DETAILS_TABLE"
+	EnvReceiptBucket         = "RECEIPT_BUCKET"
+	EnvAnalyzeQueueURL       = "ANALYZE_QUEUE_URL"
+	EnvImageMaxEdge          = "IMAGE_MAX_EDGE"
+	EnvSSMPasswordPepper     = "SSM_PASSWORD_PEPPER"
+	EnvSSMJWTSecret          = "SSM_JWT_SECRET"
+	EnvSSMOpenAIAPIKey       = "SSM_OPENAI_API_KEY"
+	EnvOpenAIModel           = "OPENAI_MODEL"
+	EnvOpenAIReasoningEffort = "OPENAI_REASONING_EFFORT"
 )

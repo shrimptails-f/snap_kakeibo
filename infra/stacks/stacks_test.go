@@ -107,6 +107,12 @@ func TestStorageStackResources(t *testing.T) {
 		},
 	})
 	app.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]any{"FunctionName": "dev-snap-kakeibo-analyze-receipt", "MemorySize": 1024, "Timeout": 180})
+	app.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]any{
+		"FunctionName": "dev-snap-kakeibo-analyze-receipt",
+		"Environment": map[string]any{"Variables": assertions.Match_ObjectLike(&map[string]any{
+			"OPENAI_MODEL": "gpt-5-mini", "OPENAI_REASONING_EFFORT": "low",
+		})},
+	})
 	app.HasResourceProperties(jsii.String("AWS::Lambda::EventSourceMapping"), map[string]any{"BatchSize": 1, "ScalingConfig": map[string]any{"MaximumConcurrency": 5}})
 	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{"RouteKey": "POST /api/uploads/{uploadId}/retry"})
 	app.HasParameter(jsii.String("*"), map[string]any{

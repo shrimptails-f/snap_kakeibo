@@ -242,21 +242,16 @@ func safeID(v string) string {
 
 func openAISettings(ctx context.Context) (analyze.Client, error) {
 	settingsOnce.Do(func() {
-		names := []string{cfg.OpenAIAPIKeyParameter, cfg.OpenAIModelParameter, cfg.OpenAIReasoningParameter}
-		vals := make([]string, 3)
-		for i, n := range names {
-			if n == "" {
-				settingsErr = fmt.Errorf("OpenAI SSM parameter name is missing")
-				return
-			}
-			out, e := ssmc.GetParameter(ctx, &ssm.GetParameterInput{Name: aws.String(n), WithDecryption: aws.Bool(true)})
-			if e != nil {
-				settingsErr = e
-				return
-			}
-			vals[i] = aws.ToString(out.Parameter.Value)
+		if cfg.OpenAIAPIKeyParameter == "" || cfg.OpenAIModel == "" || cfg.OpenAIReasoningEffort == "" {
+			settingsErr = fmt.Errorf("OpenAI configuration is missing")
+			return
 		}
-		settings = analyze.Client{APIKey: vals[0], Model: vals[1], ReasoningEffort: vals[2]}
+		out, err := ssmc.GetParameter(ctx, &ssm.GetParameterInput{Name: aws.String(cfg.OpenAIAPIKeyParameter), WithDecryption: aws.Bool(true)})
+		if err != nil {
+			settingsErr = err
+			return
+		}
+		settings = analyze.Client{APIKey: aws.ToString(out.Parameter.Value), Model: cfg.OpenAIModel, ReasoningEffort: cfg.OpenAIReasoningEffort}
 	})
 	return settings, settingsErr
 }

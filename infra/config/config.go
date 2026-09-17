@@ -31,6 +31,7 @@ type Config struct {
 	Queues           Queues
 	Topics           Topics
 	Parameters       Parameters
+	OpenAI           OpenAIConfig
 	Timeouts         Timeouts
 	// MaxReceiveCount は一時エラーの再試行回数。超過したメッセージは DLQ へ移る
 	MaxReceiveCount float64
@@ -101,11 +102,15 @@ type Topics struct {
 
 // Parameters は SSM パラメータ名。値は CDK で作らず手動投入する。
 type Parameters struct {
-	PasswordPepper        string
-	JWTSecret             string
-	OpenAIAPIKey          string
-	OpenAIModel           string
-	OpenAIReasoningEffort string
+	PasswordPepper string
+	JWTSecret      string
+	OpenAIAPIKey   string
+}
+
+// OpenAIConfig は Analyze Lambda の環境変数として渡す非機密設定。
+type OpenAIConfig struct {
+	Model           string
+	ReasoningEffort string
 }
 
 // Timeouts は Lambda のタイムアウト。SQS の可視性タイムアウトはこの6倍で決まるため両スタックで共有する。
@@ -142,6 +147,9 @@ func (c Config) Validate() error {
 	}
 	if len(c.Functions) == 0 {
 		return fmt.Errorf("at least one function is required")
+	}
+	if c.OpenAI.Model == "" || c.OpenAI.ReasoningEffort == "" {
+		return fmt.Errorf("OpenAI model and reasoning effort are required")
 	}
 	for _, f := range c.Functions {
 		if f.Name == "" || f.ImageTagParameter == "" || f.LogGroup == "" {

@@ -75,8 +75,6 @@ func NewAppStack(scope constructs.Construct, id string, props *AppStackProps) *A
 		Actions: jsii.Strings("ssm:GetParameter"),
 		Resources: jsii.Strings(
 			fmt.Sprintf("arn:aws:ssm:%s:%s:parameter%s", s.cfg.Region, s.cfg.AccountID, s.cfg.Parameters.OpenAIAPIKey),
-			fmt.Sprintf("arn:aws:ssm:%s:%s:parameter%s", s.cfg.Region, s.cfg.AccountID, s.cfg.Parameters.OpenAIModel),
-			fmt.Sprintf("arn:aws:ssm:%s:%s:parameter%s", s.cfg.Region, s.cfg.AccountID, s.cfg.Parameters.OpenAIReasoningEffort),
 		),
 	}))
 
@@ -149,18 +147,18 @@ func (s *AppStack) newFunction(name string, props functionProps) awslambda.Docke
 func (s *AppStack) commonEnvironment() map[string]*string {
 	st := s.storage
 	return map[string]*string{
-		common.EnvUsersTable:               st.UsersTable.TableName(),
-		common.EnvMonthlySummariesTable:    st.MonthlySummariesTable.TableName(),
-		common.EnvUploadHistoriesTable:     st.UploadHistoriesTable.TableName(),
-		common.EnvBillingsTable:            st.BillingsTable.TableName(),
-		common.EnvBillingDetailsTable:      st.BillingDetailsTable.TableName(),
-		common.EnvReceiptBucket:            st.Bucket.BucketName(),
-		common.EnvAnalyzeQueueURL:          st.AnalyzeQueue.QueueUrl(),
-		common.EnvImageMaxEdge:             jsii.String("2048"),
-		common.EnvSSMPasswordPepper:        jsii.String(s.cfg.Parameters.PasswordPepper),
-		common.EnvSSMJWTSecret:             jsii.String(s.cfg.Parameters.JWTSecret),
-		common.EnvSSMOpenAIAPIKey:          jsii.String(s.cfg.Parameters.OpenAIAPIKey),
-		common.EnvSSMOpenAIModel:           jsii.String(s.cfg.Parameters.OpenAIModel),
-		common.EnvSSMOpenAIReasoningEffort: jsii.String(s.cfg.Parameters.OpenAIReasoningEffort),
+		common.EnvUsersTable:            st.UsersTable.TableName(),
+		common.EnvMonthlySummariesTable: st.MonthlySummariesTable.TableName(),
+		common.EnvUploadHistoriesTable:  st.UploadHistoriesTable.TableName(),
+		common.EnvBillingsTable:         st.BillingsTable.TableName(),
+		common.EnvBillingDetailsTable:   st.BillingDetailsTable.TableName(),
+		common.EnvReceiptBucket:         st.Bucket.BucketName(),
+		common.EnvAnalyzeQueueURL:       st.AnalyzeQueue.QueueUrl(),
+		common.EnvImageMaxEdge:          jsii.String("2048"),
+		common.EnvSSMPasswordPepper:     jsii.String(s.cfg.Parameters.PasswordPepper),
+		common.EnvSSMJWTSecret:          jsii.String(s.cfg.Parameters.JWTSecret),
+		common.EnvSSMOpenAIAPIKey:       jsii.String(s.cfg.Parameters.OpenAIAPIKey),
+		common.EnvOpenAIModel:           jsii.String(s.cfg.OpenAI.Model),
+		common.EnvOpenAIReasoningEffort: jsii.String(s.cfg.OpenAI.ReasoningEffort),
 	}
 }

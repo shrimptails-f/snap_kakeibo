@@ -2,8 +2,8 @@
 //
 //	go run ./cmd/ensure-parameters -stage dev
 //
-// pepper と JWT 署名鍵は乱数で生成する。OpenAI の API キーとモデル名は
-// 環境変数 OPENAI_API_KEY / OPENAI_MODEL があればその値、無ければ UNSET で作る。
+// pepper と JWT 署名鍵は乱数で生成する。OpenAI の API キーは
+// 環境変数 OPENAI_API_KEY があればその値、無ければ UNSET で作る。
 // 関数ごとのイメージタグは UNSET で作り、image:push が上書きする。
 package main
 
@@ -57,8 +57,6 @@ func parametersFor(cfg config.Config) []parameter {
 		{Name: cfg.Parameters.PasswordPepper, Type: types.ParameterTypeSecureString, Value: randomSecret()},
 		{Name: cfg.Parameters.JWTSecret, Type: types.ParameterTypeSecureString, Value: randomSecret()},
 		{Name: cfg.Parameters.OpenAIAPIKey, Type: types.ParameterTypeSecureString, Value: envOr("OPENAI_API_KEY", common.UnsetParameterValue)},
-		{Name: cfg.Parameters.OpenAIModel, Type: types.ParameterTypeString, Value: envOr("OPENAI_MODEL", "gpt-5-mini")},
-		{Name: cfg.Parameters.OpenAIReasoningEffort, Type: types.ParameterTypeString, Value: envOr("OPENAI_REASONING_EFFORT", "low")},
 	}
 	for _, f := range cfg.Functions {
 		params = append(params, parameter{Name: f.ImageTagParameter, Type: types.ParameterTypeString, Value: common.UnsetParameterValue})

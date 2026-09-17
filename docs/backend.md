@@ -271,11 +271,11 @@ unknown
 
 ### モデルと reasoning effort
 
-SSM Parameter Store から取得し、デプロイなしで切り替える。
+Analyze Lambda の環境変数として設定する。変更時は app スタックを再デプロイする。
 
 ```text
-/{stage}/snap-kakeibo/openai/model             初期値 gpt-5-mini
-/{stage}/snap-kakeibo/openai/reasoning-effort  初期値 low
+OPENAI_MODEL             初期値 gpt-5-mini
+OPENAI_REASONING_EFFORT  初期値 low
 ```
 
 思考トークンは出力トークンとして課金されるため `low` か `minimal` にする。レスポンスの `usage.output_tokens_details.reasoning_tokens` と `usage.input_tokens` をログに出し、実測でどちらにするか決める。

@@ -241,8 +241,8 @@ DynamoDB TransactWriteItems
 
 | 項目 | 値 | 理由 |
 | --- | --- | --- |
-| モデル | SSM `/{stage}/snap-kakeibo/openai/model`(初期値 `gpt-5-mini`) | デプロイなしで切り替える。精度が足りなければ `gpt-5` |
-| reasoning.effort | SSM `/{stage}/snap-kakeibo/openai/reasoning-effort`(初期値 `low`) | 思考トークンは出力扱いで課金されるため抑える。読み取りタスクは `minimal` でも成立する |
+| モデル | 環境変数 `OPENAI_MODEL`(初期値 `gpt-5-mini`) | 非機密値としてCDKのstage設定で管理する。精度が足りなければ `gpt-5` |
+| reasoning.effort | 環境変数 `OPENAI_REASONING_EFFORT`(初期値 `low`) | 思考トークンは出力扱いで課金されるため抑える。読み取りタスクは `minimal` でも成立する |
 | 画像 | 長辺 2048px を上限に縮小した JPEG(拡大はしない)を Base64 の data URL で渡す。上限は環境変数 `IMAGE_MAX_EDGE` で変更可 | パッチ方式のモデルは原寸でトークンを数えるため、縮小の効果が大きい。S3 の URL を渡すと Presigned URL の発行と公開範囲の管理が要る。細長いレシートは縮小で文字が潰れやすいので、実画像で読み取り精度を評価してから値を決める |
 | input_image.detail | `high` を明示 | `auto` に任せない。tile 方式のモデルで `low` に落ちると品目が読めない |
 | 出力 | `text.format = json_schema`、`strict = true`、`max_output_tokens = 4096` | 自由文を禁止する。それでも refusal / incomplete は返り得るので、判定は `docs/backend.md` の「レスポンスの判定」に従う |
@@ -284,11 +284,9 @@ DynamoDB TransactWriteItems
 
 ```text
 /{stage}/snap-kakeibo/openai/api-key           SecureString
-/{stage}/snap-kakeibo/openai/model             String
-/{stage}/snap-kakeibo/openai/reasoning-effort  String
 ```
 
-Lambda は起動時に SSM から取得し、コンテナが生きている間はメモリに保持する。
+Lambda はAPIキーを起動時にSSMから取得し、コンテナが生きている間はメモリに保持する。モデルとreasoning effortはLambda環境変数から取得する。
 
 ---
 
@@ -409,22 +407,16 @@ SNS               メール通知は月1,000件まで無料
 
 認証用Pepper、JWT署名鍵、OpenAI APIキーをSecureStringとして保存する。
 
-OpenAIのモデル名は通常のStringとして保存する。
-
 ```text
 SecureString
   /{stage}/snap-kakeibo/auth/password-pepper
   /{stage}/snap-kakeibo/auth/jwt-secret
   /{stage}/snap-kakeibo/openai/api-key
-
-String
-  /{stage}/snap-kakeibo/openai/model
-  /{stage}/snap-kakeibo/openai/reasoning-effort
 ```
 
 ティアはStandardを使う(4KB以内、無料)。Secrets Managerは固定費がかかるため使わない。
 
-CloudFormation は SecureString を作れないため、CDK ではなく `infra/cmd/ensure-parameters` が storage スタックの deploy 前に「無ければ作る」。Pepper と JWT 署名鍵は乱数で生成し、OpenAI の API キーは環境変数 `OPENAI_API_KEY` があればその値、無ければ `UNSET` で作る。モデル名と reasoning effort は環境変数 `OPENAI_MODEL` / `OPENAI_REASONING_EFFORT` があればその値、無ければ `gpt-5-mini` / `low` で作る。既存の値は上書きしない。
+CloudFormation は SecureString を作れないため、CDK ではなく `infra/cmd/ensure-parameters` が storage スタックの deploy 前に「無ければ作る」。Pepper と JWT 署名鍵は乱数で生成し、OpenAI の API キーは環境変数 `OPENAI_API_KEY` があればその値、無ければ `UNSET` で作る。既存の値は上書きしない。モデル名と reasoning effort は `infra/config` のstage設定からLambda環境変数へ渡す。
 
 CDKはパラメータ名を環境変数としてLambdaへ渡し、Lambdaに `ssm:GetParameter` の権限を付ける。
 
