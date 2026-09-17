@@ -28,10 +28,10 @@ func TestStorageStackResources(t *testing.T) {
 	storage.ResourceCountIs(jsii.String("AWS::ECR::Repository"), jsii.Number(len(cfg.Functions)))
 	storage.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(2))
 	storage.ResourceCountIs(jsii.String("AWS::DynamoDB::Table"), jsii.Number(5))
-	storage.ResourceCountIs(jsii.String("AWS::SQS::Queue"), jsii.Number(4))
-	storage.ResourceCountIs(jsii.String("AWS::SNS::Topic"), jsii.Number(2))
-	storage.ResourceCountIs(jsii.String("AWS::SNS::Subscription"), jsii.Number(2))
-	storage.ResourceCountIs(jsii.String("AWS::CloudWatch::Alarm"), jsii.Number(2))
+	storage.ResourceCountIs(jsii.String("AWS::SQS::Queue"), jsii.Number(2))
+	storage.ResourceCountIs(jsii.String("AWS::SNS::Topic"), jsii.Number(1))
+	storage.ResourceCountIs(jsii.String("AWS::SNS::Subscription"), jsii.Number(1))
+	storage.ResourceCountIs(jsii.String("AWS::CloudWatch::Alarm"), jsii.Number(1))
 	storage.ResourceCountIs(jsii.String("AWS::Logs::LogGroup"), jsii.Number(len(cfg.Functions)))
 	storage.HasResourceProperties(jsii.String("AWS::Logs::LogGroup"), map[string]any{
 		"LogGroupName":    "dev-snap-kakeibo-hello_lambda",
@@ -51,14 +51,15 @@ func TestStorageStackResources(t *testing.T) {
 			"IndexName": common.UploadMonthIndex,
 		}},
 	})
-	// StartTextract Lambda 60秒 -> 可視性タイムアウト 360秒
+	// Analyze Lambda 3分 -> 可視性タイムアウト 18分
 	storage.HasResourceProperties(jsii.String("AWS::SQS::Queue"), map[string]any{
-		"QueueName":         "dev-snap-kakeibo-start-textract",
-		"VisibilityTimeout": 360,
+		"QueueName":         "dev-snap-kakeibo-analyze",
+		"VisibilityTimeout": 1080,
 	})
 	storage.HasResourceProperties(jsii.String("AWS::SQS::Queue"), map[string]any{
-		"QueueName": "dev-snap-kakeibo-start-textract-dlq",
+		"QueueName": "dev-snap-kakeibo-analyze-dlq",
 	})
+	storage.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]any{"LifecycleConfiguration": map[string]any{"Rules": assertions.Match_ArrayWith(&[]any{assertions.Match_ObjectLike(&map[string]any{"Prefix": "analysis-results/", "ExpirationInDays": 90})})}})
 	storage.HasResourceProperties(jsii.String("AWS::SNS::Subscription"), map[string]any{
 		"Protocol": "email",
 		"Endpoint": "alert@example.com",
@@ -105,6 +106,9 @@ func TestStorageStackResources(t *testing.T) {
 			})}},
 		},
 	})
+	app.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]any{"FunctionName": "dev-snap-kakeibo-analyze-receipt", "MemorySize": 1024, "Timeout": 180})
+	app.HasResourceProperties(jsii.String("AWS::Lambda::EventSourceMapping"), map[string]any{"BatchSize": 1, "ScalingConfig": map[string]any{"MaximumConcurrency": 5}})
+	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{"RouteKey": "POST /api/uploads/{uploadId}/retry"})
 	app.HasParameter(jsii.String("*"), map[string]any{
 		"Type":    "AWS::SSM::Parameter::Value<String>",
 		"Default": "/dev/snap-kakeibo/functions/hello/image-tag",
@@ -166,8 +170,7 @@ func TestAlertEmailIsOptional(t *testing.T) {
 	cfg := config.Dev()
 	cfg.AlertEmail = ""
 	storage, _ := synth(t, cfg)
-	// SNS -> SQS の購読のみ
-	storage.ResourceCountIs(jsii.String("AWS::SNS::Subscription"), jsii.Number(1))
+	storage.ResourceCountIs(jsii.String("AWS::SNS::Subscription"), jsii.Number(0))
 }
 
 func TestUnknownStageIsRejected(t *testing.T) {

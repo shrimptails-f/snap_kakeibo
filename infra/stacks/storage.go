@@ -39,7 +39,7 @@ type StorageStack struct {
 	Repositories map[string]awsecr.Repository
 	// LogGroups は関数名 -> Lambda のロググループ。App スタックを destroy してもログを残すためここに置く
 	LogGroups map[string]awslogs.LogGroup
-	// Bucket はレシート画像と Textract 結果 JSON
+	// Bucket はレシート画像と OpenAI 生レスポンス JSON
 	Bucket awss3.Bucket
 	// FrontendBucket は React のビルド成果物。人間が push し、App スタックの CloudFront が配信する
 	FrontendBucket awss3.Bucket
@@ -50,13 +50,9 @@ type StorageStack struct {
 	BillingsTable         awsdynamodb.Table
 	BillingDetailsTable   awsdynamodb.Table
 
-	StartTextractQueue awssqs.Queue
-	ResultHandlerQueue awssqs.Queue
+	AnalyzeQueue awssqs.Queue
 
-	TextractCompletionTopic awssns.Topic
-	AlertTopic              awssns.Topic
-	// TextractPublishRole は Textract が完了通知を TextractCompletionTopic へ Publish するためのロール
-	TextractPublishRole awsiam.Role
+	AlertTopic awssns.Topic
 }
 
 func NewStorageStack(scope constructs.Construct, id string, props *StorageStackProps) *StorageStack {
@@ -87,36 +83,18 @@ func NewStorageStack(scope constructs.Construct, id string, props *StorageStackP
 		awscdk.Annotations_Of(stack).AddWarning(jsii.String("AlertEmail is empty in config; DLQ alarms will not notify anyone"))
 	}
 
-	s.TextractCompletionTopic = awssns.NewTopic(stack, jsii.String("TextractCompletionTopic"), &awssns.TopicProps{
-		TopicName: jsii.String(cfg.Topics.TextractCompletion),
-	})
-	s.TextractPublishRole = awsiam.NewRole(stack, jsii.String("TextractPublishRole"), &awsiam.RoleProps{
-		AssumedBy:   awsiam.NewServicePrincipal(jsii.String("textract.amazonaws.com"), nil),
-		Description: jsii.String("Allows Textract to publish job completion notifications"),
-	})
-	s.TextractCompletionTopic.GrantPublish(s.TextractPublishRole)
+	s.AnalyzeQueue = newQueueWithDLQ(stack, "Analyze", cfg.Queues.Analyze, cfg.Queues.AnalyzeDLQ, cfg.Timeouts.Analyze, cfg.MaxReceiveCount, s.AlertTopic)
 
-	s.StartTextractQueue = newQueueWithDLQ(stack, "StartTextract", cfg.Queues.StartTextract, cfg.Queues.StartTextractDLQ, cfg.Timeouts.StartTextract, cfg.MaxReceiveCount, s.AlertTopic)
-	s.ResultHandlerQueue = newQueueWithDLQ(stack, "ResultHandler", cfg.Queues.ResultHandler, cfg.Queues.ResultHandlerDLQ, cfg.Timeouts.ResultHandler, cfg.MaxReceiveCount, s.AlertTopic)
-
-	// S3 ObjectCreated -> StartTextract Queue。バケットとキューが同じスタックにあるので循環参照にならない
+	// S3 ObjectCreated -> Analyze Queue。バケットとキューが同じスタックにあるので循環参照にならない
 	s.Bucket.AddEventNotification(
 		awss3.EventType_OBJECT_CREATED,
-		awss3notifications.NewSqsDestination(s.StartTextractQueue),
+		awss3notifications.NewSqsDestination(s.AnalyzeQueue),
 		&awss3.NotificationKeyFilter{Prefix: jsii.String(common.ReceiptsPrefix)},
 	)
 
-	// Textract 完了通知 -> ResultHandler Queue。RawMessageDelivery で SNS エンベロープを外し、Lambda は Textract の JSON をそのまま読む
-	s.TextractCompletionTopic.AddSubscription(awssnssubscriptions.NewSqsSubscription(s.ResultHandlerQueue, &awssnssubscriptions.SqsSubscriptionProps{
-		RawMessageDelivery: jsii.Bool(true),
-	}))
-
 	awscdk.NewCfnOutput(stack, jsii.String("ReceiptBucketName"), &awscdk.CfnOutputProps{Value: s.Bucket.BucketName()})
 	awscdk.NewCfnOutput(stack, jsii.String("FrontendBucketName"), &awscdk.CfnOutputProps{Value: s.FrontendBucket.BucketName()})
-	awscdk.NewCfnOutput(stack, jsii.String("StartTextractQueueUrl"), &awscdk.CfnOutputProps{Value: s.StartTextractQueue.QueueUrl()})
-	awscdk.NewCfnOutput(stack, jsii.String("ResultHandlerQueueUrl"), &awscdk.CfnOutputProps{Value: s.ResultHandlerQueue.QueueUrl()})
-	awscdk.NewCfnOutput(stack, jsii.String("TextractCompletionTopicArn"), &awscdk.CfnOutputProps{Value: s.TextractCompletionTopic.TopicArn()})
-	awscdk.NewCfnOutput(stack, jsii.String("TextractPublishRoleArn"), &awscdk.CfnOutputProps{Value: s.TextractPublishRole.RoleArn()})
+	awscdk.NewCfnOutput(stack, jsii.String("AnalyzeQueueUrl"), &awscdk.CfnOutputProps{Value: s.AnalyzeQueue.QueueUrl()})
 
 	return s
 }
@@ -160,7 +138,7 @@ func newLogGroups(scope constructs.Construct, cfg config.Config) map[string]awsl
 	return groups
 }
 
-// constructID は "start-textract" のような関数名を "StartTextract" に変えて construct ID に使う。
+// constructID は "analyze-receipt" のような関数名を "AnalyzeReceipt" に変えて construct ID に使う。
 func constructID(name string) string {
 	var b strings.Builder
 	upper := true
@@ -179,7 +157,7 @@ func constructID(name string) string {
 	return b.String()
 }
 
-// newReceiptBucket はレシート画像と Textract 結果 JSON を置くバケットを作る。
+// newReceiptBucket はレシート画像と OpenAI 生レスポンス JSON を置くバケットを作る。
 // ブラウザから Presigned PUT する前提なので CORS を許可する。
 func newReceiptBucket(scope constructs.Construct, cfg config.Config) awss3.Bucket {
 	return awss3.NewBucket(scope, jsii.String("ReceiptBucket"), &awss3.BucketProps{
@@ -189,6 +167,9 @@ func newReceiptBucket(scope constructs.Construct, cfg config.Config) awss3.Bucke
 		EnforceSSL:        jsii.Bool(true),
 		RemovalPolicy:     cfg.RemovalPolicy,
 		AutoDeleteObjects: jsii.Bool(!cfg.Retain()),
+		LifecycleRules: &[]*awss3.LifecycleRule{{
+			Id: jsii.String("ExpireAnalysisResults"), Enabled: jsii.Bool(true), Prefix: jsii.String(common.AnalysisResultsPrefix), Expiration: awscdk.Duration_Days(jsii.Number(90)),
+		}},
 		Cors: &[]*awss3.CorsRule{{
 			AllowedOrigins: jsii.Strings(cfg.CORSAllowedOrigins...),
 			AllowedMethods: &[]awss3.HttpMethods{awss3.HttpMethods_PUT},

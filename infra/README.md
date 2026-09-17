@@ -6,7 +6,7 @@ AWS CDK (Go) で snap_kakeibo の AWS リソースを定義する。
 
 | スタック | 役割 | 中身 |
 | --- | --- | --- |
-| `{stage}-snap-kakeibo-storage` | 失うと困るもの、人間が成果物を push する先。`Config.RemovalPolicy` が RETAIN の stage では destroy しても残る | ECR(関数ごと)、S3(receipts / frontend)、DynamoDB、SQS + DLQ、SNS + メール購読、Textract 用ロール、DLQ アラーム |
+| `{stage}-snap-kakeibo-storage` | 失うと困るもの、人間が成果物を push する先。`Config.RemovalPolicy` が RETAIN の stage では destroy しても残る | ECR(関数ごと)、S3(receipts / frontend)、DynamoDB、Analyze SQS + DLQ、SNS + メール購読、DLQ アラーム |
 | `{stage}-snap-kakeibo-app` | destroy して作り直せるもの | Lambda、API Gateway、CloudFront、イベントソースマッピング、ロググループ |
 
 依存は `app -> storage` の一方向のみ。`storage` は `app` を参照しない。

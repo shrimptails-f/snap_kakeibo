@@ -7,7 +7,7 @@ const (
 	ProjectName         = "snap_kakeibo"
 	ProjectResourceName = "snap-kakeibo"
 	AWSAccountID        = "654654388040"
-	// Textract は東京(ap-northeast-1)に無いので、対応リージョンで最も近いソウルを使う
+	// 既存リソースとの整合のためソウルを使う
 	AWSRegion = "ap-northeast-2"
 	// UnsetParameterValue は手動投入が必要な SSM パラメータの初期値
 	UnsetParameterValue = "UNSET"
@@ -48,7 +48,7 @@ const (
 
 // FunctionNames は Lambda の一覧。backend/cmd/{name} と 1:1 で、関数ごとに ECR リポジトリと
 // デプロイ中のイメージタグを持つ SSM パラメータができる。関数を足すときはここにも追加する
-var FunctionNames = []string{"hello", "upload", "start-textract", "result-handler", "list-uploads", "get-billing"}
+var FunctionNames = []string{"hello", "upload", "analyze-receipt", "retry-upload", "list-uploads", "get-billing"}
 
 // ImageTagParameterName は関数のデプロイ中イメージタグを持つ SSM パラメータ名(stage 抜き)。
 // image:push が更新し、App スタックが deploy 時に解決する
@@ -87,44 +87,42 @@ const (
 // S3 プレフィックス
 const (
 	ReceiptsPrefix        = "receipts/"
-	TextractResultsPrefix = "textract-results/"
+	AnalysisResultsPrefix = "analysis-results/"
 )
 
 // SQS
 const (
-	StartTextractQueueName ResourceName = "start-textract"
-	StartTextractDLQName   ResourceName = "start-textract-dlq"
-	ResultHandlerQueueName ResourceName = "result-handler"
-	ResultHandlerDLQName   ResourceName = "result-handler-dlq"
+	AnalyzeQueueName ResourceName = "analyze"
+	AnalyzeDLQName   ResourceName = "analyze-dlq"
 )
 
 // SNS
 const (
-	TextractCompletionTopicName ResourceName = "textract-completion"
-	AlertTopicName              ResourceName = "alert"
+	AlertTopicName ResourceName = "alert"
 )
 
 // SSM Parameter Store。値は CDK で作らず手動投入する
 const (
-	PasswordPepperParameterName ParameterName = "auth/password-pepper"
-	JWTSecretParameterName      ParameterName = "auth/jwt-secret"
-	OpenAIAPIKeyParameterName   ParameterName = "openai/api-key"
-	OpenAIModelParameterName    ParameterName = "openai/model"
+	PasswordPepperParameterName        ParameterName = "auth/password-pepper"
+	JWTSecretParameterName             ParameterName = "auth/jwt-secret"
+	OpenAIAPIKeyParameterName          ParameterName = "openai/api-key"
+	OpenAIModelParameterName           ParameterName = "openai/model"
+	OpenAIReasoningEffortParameterName ParameterName = "openai/reasoning-effort"
 )
 
 // Lambda 環境変数名。backend の実装と揃える
 const (
-	EnvUsersTable            = "USERS_TABLE"
-	EnvMonthlySummariesTable = "MONTHLY_SUMMARIES_TABLE"
-	EnvUploadHistoriesTable  = "UPLOAD_HISTORIES_TABLE"
-	EnvBillingsTable         = "BILLINGS_TABLE"
-	EnvBillingDetailsTable   = "BILLING_DETAILS_TABLE"
-	EnvReceiptBucket         = "RECEIPT_BUCKET"
-	EnvStartTextractQueueURL = "START_TEXTRACT_QUEUE_URL"
-	EnvTextractTopicARN      = "TEXTRACT_TOPIC_ARN"
-	EnvTextractRoleARN       = "TEXTRACT_ROLE_ARN"
-	EnvSSMPasswordPepper     = "SSM_PASSWORD_PEPPER"
-	EnvSSMJWTSecret          = "SSM_JWT_SECRET"
-	EnvSSMOpenAIAPIKey       = "SSM_OPENAI_API_KEY"
-	EnvSSMOpenAIModel        = "SSM_OPENAI_MODEL"
+	EnvUsersTable               = "USERS_TABLE"
+	EnvMonthlySummariesTable    = "MONTHLY_SUMMARIES_TABLE"
+	EnvUploadHistoriesTable     = "UPLOAD_HISTORIES_TABLE"
+	EnvBillingsTable            = "BILLINGS_TABLE"
+	EnvBillingDetailsTable      = "BILLING_DETAILS_TABLE"
+	EnvReceiptBucket            = "RECEIPT_BUCKET"
+	EnvAnalyzeQueueURL          = "ANALYZE_QUEUE_URL"
+	EnvImageMaxEdge             = "IMAGE_MAX_EDGE"
+	EnvSSMPasswordPepper        = "SSM_PASSWORD_PEPPER"
+	EnvSSMJWTSecret             = "SSM_JWT_SECRET"
+	EnvSSMOpenAIAPIKey          = "SSM_OPENAI_API_KEY"
+	EnvSSMOpenAIModel           = "SSM_OPENAI_MODEL"
+	EnvSSMOpenAIReasoningEffort = "SSM_OPENAI_REASONING_EFFORT"
 )

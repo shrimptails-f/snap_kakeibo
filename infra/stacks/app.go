@@ -60,32 +60,30 @@ func NewAppStack(scope constructs.Construct, id string, props *AppStackProps) *A
 	s.storage.UploadHistoriesTable.GrantWriteData(upload)
 	s.storage.Bucket.GrantPut(upload, jsii.String("receipts/*"))
 
-	startTextract := s.newFunction("start-textract", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.StartTextract})
-	startTextract.AddEventSource(awslambdaeventsources.NewSqsEventSource(s.storage.StartTextractQueue, &awslambdaeventsources.SqsEventSourceProps{
+	analyzeReceipt := s.newFunction("analyze-receipt", functionProps{MemorySize: 1024, Timeout: props.Config.Timeouts.Analyze})
+	analyzeReceipt.AddEventSource(awslambdaeventsources.NewSqsEventSource(s.storage.AnalyzeQueue, &awslambdaeventsources.SqsEventSourceProps{
 		BatchSize:      jsii.Number(1),
 		MaxConcurrency: jsii.Number(5),
 	}))
-	s.storage.Bucket.GrantRead(startTextract, jsii.String("receipts/*"))
-	s.storage.UploadHistoriesTable.GrantReadWriteData(startTextract)
-	s.storage.TextractPublishRole.GrantPassRole(startTextract.Role())
-	startTextract.AddToRolePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
-		Actions:   jsii.Strings("textract:StartExpenseAnalysis"),
-		Resources: jsii.Strings("*"),
+	s.storage.Bucket.GrantRead(analyzeReceipt, jsii.String("receipts/*"))
+	s.storage.Bucket.GrantPut(analyzeReceipt, jsii.String("analysis-results/*"))
+	s.storage.UploadHistoriesTable.GrantReadWriteData(analyzeReceipt)
+	s.storage.BillingsTable.GrantReadWriteData(analyzeReceipt)
+	s.storage.BillingDetailsTable.GrantReadWriteData(analyzeReceipt)
+	s.storage.MonthlySummariesTable.GrantReadWriteData(analyzeReceipt)
+	analyzeReceipt.AddToRolePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Actions: jsii.Strings("ssm:GetParameter"),
+		Resources: jsii.Strings(
+			fmt.Sprintf("arn:aws:ssm:%s:%s:parameter%s", s.cfg.Region, s.cfg.AccountID, s.cfg.Parameters.OpenAIAPIKey),
+			fmt.Sprintf("arn:aws:ssm:%s:%s:parameter%s", s.cfg.Region, s.cfg.AccountID, s.cfg.Parameters.OpenAIModel),
+			fmt.Sprintf("arn:aws:ssm:%s:%s:parameter%s", s.cfg.Region, s.cfg.AccountID, s.cfg.Parameters.OpenAIReasoningEffort),
+		),
 	}))
 
-	resultHandler := s.newFunction("result-handler", functionProps{MemorySize: 512, Timeout: props.Config.Timeouts.ResultHandler})
-	resultHandler.AddEventSource(awslambdaeventsources.NewSqsEventSource(s.storage.ResultHandlerQueue, &awslambdaeventsources.SqsEventSourceProps{
-		BatchSize: jsii.Number(1),
-	}))
-	s.storage.Bucket.GrantReadWrite(resultHandler, nil)
-	s.storage.UploadHistoriesTable.GrantReadWriteData(resultHandler)
-	s.storage.BillingsTable.GrantReadWriteData(resultHandler)
-	s.storage.BillingDetailsTable.GrantReadWriteData(resultHandler)
-	s.storage.MonthlySummariesTable.GrantReadWriteData(resultHandler)
-	resultHandler.AddToRolePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
-		Actions:   jsii.Strings("textract:GetExpenseAnalysis"),
-		Resources: jsii.Strings("*"),
-	}))
+	retryUpload := s.newFunction("retry-upload", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API})
+	addRoute(s.API, awsapigatewayv2.HttpMethod_POST, APIPathPrefix+"/uploads/{uploadId}/retry", retryUpload)
+	s.storage.UploadHistoriesTable.GrantReadWriteData(retryUpload)
+	s.storage.AnalyzeQueue.GrantSendMessages(retryUpload)
 
 	listUploads := s.newFunction("list-uploads", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API})
 	addRoute(s.API, awsapigatewayv2.HttpMethod_GET, APIPathPrefix+"/months/{month}/uploads", listUploads)
@@ -151,18 +149,18 @@ func (s *AppStack) newFunction(name string, props functionProps) awslambda.Docke
 func (s *AppStack) commonEnvironment() map[string]*string {
 	st := s.storage
 	return map[string]*string{
-		common.EnvUsersTable:            st.UsersTable.TableName(),
-		common.EnvMonthlySummariesTable: st.MonthlySummariesTable.TableName(),
-		common.EnvUploadHistoriesTable:  st.UploadHistoriesTable.TableName(),
-		common.EnvBillingsTable:         st.BillingsTable.TableName(),
-		common.EnvBillingDetailsTable:   st.BillingDetailsTable.TableName(),
-		common.EnvReceiptBucket:         st.Bucket.BucketName(),
-		common.EnvStartTextractQueueURL: st.StartTextractQueue.QueueUrl(),
-		common.EnvTextractTopicARN:      st.TextractCompletionTopic.TopicArn(),
-		common.EnvTextractRoleARN:       st.TextractPublishRole.RoleArn(),
-		common.EnvSSMPasswordPepper:     jsii.String(s.cfg.Parameters.PasswordPepper),
-		common.EnvSSMJWTSecret:          jsii.String(s.cfg.Parameters.JWTSecret),
-		common.EnvSSMOpenAIAPIKey:       jsii.String(s.cfg.Parameters.OpenAIAPIKey),
-		common.EnvSSMOpenAIModel:        jsii.String(s.cfg.Parameters.OpenAIModel),
+		common.EnvUsersTable:               st.UsersTable.TableName(),
+		common.EnvMonthlySummariesTable:    st.MonthlySummariesTable.TableName(),
+		common.EnvUploadHistoriesTable:     st.UploadHistoriesTable.TableName(),
+		common.EnvBillingsTable:            st.BillingsTable.TableName(),
+		common.EnvBillingDetailsTable:      st.BillingDetailsTable.TableName(),
+		common.EnvReceiptBucket:            st.Bucket.BucketName(),
+		common.EnvAnalyzeQueueURL:          st.AnalyzeQueue.QueueUrl(),
+		common.EnvImageMaxEdge:             jsii.String("2048"),
+		common.EnvSSMPasswordPepper:        jsii.String(s.cfg.Parameters.PasswordPepper),
+		common.EnvSSMJWTSecret:             jsii.String(s.cfg.Parameters.JWTSecret),
+		common.EnvSSMOpenAIAPIKey:          jsii.String(s.cfg.Parameters.OpenAIAPIKey),
+		common.EnvSSMOpenAIModel:           jsii.String(s.cfg.Parameters.OpenAIModel),
+		common.EnvSSMOpenAIReasoningEffort: jsii.String(s.cfg.Parameters.OpenAIReasoningEffort),
 	}
 }

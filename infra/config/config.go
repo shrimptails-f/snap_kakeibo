@@ -73,7 +73,7 @@ func functions(stage common.Stage, repository ECRConfig) []Function {
 
 // Buckets は S3 バケット名。S3 の名前はグローバルに一意なので衝突したら stage 側で変える。
 type Buckets struct {
-	// Receipts はレシート画像と Textract 結果 JSON
+	// Receipts はレシート画像と OpenAI 生レスポンス JSON
 	Receipts string
 	// Frontend は React のビルド成果物。CloudFront(OAC) から配信する
 	Frontend string
@@ -90,31 +90,28 @@ type Tables struct {
 
 // Queues は SQS キュー名。
 type Queues struct {
-	StartTextract    string
-	StartTextractDLQ string
-	ResultHandler    string
-	ResultHandlerDLQ string
+	Analyze    string
+	AnalyzeDLQ string
 }
 
 // Topics は SNS トピック名。
 type Topics struct {
-	TextractCompletion string
-	Alert              string
+	Alert string
 }
 
 // Parameters は SSM パラメータ名。値は CDK で作らず手動投入する。
 type Parameters struct {
-	PasswordPepper string
-	JWTSecret      string
-	OpenAIAPIKey   string
-	OpenAIModel    string
+	PasswordPepper        string
+	JWTSecret             string
+	OpenAIAPIKey          string
+	OpenAIModel           string
+	OpenAIReasoningEffort string
 }
 
 // Timeouts は Lambda のタイムアウト。SQS の可視性タイムアウトはこの6倍で決まるため両スタックで共有する。
 type Timeouts struct {
-	StartTextract awscdk.Duration
-	ResultHandler awscdk.Duration
-	API           awscdk.Duration
+	Analyze awscdk.Duration
+	API     awscdk.Duration
 }
 
 // Load は stage 名に対応する設定を返す。

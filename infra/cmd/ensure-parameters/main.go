@@ -57,7 +57,8 @@ func parametersFor(cfg config.Config) []parameter {
 		{Name: cfg.Parameters.PasswordPepper, Type: types.ParameterTypeSecureString, Value: randomSecret()},
 		{Name: cfg.Parameters.JWTSecret, Type: types.ParameterTypeSecureString, Value: randomSecret()},
 		{Name: cfg.Parameters.OpenAIAPIKey, Type: types.ParameterTypeSecureString, Value: envOr("OPENAI_API_KEY", common.UnsetParameterValue)},
-		{Name: cfg.Parameters.OpenAIModel, Type: types.ParameterTypeString, Value: envOr("OPENAI_MODEL", common.UnsetParameterValue)},
+		{Name: cfg.Parameters.OpenAIModel, Type: types.ParameterTypeString, Value: envOr("OPENAI_MODEL", "gpt-5-mini")},
+		{Name: cfg.Parameters.OpenAIReasoningEffort, Type: types.ParameterTypeString, Value: envOr("OPENAI_REASONING_EFFORT", "low")},
 	}
 	for _, f := range cfg.Functions {
 		params = append(params, parameter{Name: f.ImageTagParameter, Type: types.ParameterTypeString, Value: common.UnsetParameterValue})
