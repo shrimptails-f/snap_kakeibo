@@ -111,7 +111,7 @@ billings.final_amount
    S3から画像取得、長辺2048pxに縮小、JPEGでBase64
    OpenAI Responses APIに画像と指示文を渡し、JSON Schemaで結果を受け取る
    店名 / 購入日 / 合計金額 / 明細(品目名・金額・数量・カテゴリ)
-   生レスポンスを S3 analysis-results/{user_id}/{upload_id}/{attempt}.json に保存
+   生レスポンスを S3 analysis-results/{user_id}/{upload_id}/{attempt}/{response_id}.json に保存
 
 9. Analyze Lambda
    解析結果を検証(「検証」の表)
@@ -576,7 +576,7 @@ status = ANALYZING AND attempt = :attempt
 Update:
 status = SUCCEEDED
 billing_id = 01JBILLXXX
-raw_result_s3_key = analysis-results/{user_id}/{upload_id}/{attempt}.json
+raw_result_s3_key = analysis-results/{user_id}/{upload_id}/{attempt}/{response_id}.json
 
 2. billings
 
@@ -762,7 +762,7 @@ GSI1PK = USER#{user_id}#MONTH#{yyyy-MM}
 | 登録 | 明細50件超 | `FAILED` (`TOO_MANY_DETAILS`)。初期構成の仕様上、billingsは作らない |
 | 登録 | 停滞した前回処理の遅延登録・遅延失敗記録 | SUCCEEDED / FAILED / NO_DATA すべて `status = ANALYZING AND attempt = :attempt` で弾く。`ConditionalCheckFailed` は正常終了 |
 | 集計 | 同じ月のレシートの並行登録 | `category_total_*` を含めすべて `ADD` なので競合しない |
-| 登録 | Analyze Lambdaが途中で落ちる | Transactionはall-or-nothing、S3保存は上書き冪等。SQSリトライで最初からやり直す |
+| 登録 | Analyze Lambdaが途中で落ちる | Transactionはall-or-nothing。生レスポンスは response_id ごとの一意なS3キーへ保存し、SQSリトライで最初からやり直す |
 | 登録 | リトライ枯渇 | DLQに残る。CloudWatch Alarmでメール通知。redriveで再処理 |
 | 検知 | イベント自体が届かない | DLQでは拾えない。画面の停滞表示で気づき、再実行APIで手動回復 |
 | 集計 | 再計算とAnalyze Lambdaの競合 | `version` の条件失敗でやり直す |
@@ -804,6 +804,7 @@ Analyze(FAILED/NO_DATA) Condition: status = ANALYZING AND attempt = :attempt
 
 S3イベント重複によるOpenAIの二重呼び出し
   → 1枚 ¥1 未満なので許容。登録は条件で1回になる
+  → 生レスポンスは response_id ごとの別キーに保存し、終端状態を確定した処理のキーだけを raw_result_s3_key に記録する
 
 同じattemptの並行処理で、成功した方ではなく先に終端状態を書いた方が勝つ
   → 正常解析と refusal が並行し、refusal が先に FAILED を書けば最終状態は FAILED

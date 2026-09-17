@@ -315,7 +315,7 @@ billing_details.amount を category ごとに合計
   "status": "SUCCEEDED", // アップロードおよび解析の状態。UPLOADING / ANALYZING / SUCCEEDED / NO_DATA / FAILED
   "attempt": 1, // 解析の試行回数。手動再実行のたびに+1。登録時の条件に使う
   "s3_key": "receipts/01JUSERXXX/01JUPLOADXXX/original.jpg", // 元画像を保存したS3キー
-  "raw_result_s3_key": "analysis-results/01JUSERXXX/01JUPLOADXXX/1.json", // OpenAIの生レスポンスJSONを保存したS3キー。attemptごとに別ファイル。S3側は90日で削除されるため、古い履歴では参照先が無いことがある。レスポンスを保存できなかった失敗では未設定
+  "raw_result_s3_key": "analysis-results/01JUSERXXX/01JUPLOADXXX/1/resp_01JRESPONSEXXX.json", // OpenAIの生レスポンスJSONを保存したS3キー。responseごとに別ファイル。S3側は90日で削除されるため、古い履歴では参照先が無いことがある。レスポンスを保存できなかった失敗では未設定
 
   "file_name": "receipt.jpg", // ユーザーがアップロードした元ファイル名
   "content_type": "image/jpeg", // アップロード画像のContent-Type
@@ -526,7 +526,7 @@ monthly_summaries.total_amount = SUM(billing_details.amount)
 1. upload_histories
    status = SUCCEEDED
    billing_id = 01JBILLXXX
-   raw_result_s3_key = analysis-results/{user_id}/{upload_id}/{attempt}.json
+   raw_result_s3_key = analysis-results/{user_id}/{upload_id}/{attempt}/{response_id}.json
    Condition: status = ANALYZING AND attempt = :attempt
 
 2. billings
@@ -579,7 +579,7 @@ upload_histories
   error_code = 理由
   error_message = 詳細
   failed_at = 現在時刻
-  raw_result_s3_key = analysis-results/{user_id}/{upload_id}/{attempt}.json(レスポンスを保存できた場合のみ)
+  raw_result_s3_key = analysis-results/{user_id}/{upload_id}/{attempt}/{response_id}.json(レスポンスを保存できた場合のみ)
 ```
 
 明細0件の場合は失敗ではなく、解析完了だが登録対象なしとして扱う。
@@ -588,7 +588,7 @@ upload_histories
 upload_histories
   Condition: status = ANALYZING AND attempt = :attempt
   status = NO_DATA
-  raw_result_s3_key = analysis-results/{user_id}/{upload_id}/{attempt}.json
+  raw_result_s3_key = analysis-results/{user_id}/{upload_id}/{attempt}/{response_id}.json
   error_code / error_message / failed_at は未設定
 ```
 

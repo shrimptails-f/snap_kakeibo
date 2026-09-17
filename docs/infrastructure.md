@@ -176,14 +176,14 @@ S3          数円
 
 ```text
 receipts/{user_id}/{upload_id}/original.jpg
-analysis-results/{user_id}/{upload_id}/{attempt}.json
+analysis-results/{user_id}/{upload_id}/{attempt}/{response_id}.json
 ```
 
 例:
 
 ```text
 receipts/01JUSERXXX/01JUPLOADXXX/original.jpg
-analysis-results/01JUSERXXX/01JUPLOADXXX/1.json
+analysis-results/01JUSERXXX/01JUPLOADXXX/1/resp_01JRESPONSEXXX.json
 ```
 
 S3キーはクライアントから指定させず、Lambda側で生成する。`analysis-results/` は読み取り結果をあとから検証するための生レスポンスで、業務処理からは参照しない。
