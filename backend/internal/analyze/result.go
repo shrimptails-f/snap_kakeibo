@@ -24,26 +24,33 @@ type Detail struct {
 	Category string `json:"category"`
 }
 
-type Failure struct{ Code, Message string }
+type Failure struct {
+	Code            string
+	Message         string
+	HTTPStatus      int
+	ProviderType    string
+	ProviderCode    string
+	ProviderMessage string
+}
 
 func (f *Failure) Error() string { return f.Code + ": " + f.Message }
 
 func Validate(r Receipt, now time.Time) (Receipt, *Failure) {
 	if r.PurchasedAt == nil {
-		return r, &Failure{"NO_DATE", "購入日を取得できませんでした"}
+		return r, &Failure{Code: "NO_DATE", Message: "購入日を取得できませんでした"}
 	}
 	d, err := time.ParseInLocation("2006-01-02", *r.PurchasedAt, now.Location())
 	if err != nil || d.After(dateOnly(now).AddDate(0, 0, 1)) || d.Before(dateOnly(now).AddDate(-5, 0, 0)) {
-		return r, &Failure{"INVALID_DATE", "購入日が有効な範囲ではありません"}
+		return r, &Failure{Code: "INVALID_DATE", Message: "購入日が有効な範囲ではありません"}
 	}
 	if r.TotalAmount == nil {
-		return r, &Failure{"NO_TOTAL_AMOUNT", "合計金額を取得できませんでした"}
+		return r, &Failure{Code: "NO_TOTAL_AMOUNT", Message: "合計金額を取得できませんでした"}
 	}
 	if *r.TotalAmount < 1 || *r.TotalAmount > 10_000_000 {
-		return r, &Failure{"INVALID_AMOUNT", "合計金額が有効な範囲ではありません"}
+		return r, &Failure{Code: "INVALID_AMOUNT", Message: "合計金額が有効な範囲ではありません"}
 	}
 	if len(r.Details) > 50 {
-		return r, &Failure{"TOO_MANY_DETAILS", "明細件数が50件を超えています"}
+		return r, &Failure{Code: "TOO_MANY_DETAILS", Message: "明細件数が50件を超えています"}
 	}
 	if r.StoreName != nil {
 		s := truncate(*r.StoreName, 100)
@@ -52,7 +59,7 @@ func Validate(r Receipt, now time.Time) (Receipt, *Failure) {
 	valid := make([]Detail, 0, len(r.Details))
 	for _, d := range r.Details {
 		if d.Amount < 0 || d.Amount > 10_000_000 || d.Quantity < 1 || d.Quantity > 999 {
-			return r, &Failure{"INVALID_AMOUNT", "明細の金額または数量が有効な範囲ではありません"}
+			return r, &Failure{Code: "INVALID_AMOUNT", Message: "明細の金額または数量が有効な範囲ではありません"}
 		}
 		d.Name = truncate(strings.TrimSpace(d.Name), 100)
 		if d.Name == "" {
@@ -112,7 +119,7 @@ var ErrTemporary = errors.New("temporary OpenAI failure")
 func ParseResponse(raw []byte) (Receipt, APIResponse, error) {
 	var resp APIResponse
 	if err := json.Unmarshal(raw, &resp); err != nil {
-		return Receipt{}, resp, &Failure{"ANALYSIS_FAILED", "OpenAIレスポンスを解析できませんでした"}
+		return Receipt{}, resp, &Failure{Code: "ANALYSIS_FAILED", Message: "OpenAIレスポンスを解析できませんでした"}
 	}
 	if resp.Status == "failed" {
 		return Receipt{}, resp, fmt.Errorf("%w: response status failed", ErrTemporary)
@@ -122,24 +129,24 @@ func ParseResponse(raw []byte) (Receipt, APIResponse, error) {
 		if resp.IncompleteDetails != nil {
 			reason = resp.IncompleteDetails.Reason
 		}
-		return Receipt{}, resp, &Failure{"ANALYSIS_FAILED", "OpenAIレスポンスが未完了です: " + reason}
+		return Receipt{}, resp, &Failure{Code: "ANALYSIS_FAILED", Message: "OpenAIレスポンスが未完了です: " + reason}
 	}
 	if resp.Status != "completed" {
-		return Receipt{}, resp, &Failure{"ANALYSIS_FAILED", "OpenAIレスポンスの状態が不正です"}
+		return Receipt{}, resp, &Failure{Code: "ANALYSIS_FAILED", Message: "OpenAIレスポンスの状態が不正です"}
 	}
 	for _, out := range resp.Output {
 		for _, c := range out.Content {
 			if c.Type == "refusal" {
-				return Receipt{}, resp, &Failure{"ANALYSIS_FAILED", "OpenAIが解析を拒否しました: " + c.Refusal}
+				return Receipt{}, resp, &Failure{Code: "ANALYSIS_FAILED", Message: "OpenAIが解析を拒否しました: " + c.Refusal}
 			}
 			if c.Type == "output_text" && c.Text != "" {
 				var r Receipt
 				if err := json.Unmarshal([]byte(c.Text), &r); err != nil {
-					return Receipt{}, resp, &Failure{"ANALYSIS_FAILED", "解析結果がJSON Schemaに適合しません"}
+					return Receipt{}, resp, &Failure{Code: "ANALYSIS_FAILED", Message: "解析結果がJSON Schemaに適合しません"}
 				}
 				return r, resp, nil
 			}
 		}
 	}
-	return Receipt{}, resp, &Failure{"ANALYSIS_FAILED", "OpenAIレスポンスに解析結果がありません"}
+	return Receipt{}, resp, &Failure{Code: "ANALYSIS_FAILED", Message: "OpenAIレスポンスに解析結果がありません"}
 }

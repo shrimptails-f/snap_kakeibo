@@ -298,6 +298,8 @@ Structured Outputs でも「JSON が返る」以外の終わり方がある。`s
 
 `max_output_tokens` は明細 50 件 + 余裕で足りる値(4,096)にする。思考トークンも `max_output_tokens` に含まれるため、reasoning effort を上げるときは合わせて見直す。
 
+OpenAI APIの失敗は `ERROR` レベルで、`upload_id`、`attempt`、HTTP status、OpenAIのerror type/code/message、`response_id`、生レスポンスのS3キーをログに出す。画像や生レスポンス本文そのものはログに出さない。refusalなど本文性の高い内容はerror codeとS3キーだけを出す。
+
 ### タイムアウトとリトライ
 
 Analyze Lambdaのタイムアウトは3分とする。

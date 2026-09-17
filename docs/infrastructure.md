@@ -256,7 +256,7 @@ DynamoDB TransactWriteItems
 | OpenAI | リクエストとレスポンス | `store: false` で保存させない。不正利用監視のためのログは OpenAI 側のポリシーで最大 30 日保持される場合がある(ZDR は個人利用では申請しない) |
 | S3 `receipts/` | 元画像 | 削除しない。請求詳細画面のプレビューで使う |
 | S3 `analysis-results/` | OpenAI の生レスポンス JSON | ライフサイクルルールで 90 日後に削除。検証用途なので長期保持しない |
-| CloudWatch Logs | Lambda のログ | 30 日。画像や生レスポンスの本文はログに出さない(`usage` と件数のみ) |
+| CloudWatch Logs | Lambda のログ | 30 日。画像や生レスポンスの本文はログに出さない。正常時は`usage`と件数、失敗時はHTTP status、OpenAIのerror type/code/message、response_id、生レスポンスのS3キーを出す |
 
 ### コスト目安
 

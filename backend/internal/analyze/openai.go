@@ -67,7 +67,7 @@ func (c Client) Analyze(ctx context.Context, jpegData []byte) ([]byte, error) {
 					return raw, nil
 				}
 			} else if resp.StatusCode != 429 && resp.StatusCode != 500 && resp.StatusCode != 502 && resp.StatusCode != 503 && resp.StatusCode != 504 {
-				return raw, &Failure{"ANALYSIS_FAILED", fmt.Sprintf("OpenAI APIがHTTP %dを返しました", resp.StatusCode)}
+				return raw, failureFromHTTP(resp.StatusCode, raw)
 			} else {
 				err = fmt.Errorf("OpenAI temporary HTTP status %d", resp.StatusCode)
 			}
@@ -83,6 +83,23 @@ func (c Client) Analyze(ctx context.Context, jpegData []byte) ([]byte, error) {
 		case <-time.After(delay):
 		}
 	}
+}
+
+func failureFromHTTP(status int, raw []byte) *Failure {
+	failure := &Failure{Code: "ANALYSIS_FAILED", Message: fmt.Sprintf("OpenAI APIがHTTP %dを返しました", status), HTTPStatus: status}
+	var response struct {
+		Error struct {
+			Message string `json:"message"`
+			Type    string `json:"type"`
+			Code    string `json:"code"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(raw, &response) == nil {
+		failure.ProviderType = response.Error.Type
+		failure.ProviderCode = response.Error.Code
+		failure.ProviderMessage = response.Error.Message
+	}
+	return failure
 }
 
 func receiptSchema() map[string]any {

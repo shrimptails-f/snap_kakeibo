@@ -176,6 +176,7 @@ func process(ctx context.Context, j job) error {
 	raw, callErr := client.Analyze(apiCtx, jpegData)
 	cancel()
 	if errors.Is(callErr, analyze.ErrTemporary) {
+		log.Printf("level=ERROR event=openai_request_failed upload_id=%s attempt=%d temporary=true error=%q", j.UploadID, j.Attempt, truncateMessage(callErr.Error()))
 		return callErr
 	}
 	responseID := responseID(raw)
@@ -196,8 +197,10 @@ func process(ctx context.Context, j job) error {
 	if callErr != nil {
 		var f *analyze.Failure
 		if errors.As(callErr, &f) {
+			logOpenAIFailure(j, responseID, rawKey, f)
 			return markFailed(ctx, j, f.Code, f.Message, rawKey)
 		}
+		log.Printf("level=ERROR event=openai_request_failed upload_id=%s attempt=%d response_id=%s error=%q", j.UploadID, j.Attempt, responseID, truncateMessage(callErr.Error()))
 		return callErr
 	}
 	receipt, resp, err := analyze.ParseResponse(raw)
@@ -205,12 +208,14 @@ func process(ctx context.Context, j job) error {
 	if err != nil {
 		var f *analyze.Failure
 		if errors.As(err, &f) {
+			log.Printf("level=ERROR event=openai_response_rejected upload_id=%s attempt=%d response_id=%s error_code=%s raw_result_s3_key=%s", j.UploadID, j.Attempt, responseID, f.Code, rawKey)
 			return markFailed(ctx, j, f.Code, f.Message, rawKey)
 		}
 		return err
 	}
 	receipt, failure := analyze.Validate(receipt, time.Now())
 	if failure != nil {
+		log.Printf("level=ERROR event=analysis_validation_failed upload_id=%s attempt=%d response_id=%s error_code=%s detail_count=%d raw_result_s3_key=%s", j.UploadID, j.Attempt, responseID, failure.Code, len(receipt.Details), rawKey)
 		return markFailed(ctx, j, failure.Code, failure.Message, rawKey)
 	}
 	log.Printf("analysis validated response_id=%s detail_count=%d", responseID, len(receipt.Details))
@@ -218,6 +223,12 @@ func process(ctx context.Context, j job) error {
 		return markNoData(ctx, j, rawKey)
 	}
 	return register(ctx, j, receipt, rawKey)
+}
+
+func logOpenAIFailure(j job, responseID, rawKey string, failure *analyze.Failure) {
+	// 生レスポンス本文は出さず、OpenAI の error object から調査用フィールドだけを記録する。
+	log.Printf("level=ERROR event=openai_api_error upload_id=%s attempt=%d response_id=%s http_status=%d provider_type=%q provider_code=%q provider_message=%q raw_result_s3_key=%s",
+		j.UploadID, j.Attempt, responseID, failure.HTTPStatus, failure.ProviderType, failure.ProviderCode, truncateMessage(failure.ProviderMessage), rawKey)
 }
 
 func responseID(raw []byte) string {
