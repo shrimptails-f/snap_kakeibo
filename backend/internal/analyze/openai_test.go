@@ -8,3 +8,13 @@ func TestFailureFromHTTPExtractsSafeErrorMetadata(t *testing.T) {
 		t.Fatalf("failure=%+v", f)
 	}
 }
+
+func TestReceiptSchemaRequiresDateOnly(t *testing.T) {
+	properties := receiptSchema()["properties"].(map[string]any)
+	purchasedAt := properties["purchased_at"].(map[string]any)
+	variants := purchasedAt["anyOf"].([]any)
+	date := variants[0].(map[string]any)
+	if got := date["pattern"]; got != `^\d{4}-\d{2}-\d{2}$` {
+		t.Fatalf("purchased_at pattern = %v", got)
+	}
+}

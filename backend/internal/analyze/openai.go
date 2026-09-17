@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const Instructions = `レシート画像から店名・購入日・合計金額・明細を読み取り、明細を固定カテゴリに分類する。読めない項目はnullにし、推測で埋めない。金額は税込の整数（円）。合計金額は「合計」「お買上げ計」など支払額の行を使う。明細は商品行のみとし、小計・税・割引・預り金・お釣りは含めない。レシートでない画像ならdetailsを空にする。`
+const Instructions = `レシート画像から店名・購入日・合計金額・明細を読み取り、明細を固定カテゴリに分類する。読めない項目はnullにし、推測で埋めない。購入日は時刻を含めずYYYY-MM-DD形式にする。金額は税込の整数（円）。合計金額は「合計」「お買上げ計」など支払額の行を使う。明細は商品行のみとし、小計・税・割引・預り金・お釣りは含めない。レシートでない画像ならdetailsを空にする。`
 
 type Client struct {
 	HTTP                           *http.Client
@@ -107,6 +107,11 @@ func receiptSchema() map[string]any {
 		"name": map[string]any{"type": "string"}, "amount": map[string]any{"type": "integer"}, "quantity": map[string]any{"type": "integer"}, "category": map[string]any{"type": "string", "enum": Categories},
 	}}
 	return map[string]any{"type": "object", "additionalProperties": false, "required": []string{"store_name", "purchased_at", "total_amount", "details"}, "properties": map[string]any{
-		"store_name": map[string]any{"type": []string{"string", "null"}}, "purchased_at": map[string]any{"type": []string{"string", "null"}}, "total_amount": map[string]any{"type": []string{"integer", "null"}}, "details": map[string]any{"type": "array", "items": detail},
+		"store_name": map[string]any{"type": []string{"string", "null"}},
+		"purchased_at": map[string]any{"anyOf": []any{
+			map[string]any{"type": "string", "pattern": `^\d{4}-\d{2}-\d{2}$`, "description": "購入日。時刻を含めないYYYY-MM-DD形式"},
+			map[string]any{"type": "null"},
+		}},
+		"total_amount": map[string]any{"type": []string{"integer", "null"}}, "details": map[string]any{"type": "array", "items": detail},
 	}}
 }

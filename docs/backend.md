@@ -221,7 +221,7 @@ Structured Outputs(JSON Schema、`strict: true`)で固定形式のJSONで受け�
 | 項目 | 型 | 備考 |
 | --- | --- | --- |
 | store_name | string / null | 読めなければ null。null でも登録は続ける |
-| purchased_at | string(YYYY-MM-DD) / null | null なら `NO_DATE` |
+| purchased_at | string(YYYY-MM-DD) / null | 時刻を含めない。JSON Schemaでも形式を制約する。null なら `NO_DATE` |
 | total_amount | integer / null | null なら `NO_TOTAL_AMOUNT` |
 | details[].name | string | レシート表記のまま |
 | details[].amount | integer | 行の金額(数量をかけた後) |
