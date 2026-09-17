@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/url"
 	"strconv"
 	"strings"
@@ -89,23 +90,27 @@ func start(ctx context.Context, bucket, key, userID, uploadID string) error {
 	}
 
 	attempt := strconv.Itoa(history.Attempt)
-	out, err := texClient.StartExpenseAnalysis(ctx, &textract.StartExpenseAnalysisInput{
-		ClientRequestToken: aws.String(uploadID + "#" + attempt),
+	input := &textract.StartExpenseAnalysisInput{
+		ClientRequestToken: aws.String(uploadID + "_" + attempt),
 		DocumentLocation: &textracttypes.DocumentLocation{
 			S3Object: &textracttypes.S3Object{
 				Bucket: aws.String(bucket),
 				Name:   aws.String(key),
 			},
 		},
-		JobTag: aws.String(userID + "#" + uploadID + "#" + attempt),
+		JobTag: aws.String(app.JobTag(userID, uploadID, attempt)),
 		NotificationChannel: &textracttypes.NotificationChannel{
 			RoleArn:     aws.String(cfg.TextractRoleARN),
 			SNSTopicArn: aws.String(cfg.TextractTopicARN),
 		},
-	})
+	}
+	out, err := texClient.StartExpenseAnalysis(ctx, input)
 	if err != nil {
+		// Textract のエラーは本文が空のことがあるので、何を投げたかを一緒に残す
+		log.Printf("StartExpenseAnalysis failed: %v request=%s", err, describeStartInput(input))
 		return err
 	}
+	log.Printf("StartExpenseAnalysis started: job_id=%s upload_id=%s attempt=%s", aws.ToString(out.JobId), uploadID, attempt)
 
 	_, err = ddb.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(cfg.UploadHistoriesTable),
@@ -124,6 +129,23 @@ func start(ctx context.Context, bucket, key, userID, uploadID string) error {
 		},
 	})
 	return err
+}
+
+// describeStartInput はログ用に StartExpenseAnalysisInput を1行の JSON にする。
+func describeStartInput(in *textract.StartExpenseAnalysisInput) string {
+	b, err := json.Marshal(map[string]any{
+		"client_request_token": aws.ToString(in.ClientRequestToken),
+		"bucket":               aws.ToString(in.DocumentLocation.S3Object.Bucket),
+		"key":                  aws.ToString(in.DocumentLocation.S3Object.Name),
+		"job_tag":              aws.ToString(in.JobTag),
+		"role_arn":             aws.ToString(in.NotificationChannel.RoleArn),
+		"sns_topic_arn":        aws.ToString(in.NotificationChannel.SNSTopicArn),
+		"region":               texClient.Options().Region,
+	})
+	if err != nil {
+		return err.Error()
+	}
+	return string(b)
 }
 
 func main() {

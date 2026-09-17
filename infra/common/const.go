@@ -7,7 +7,8 @@ const (
 	ProjectName         = "snap_kakeibo"
 	ProjectResourceName = "snap-kakeibo"
 	AWSAccountID        = "654654388040"
-	AWSRegion           = "ap-northeast-1"
+	// Textract は東京(ap-northeast-1)に無いので、対応リージョンで最も近いソウルを使う
+	AWSRegion = "ap-northeast-2"
 	// UnsetParameterValue は手動投入が必要な SSM パラメータの初期値
 	UnsetParameterValue = "UNSET"
 )
@@ -55,6 +56,13 @@ func ImageTagParameterName(functionName string) ParameterName {
 	return ParameterName("functions/" + functionName + "/image-tag")
 }
 
+// LogGroupName は関数のロググループ名(stage 抜き)。Storage スタックが作り、App スタックの Lambda が書き込む
+//
+//	common.LogGroupName("hello").Dev() // "dev-snap-kakeibo-hello_lambda"
+func LogGroupName(functionName string) ResourceName {
+	return ResourceName(functionName + "_lambda")
+}
+
 // DynamoDB
 const (
 	UsersTableName            ResourceName = "users"
@@ -66,8 +74,8 @@ const (
 
 // S3
 const (
-	ReceiptBucketName  ResourceName = "receipts"
-	FrontendBucketName ResourceName = "frontend"
+	ReceiptBucketName  ResourceName = "receipt"
+	FrontendBucketName ResourceName = "front"
 )
 
 // GSI

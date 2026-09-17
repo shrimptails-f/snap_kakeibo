@@ -32,6 +32,11 @@ func TestStorageStackResources(t *testing.T) {
 	storage.ResourceCountIs(jsii.String("AWS::SNS::Topic"), jsii.Number(2))
 	storage.ResourceCountIs(jsii.String("AWS::SNS::Subscription"), jsii.Number(2))
 	storage.ResourceCountIs(jsii.String("AWS::CloudWatch::Alarm"), jsii.Number(2))
+	storage.ResourceCountIs(jsii.String("AWS::Logs::LogGroup"), jsii.Number(len(cfg.Functions)))
+	storage.HasResourceProperties(jsii.String("AWS::Logs::LogGroup"), map[string]any{
+		"LogGroupName":    "dev-snap-kakeibo-hello_lambda",
+		"RetentionInDays": 30,
+	})
 
 	storage.HasResourceProperties(jsii.String("AWS::ECR::Repository"), map[string]any{
 		"RepositoryName":     "dev-snap-kakeibo-hello",
@@ -104,9 +109,13 @@ func TestStorageStackResources(t *testing.T) {
 		"Type":    "AWS::SSM::Parameter::Value<String>",
 		"Default": "/dev/snap-kakeibo/functions/hello/image-tag",
 	})
-	app.HasResourceProperties(jsii.String("AWS::Logs::LogGroup"), map[string]any{
-		"LogGroupName":    "/aws/lambda/dev-snap-kakeibo-hello",
-		"RetentionInDays": 30,
+	// ロググループは Storage が持ち、Lambda は Export 経由で参照する
+	app.ResourceCountIs(jsii.String("AWS::Logs::LogGroup"), jsii.Number(0))
+	app.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]any{
+		"FunctionName": "dev-snap-kakeibo-hello",
+		"LoggingConfig": map[string]any{
+			"LogGroup": map[string]any{"Fn::ImportValue": assertions.Match_AnyValue()},
+		},
 	})
 	app.HasResourceProperties(jsii.String("AWS::CloudFront::Distribution"), map[string]any{
 		"DistributionConfig": assertions.Match_ObjectLike(&map[string]any{
@@ -122,7 +131,7 @@ func TestStorageStackResources(t *testing.T) {
 func TestDevDestroysStatefulResources(t *testing.T) {
 	storage, _ := synth(t, config.Dev())
 
-	for _, typ := range []string{"AWS::DynamoDB::Table", "AWS::S3::Bucket", "AWS::ECR::Repository"} {
+	for _, typ := range []string{"AWS::DynamoDB::Table", "AWS::S3::Bucket", "AWS::ECR::Repository", "AWS::Logs::LogGroup"} {
 		storage.HasResource(jsii.String(typ), map[string]any{
 			"DeletionPolicy": "Delete",
 		})
@@ -142,7 +151,7 @@ func TestRetainPolicyProtectsStatefulResources(t *testing.T) {
 	cfg.RemovalPolicy = awscdk.RemovalPolicy_RETAIN
 	storage, _ := synth(t, cfg)
 
-	for _, typ := range []string{"AWS::DynamoDB::Table", "AWS::S3::Bucket", "AWS::ECR::Repository"} {
+	for _, typ := range []string{"AWS::DynamoDB::Table", "AWS::S3::Bucket", "AWS::ECR::Repository", "AWS::Logs::LogGroup"} {
 		storage.HasResource(jsii.String(typ), map[string]any{
 			"DeletionPolicy": "Retain",
 		})

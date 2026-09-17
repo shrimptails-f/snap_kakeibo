@@ -42,6 +42,8 @@ type Function struct {
 	Repository ECRConfig
 	// ImageTagParameter はデプロイ中のイメージタグを持つ SSM パラメータ名
 	ImageTagParameter string
+	// LogGroup は Lambda のロググループ名。Storage スタックが作る
+	LogGroup string
 }
 
 // ECRConfig は ECR リポジトリの設定。
@@ -63,6 +65,7 @@ func functions(stage common.Stage, repository ECRConfig) []Function {
 			Name:              name,
 			Repository:        repo,
 			ImageTagParameter: common.ImageTagParameterName(name).For(stage),
+			LogGroup:          common.LogGroupName(name).For(stage),
 		})
 	}
 	return fs
@@ -144,7 +147,7 @@ func (c Config) Validate() error {
 		return fmt.Errorf("at least one function is required")
 	}
 	for _, f := range c.Functions {
-		if f.Name == "" || f.ImageTagParameter == "" {
+		if f.Name == "" || f.ImageTagParameter == "" || f.LogGroup == "" {
 			return fmt.Errorf("function name and image tag parameter are required")
 		}
 		if f.Repository.Name == "" || f.Repository.MaxImageCount <= 0 || f.Repository.ImageTagMutability == "" {

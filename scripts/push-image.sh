@@ -41,7 +41,7 @@ done
 
 account_id="$(aws sts get-caller-identity --query Account --output text)"
 region="$(aws configure get region || true)"
-region="${AWS_REGION:-${region:-ap-northeast-1}}"
+region="${AWS_REGION:-${region:-ap-northeast-2}}"
 registry="${account_id}.dkr.ecr.${region}.amazonaws.com"
 
 repository_name() { echo "${stage}-${project}-$1"; }

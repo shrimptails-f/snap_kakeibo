@@ -4,6 +4,10 @@ vars:
   # 対象 stage。STAGE=prod task ... で切り替える
   STAGE: '{{.STAGE | default "dev"}}'
   PROJECT: snap-kakeibo
+  # CDK は infra/common/const.go の AWSRegion を使う。aws CLI と scripts/ も同じリージョンを向くようにする。
+  # Taskfile の env: はシェル側の環境変数(devcontainer の AWS_REGION など)に負けるので、コマンドごとに明示で渡す
+  REGION: ap-northeast-2
+  AWS: env -u AWS_ENDPOINT_URL AWS_REGION={{.REGION}} AWS_DEFAULT_REGION={{.REGION}}
   # image:push が付ける Lambda イメージのタグ。IMAGE_TAG=<sha> で上書き可
   IMAGE_TAG:
     sh: git rev-parse --short HEAD
@@ -54,43 +58,43 @@ tasks:
     desc: Synthesize CloudFormation templates for the stage
     dir: infra
     cmds:
-      - env -u AWS_ENDPOINT_URL cdk synth --quiet -c stage={{.STAGE}} {{.CLI_ARGS}}
+      - '{{.AWS}} cdk synth --quiet -c stage={{.STAGE}} {{.CLI_ARGS}}'
 
   infra:diff:
     desc: Diff both stacks against the deployed state
     dir: infra
     cmds:
-      - env -u AWS_ENDPOINT_URL cdk diff --all -c stage={{.STAGE}} {{.CLI_ARGS}}
+      - '{{.AWS}} cdk diff --all -c stage={{.STAGE}} {{.CLI_ARGS}}'
 
   infra:parameters:
     desc: Create missing SSM parameters for the stage (never overwrites)
     dir: infra
     cmds:
-      - env -u AWS_ENDPOINT_URL go run ./cmd/ensure-parameters -stage {{.STAGE}}
+      - '{{.AWS}} go run ./cmd/ensure-parameters -stage {{.STAGE}}'
 
   infra:deploy:storage:
     desc: "Step 1: ensure SSM parameters, then deploy the storage stack (ECR / S3 / DynamoDB / SQS / SNS)"
     dir: infra
     cmds:
       - task: infra:parameters
-      - env -u AWS_ENDPOINT_URL cdk deploy {{.STAGE}}-{{.PROJECT}}-storage --exclusively -c stage={{.STAGE}} {{.CLI_ARGS}}
+      - '{{.AWS}} cdk deploy {{.STAGE}}-{{.PROJECT}}-storage --exclusively -c stage={{.STAGE}} {{.CLI_ARGS}}'
 
   image:push:
     desc: "Step 2a: build each Lambda image (linux/arm64), push it to the function's ECR and set its image-tag SSM parameter. FUNCTIONS='hello upload' limits the targets (default: all of backend/cmd). Needs Docker: run from the host or CI"
     cmds:
-      - env -u AWS_ENDPOINT_URL bash scripts/push-image.sh {{.STAGE}} {{.PROJECT}} "{{.IMAGE_TAG}}" {{.FUNCTIONS}}
+      - '{{.AWS}} bash scripts/push-image.sh {{.STAGE}} {{.PROJECT}} "{{.IMAGE_TAG}}" {{.FUNCTIONS}}'
 
   front:push:
     desc: "Step 2b: upload front/dist to the frontend bucket, then invalidate CloudFront if the app stack exists"
     cmds:
-      - env -u AWS_ENDPOINT_URL aws s3 sync front/dist s3://{{.STAGE}}-{{.PROJECT}}-frontend --delete
+      - '{{.AWS}} aws s3 sync front/dist s3://{{.STAGE}}-{{.PROJECT}}-front --delete'
       - task: front:invalidate
 
   front:invalidate:
     desc: Invalidate the CloudFront cache (skipped when the app stack is not deployed yet)
     cmds:
       - |
-        dist_id=$(env -u AWS_ENDPOINT_URL aws cloudformation describe-stacks \
+        dist_id=$({{.AWS}} aws cloudformation describe-stacks \
           --stack-name {{.STAGE}}-{{.PROJECT}}-app \
           --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" \
           --output text 2>/dev/null || true)
@@ -98,19 +102,19 @@ tasks:
           echo "app stack is not deployed yet; skipping invalidation"
           exit 0
         fi
-        env -u AWS_ENDPOINT_URL aws cloudfront create-invalidation --distribution-id "$dist_id" --paths '/*'
+        {{.AWS}} aws cloudfront create-invalidation --distribution-id "$dist_id" --paths '/*'
 
   infra:deploy:app:
     desc: "Step 3: deploy the app stack (Lambda / API Gateway / CloudFront). Each Lambda uses the image tag in its SSM parameter"
     cmds:
-      - env -u AWS_ENDPOINT_URL bash scripts/check-image-tags.sh {{.STAGE}} {{.PROJECT}}
-      - cd infra && env -u AWS_ENDPOINT_URL cdk deploy {{.STAGE}}-{{.PROJECT}}-app --exclusively -c stage={{.STAGE}} {{.CLI_ARGS}}
+      - '{{.AWS}} bash scripts/check-image-tags.sh {{.STAGE}} {{.PROJECT}}'
+      - cd infra && {{.AWS}} cdk deploy {{.STAGE}}-{{.PROJECT}}-app --exclusively -c stage={{.STAGE}} {{.CLI_ARGS}}
 
   infra:bootstrap:
     desc: Bootstrap the CDK toolkit stack in the target account (one time)
     dir: infra
     cmds:
-      - env -u AWS_ENDPOINT_URL cdk bootstrap
+      - '{{.AWS}} cdk bootstrap'
 
   floci:check:
     desc: Check local DynamoDB and S3 through Floci

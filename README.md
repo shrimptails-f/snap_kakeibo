@@ -8,7 +8,7 @@ Go 1.26、Node.js/npm（React + TypeScript 用）、Task、Codex CLI、Claude Co
 
 コンテナは UID/GID 1000 の `dev` で起動し、Dockerfile の最終ユーザーも `dev` です。`sudo` と Docker ソケットのマウントは設けていません。Codex と Claude の認証情報は各専用ボリュームに保存します。ホストの UID/GID が 1000 以外なら、Compose の `user` と Dockerfile のユーザー作成値を合わせて変更してください。
 
-ホストの `${HOME}/.aws` をコンテナの `/home/dev/.aws` に読み取り専用でマウントします。ホストで `AWS_PROFILE` と `AWS_REGION` を指定して起動すればその値を使い、未指定なら `default` と `ap-northeast-1` を使います。AWS CLI も導入しています。SSO プロファイルの更新など、`.aws` への書き込みが必要なログイン操作はホスト側で実行してください。
+ホストの `${HOME}/.aws` をコンテナの `/home/dev/.aws` に読み取り専用でマウントします。ホストで `AWS_PROFILE` と `AWS_REGION` を指定して起動すればその値を使い、未指定なら `default` と `ap-northeast-2` を使います(Textract が東京リージョン未対応のためソウルを使っています)。AWS CLI も導入しています。SSO プロファイルの更新など、`.aws` への書き込みが必要なログイン操作はホスト側で実行してください。
 
 Floci を同じ Compose 構成で起動し、開発コンテナ内の標準の AWS 接続先を `http://floci:4566` にします。DynamoDB と S3 を使う際は `task floci:check` で疎通を確認できます。このタスクは Floci 用のダミー認証情報を使います。AWS SDK のコードでも `AWS_ENDPOINT_URL` を読み取り、DynamoDB/S3 クライアントのエンドポイントを設定してください。ホスト PC からは `http://localhost:4566` に接続できます。
 

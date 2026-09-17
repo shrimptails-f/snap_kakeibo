@@ -104,8 +104,8 @@ SNS (通知用トピック)
 
 | スタック | 中身 | 備考 |
 | --- | --- | --- |
-| `{stage}-snap-kakeibo-storage` | ECR(関数ごと)、S3(receipts / frontend)、DynamoDB、SQS + DLQ、SNS、Textract 用ロール、DLQ アラーム | 人間が成果物を push する先。stage の `RemovalPolicy` で残すかを決める |
-| `{stage}-snap-kakeibo-app` | Lambda、API Gateway、CloudFront、イベントソースマッピング、ロググループ | destroy して作り直せる |
+| `{stage}-snap-kakeibo-storage` | ECR(関数ごと)、S3(receipts / frontend)、DynamoDB、SQS + DLQ、SNS、Textract 用ロール、DLQ アラーム、Lambda のロググループ | 人間が成果物を push する先。stage の `RemovalPolicy` で残すかを決める |
+| `{stage}-snap-kakeibo-app` | Lambda、API Gateway、CloudFront、イベントソースマッピング | destroy して作り直せる |
 
 SQS / SNS を storage 側に置くのは、S3 → SQS の通知設定がバケット側のスタックに生成されるため(app 側に置くと循環参照になる)と、DLQ のメッセージとメール購読の確認状態を失いたくないため。
 
@@ -176,8 +176,8 @@ S3          数円
 
 | バケット | 用途 | スタック |
 | --- | --- | --- |
-| `{stage}-snap-kakeibo-receipts` | レシート画像(`receipts/`)と Textract 結果 JSON(`textract-results/`) | storage |
-| `{stage}-snap-kakeibo-frontend` | React のビルド成果物。CloudFront から配信 | storage |
+| `{stage}-snap-kakeibo-receipt` | レシート画像(`receipts/`)と Textract 結果 JSON(`textract-results/`) | storage |
+| `{stage}-snap-kakeibo-front` | React のビルド成果物。CloudFront から配信 | storage |
 
 ### Object Key
 
@@ -218,6 +218,8 @@ S3イベント通知はFIFOキューに送れないため、標準キューを�
 
 レシート・請求書解析には以下を使用する。
 
+Textract は東京リージョン(ap-northeast-1)では提供されていないため、全リソースを対応リージョンで最も近いソウル(ap-northeast-2)に置く(`infra/common/const.go` の `AWSRegion`)。非同期 API は S3 バケット・SNS トピックが Textract と同じリージョンにある必要があるので、Textract だけ別リージョンにする構成は取らない。
+
 ```text
 StartExpenseAnalysis
 ```
@@ -236,8 +238,8 @@ Lambda
  | StartExpenseAnalysis
  | DocumentLocation.S3Object.Bucket = 画像保存S3バケット
  | DocumentLocation.S3Object.Name = receipts/{user_id}/{upload_id}/original.jpg
- | ClientRequestToken = {upload_id}#{attempt}
- | JobTag = {user_id}#{upload_id}#{attempt}
+ | ClientRequestToken = {upload_id}_{attempt}
+ | JobTag = {user_id}_{upload_id}_{attempt}
  v
 Textract
  |

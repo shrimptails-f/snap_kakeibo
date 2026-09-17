@@ -107,8 +107,8 @@ Textract解析は画像1枚単位で実行する。
    画像1枚に対してStartExpenseAnalysis実行
    DocumentLocation.S3Object.Bucket = 画像保存S3バケット
    DocumentLocation.S3Object.Name = upload_histories.s3_key
-   ClientRequestToken = {upload_id}#{attempt}
-   JobTag = {user_id}#{upload_id}#{attempt}
+   ClientRequestToken = {upload_id}_{attempt}
+   JobTag = {user_id}_{upload_id}_{attempt}
 
 8. StartTextract Lambda
    upload_histories.status = ANALYZING
@@ -345,8 +345,8 @@ POST /uploads/{upload_id}/retry
    textract_job_id / error_code / error_message / failed_at を削除
 
 2. StartExpenseAnalysis実行
-   ClientRequestToken = {upload_id}#{attempt}
-   JobTag = {user_id}#{upload_id}#{attempt}
+   ClientRequestToken = {upload_id}_{attempt}
+   JobTag = {user_id}_{upload_id}_{attempt}
    textract_job_idを保存
 ```
 
@@ -730,8 +730,8 @@ monthly_summaries
 
 ```text
 StartTextract    Condition: attempt = :attempt
-                 ClientRequestToken = {upload_id}#{attempt}
-                 JobTag = {user_id}#{upload_id}#{attempt}
+                 ClientRequestToken = {upload_id}_{attempt}
+                 JobTag = {user_id}_{upload_id}_{attempt}
 
 ResultHandler    Condition: status = ANALYZING AND attempt = :attempt
                  TransactWriteItems

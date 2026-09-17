@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsdynamodb"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsecr"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3notifications"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awssns"
@@ -29,13 +30,15 @@ type StorageStackProps struct {
 }
 
 // StorageStack は失うと困るリソースをまとめる。
-// DynamoDB / S3 / ECR のデータ、DLQ に溜まった失敗メッセージ、
+// DynamoDB / S3 / ECR のデータ、Lambda のログ、DLQ に溜まった失敗メッセージ、
 // 確認済みのメール購読が該当する。App スタックからのみ参照され、逆方向の依存は持たない。
 type StorageStack struct {
 	awscdk.Stack
 
 	// Repositories は関数名 -> Lambda イメージ用 ECR
 	Repositories map[string]awsecr.Repository
+	// LogGroups は関数名 -> Lambda のロググループ。App スタックを destroy してもログを残すためここに置く
+	LogGroups map[string]awslogs.LogGroup
 	// Bucket はレシート画像と Textract 結果 JSON
 	Bucket awss3.Bucket
 	// FrontendBucket は React のビルド成果物。人間が push し、App スタックの CloudFront が配信する
@@ -62,6 +65,7 @@ func NewStorageStack(scope constructs.Construct, id string, props *StorageStackP
 	s := &StorageStack{Stack: stack}
 
 	s.Repositories = newRepositories(stack, cfg)
+	s.LogGroups = newLogGroups(stack, cfg)
 	s.Bucket = newReceiptBucket(stack, cfg)
 	s.FrontendBucket = newFrontendBucket(stack, cfg)
 
@@ -140,6 +144,20 @@ func newRepositories(scope constructs.Construct, cfg config.Config) map[string]a
 		repos[f.Name] = repo
 	}
 	return repos
+}
+
+// newLogGroups は関数ごとに Lambda のロググループを作る。
+// Lambda 側で LogGroup を明示するので /aws/lambda/ 以外の名前でも Lambda が書き込める。
+func newLogGroups(scope constructs.Construct, cfg config.Config) map[string]awslogs.LogGroup {
+	groups := make(map[string]awslogs.LogGroup, len(cfg.Functions))
+	for _, f := range cfg.Functions {
+		groups[f.Name] = awslogs.NewLogGroup(scope, jsii.String(constructID(f.Name)+"LogGroup"), &awslogs.LogGroupProps{
+			LogGroupName:  jsii.String(f.LogGroup),
+			Retention:     awslogs.RetentionDays_ONE_MONTH,
+			RemovalPolicy: cfg.RemovalPolicy,
+		})
+	}
+	return groups
 }
 
 // constructID は "start-textract" のような関数名を "StartTextract" に変えて construct ID に使う。

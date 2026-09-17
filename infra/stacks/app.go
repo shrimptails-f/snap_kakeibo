@@ -9,7 +9,6 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awslambda"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awslambdaeventsources"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsssm"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
@@ -26,7 +25,7 @@ type AppStackProps struct {
 }
 
 // AppStack は destroy して作り直せるリソースをまとめる。
-// Lambda / API Gateway / イベントソースマッピング / ロググループ / CloudFront が該当する。
+// Lambda / API Gateway / イベントソースマッピング / CloudFront が該当する。
 // Lambda は各ステップ(認証、アップロード、...)の実装と同時に newFunction で追加する。
 type AppStack struct {
 	awscdk.Stack
@@ -119,14 +118,12 @@ func (s *AppStack) newFunction(name string, props functionProps) awslambda.Docke
 	if !ok {
 		panic(fmt.Sprintf("storage stack has no repository for function %q", name))
 	}
+	// ログは Storage スタックが持ち、App を作り直しても残る
+	logGroup, ok := s.storage.LogGroups[name]
+	if !ok {
+		panic(fmt.Sprintf("storage stack has no log group for function %q", name))
+	}
 	functionName := s.cfg.ResourceName(name)
-
-	// ログは再構築できるデータではないので App スタックに置き、Lambda と一緒に消す
-	logGroup := awslogs.NewLogGroup(s.Stack, jsii.String(constructID(name)+"LogGroup"), &awslogs.LogGroupProps{
-		LogGroupName:  jsii.String("/aws/lambda/" + functionName),
-		Retention:     awslogs.RetentionDays_ONE_MONTH,
-		RemovalPolicy: awscdk.RemovalPolicy_DESTROY,
-	})
 
 	env := s.commonEnvironment()
 	for k, v := range props.Environment {
