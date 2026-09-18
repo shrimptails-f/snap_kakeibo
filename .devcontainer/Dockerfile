@@ -1,6 +1,8 @@
 FROM golang:1.26-alpine3.22
 
 ARG TASK_VERSION=v3.45.4
+# front/package.json の packageManager と揃える(pnpm はそこを読んで自動で同じ版に切り替わる)
+ARG PNPM_VERSION=12.4.2
 ENV TZ=Asia/Tokyo \
     GOPATH=/home/dev/go \
     NPM_CONFIG_PREFIX=/home/dev/.local \
@@ -32,8 +34,8 @@ COPY --chown=dev:dev .devcontainer/infra/go/config.toml /home/dev/.codex/config.
 WORKDIR /workspace/snap_kakeibo
 USER dev
 
-RUN npm install --global @openai/codex@latest aws-cdk@2.1141.0 && \
+RUN npm install --global @openai/codex@latest aws-cdk@2.1141.0 pnpm@${PNPM_VERSION} && \
     curl -fsSL https://claude.ai/install.sh -o /tmp/install-claude.sh && \
     bash /tmp/install-claude.sh && \
     rm /tmp/install-claude.sh && \
-    task --version && codex --version && claude --version && cdk --version
+    task --version && pnpm --version && codex --version && claude --version && cdk --version

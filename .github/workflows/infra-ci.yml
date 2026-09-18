@@ -1,0 +1,16 @@
+# infra/(CDK Go モジュール)の CI。CDK スタックのアサーション(infra/stacks/stacks_test.go など)を含む。
+# cdk synth / diff は AWS 認証が要るためここでは実行しない。
+name: Infra CI
+
+on:
+  push:
+    paths:
+      - infra/**
+      - .github/workflows/infra-ci.yml
+      - .github/workflows/_go-module.yml
+
+jobs:
+  go:
+    uses: ./.github/workflows/_go-module.yml
+    with:
+      module: infra

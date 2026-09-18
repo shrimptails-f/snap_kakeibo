@@ -2,9 +2,11 @@
 
 VS Code の Dev Containers でこのディレクトリを開き、**Reopen in Container** を実行します。Docker Desktop を WSL で使う場合は、対象ディストリビューションの WSL integration を有効にしてください。初回起動時に `task setup` が走ります。
 
-Go 1.26、Node.js/npm（React + TypeScript 用）、Task、Codex CLI、Claude Code を Alpine ベースの開発コンテナへ導入します。モノレポは直下に `backend/`（Go）、`front/`（React + TypeScript）、`infra/`（インフラ資材）を置く前提です。アプリ本体はまだ作成していません。React アプリを作る場合はルートで `npm create vite@latest front -- --template react-ts` を実行し、`cd front && npm install` してください。Go モジュールは `backend/` で `go mod init <module-path>` を実行してください。
+Go 1.26、Node.js/pnpm（React + TypeScript 用）、Task、Codex CLI、Claude Code を Alpine ベースの開発コンテナへ導入します。モノレポは直下に `backend/`（Go）、`front/`（React + TypeScript）、`infra/`（インフラ資材）を置く前提です。アプリ本体はまだ作成していません。React アプリを作る場合はルートで `pnpm create vite@latest front --template react-ts` を実行し、`cd front && pnpm install` してください。Go モジュールは `backend/` で `go mod init <module-path>` を実行してください。
 
-`task setup` は `backend/go.mod` があれば Go の依存関係を、`front/package.json` があれば npm の依存関係を導入します。`task go:test` は `backend/`、`task web:dev` と `task web:build` は `front/` で実行します。
+`task setup` は `backend/go.mod` があれば Go の依存関係を、`front/package.json` があれば pnpm の依存関係を導入します。
+
+`front/pnpm-workspace.yaml` の `minimumReleaseAge: 2880` により、`pnpm install` / `pnpm add` / `pnpm update` は公開から 48 時間経っていない版を(推移的依存も含めて)選びません。CI の Safe Chain も同じ 48 時間ルールでダウンロードをブロックするので、値を変えるときは両方揃えてください。`pnpm install --frozen-lockfile`(`task setup` / CI / CD)は lockfile をそのまま入れるだけで再解決しません。`task go:test` は `backend/`、`task web:dev` / `task web:build` / `task web:test`(vitest)は `front/` で実行します。
 
 コンテナは UID/GID 1000 の `dev` で起動し、Dockerfile の最終ユーザーも `dev` です。`sudo` と Docker ソケットのマウントは設けていません。Codex と Claude の認証情報は各専用ボリュームに保存します。ホストの UID/GID が 1000 以外なら、Compose の `user` と Dockerfile のユーザー作成値を合わせて変更してください。
 

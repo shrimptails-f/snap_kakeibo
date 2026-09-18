@@ -53,7 +53,7 @@ func (c Client) Analyze(ctx context.Context, jpegData []byte) ([]byte, error) {
 		resp, err := client.Do(req)
 		if err == nil {
 			raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			if readErr != nil {
 				err = readErr
 			} else if resp.StatusCode >= 200 && resp.StatusCode < 300 {

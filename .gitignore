@@ -1,4 +1,6 @@
 node_modules/
+# pnpm がワークスペースと同じファイルシステム上に作るストア(ハードリンク用)
+.pnpm-store/
 dist/
 .env
 .env.*

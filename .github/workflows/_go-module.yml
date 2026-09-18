@@ -1,0 +1,65 @@
+# Go モジュール 1 つ分の CI(build / vet / test / tidy チェック / golangci-lint)。
+# backend-ci.yml と infra-ci.yml から workflow_call で呼び出す。直接は起動しない。
+name: Go module CI
+
+on:
+  workflow_call:
+    inputs:
+      module:
+        description: "リポジトリ直下からの Go モジュールのディレクトリ(backend / infra)"
+        required: true
+        type: string
+
+env:
+  GOLANGCI_LINT_VERSION: v2.11.3
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.module }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: ${{ inputs.module }}/go.mod
+          cache-dependency-path: ${{ inputs.module }}/go.sum
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Check go.mod / go.sum are tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race ./...
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: ${{ inputs.module }}/go.mod
+          cache-dependency-path: ${{ inputs.module }}/go.sum
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+          working-directory: ${{ inputs.module }}

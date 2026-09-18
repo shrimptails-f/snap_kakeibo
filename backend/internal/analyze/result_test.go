@@ -10,6 +10,7 @@ import (
 func ptr[T any](v T) *T { return &v }
 
 func TestValidate(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 9, 18, 12, 0, 0, 0, time.FixedZone("JST", 9*3600))
 	tests := []struct {
 		name string
@@ -27,6 +28,7 @@ func TestValidate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			_, f := Validate(tt.r, now)
 			if tt.code == "" && f != nil {
 				t.Fatal(f)
@@ -39,6 +41,7 @@ func TestValidate(t *testing.T) {
 }
 
 func TestValidateDropsEmptyAndTruncates(t *testing.T) {
+	t.Parallel()
 	r := Receipt{StoreName: ptr(strings.Repeat("店", 101)), PurchasedAt: ptr("2026-09-18"), TotalAmount: ptr(int64(10)), Details: []Detail{{Name: " ", Amount: 1, Quantity: 1}, {Name: strings.Repeat("品", 101), Amount: 2, Quantity: 1, Category: "bad"}}}
 	got, f := Validate(r, time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC))
 	if f != nil {
@@ -50,6 +53,7 @@ func TestValidateDropsEmptyAndTruncates(t *testing.T) {
 }
 
 func TestParseResponse(t *testing.T) {
+	t.Parallel()
 	raw := []byte(`{"id":"resp_1","status":"completed","output":[{"type":"message","content":[{"type":"output_text","Text":"{\"store_name\":null,\"purchased_at\":\"2026-09-18\",\"total_amount\":100,\"details\":[]}"}]}]}`)
 	// Responses API uses lowercase "text"; encoding/json matches field name Text case-insensitively.
 	got, resp, err := ParseResponse(raw)

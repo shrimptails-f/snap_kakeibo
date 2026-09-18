@@ -27,8 +27,8 @@ cp scripts/frontend-deploy.sh build/scripts/frontend-deploy.sh
 
 if [[ "${deploy}" == true ]]; then
   cd front
-  npm ci
-  npm run build
+  pnpm install --frozen-lockfile
+  pnpm build
   cd ..
   mkdir -p build/front-dist
   cp -R front/dist/. build/front-dist/
