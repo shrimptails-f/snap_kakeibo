@@ -6,10 +6,12 @@
 
 ```text
 backend pipeline
-  GitHub -> CodeBuild(test -> ECR push -> Lambda publish -> CodeDeploy)
+  GitHub -> Build(CodeBuild: test -> ECR push -> deployment plan)
+         -> Deploy(CodeBuild: Lambda publish -> CodeDeploy -> marker)
 
 frontend pipeline
-  GitHub -> CodeBuild(test/build -> S3 sync -> CloudFront invalidation)
+  GitHub -> Build(CodeBuild: test/build -> deployment plan + dist)
+         -> Deploy(CodeBuild: S3 sync -> CloudFront invalidation -> marker)
 
 infra pipeline
   TODO
@@ -93,7 +95,7 @@ pipeline が更新する運用状態は CDK の `StringParameter` として値�
 
 Connection は Pipeline stack と同じリージョンに作る。現行の dev 環境は `ap-northeast-2` なので、`arn:aws:codeconnections:ap-northeast-2:...` の ARN を設定する。`ap-northeast-1` など別リージョンの connection ARN は使わない。
 
-現行実装では CDK が `dev-snap-kakeibo-pipeline` に backend / frontend の 2 本の CodePipeline を作る。Source action は `CodeBuildCloneOutput` を有効にし、CodeBuild 内で `.git` を使えるようにする。これは `git diff --name-status base head` と `go list -deps` による差分判定に必要。
+現行実装では CDK が `dev-snap-kakeibo-pipeline` に backend / frontend の 2 本の CodePipeline を作る。各 pipeline は `Source` / `Build` / `Deploy` stage に分ける。Source action は `CodeBuildCloneOutput` を有効にし、Build stage の CodeBuild 内で `.git` を使えるようにする。これは `git diff --name-status base head` と `go list -deps` による差分判定に必要。
 
 ```bash
 task infra:parameters
@@ -216,23 +218,36 @@ affected functions =
 
 ### 実行内容
 
-CodeBuild は関数ごとに次を実行する。
+backend pipeline は Build / Deploy stage を分ける。
+
+Build stage は次を実行し、Deploy stage へ `backend-plan.json` を artifact として渡す。
 
 ```text
 1. テストを実行する
-2. 対象 Lambda image を ECR へ push する
-3. aws lambda update-function-code --publish で新 Version を発行する
-4. live Alias の現在 Version を取得する
-5. Lambda AppSpec を生成する
-6. aws deploy create-deployment を実行する
-7. deployment 成功を待つ
-8. live Alias が新 Version を向いたことを確認する
-9. 成功したら backend marker を head commit に更新する
+2. 差分から対象 Lambda を判定する
+3. 対象 Lambda image を ECR へ push する
+4. 対象 Lambda 一覧、image URI、関数名、Deployment Group 名を backend-plan.json に書く
+```
+
+Deploy stage は `backend-plan.json` を読み、関数ごとに次を実行する。
+
+
+```text
+1. live Alias が既に今回の image URI を使っていれば skip する
+2. aws lambda update-function-code --publish で新 Version を発行する
+3. live Alias の現在 Version を取得する
+4. Lambda AppSpec を生成する
+5. aws deploy create-deployment を実行する
+6. deployment 成功を待つ
+7. live Alias が新 Version を向いたことを確認する
+8. 全対象が成功したら backend marker を head commit に更新する
 ```
 
 CodeDeploy Application / Deployment Group / Deployment Config / Lambda Alias は AppStack が作る。
 
-実行ロジックは `scripts/backend-cd.sh` に置く。初回または marker が `UNSET` の場合は `backend/cmd/*` 全関数の ECR image/tag を揃え、CodeDeploy deployment は同期 API 5本だけ作る。通常時は `git diff --name-status` で削除・rename を検出し、`backend/internal` の既存 Go package 変更は `go list -deps` の依存集合で API Lambda に絞る。
+実行ロジックは `scripts/backend-build.sh` と `scripts/backend-deploy.sh` に置く。初回または marker が `UNSET` の場合は `backend/cmd/*` 全関数の ECR image/tag を揃え、CodeDeploy deployment は同期 API 5本だけ作る。通常時は `git diff --name-status` で削除・rename を検出し、`backend/internal` の既存 Go package 変更は `go list -deps` の依存集合で API Lambda に絞る。
+
+再実行時は、同じ commit tag の ECR image が既に存在すれば build / push を skip する。さらに `live` Alias が既に今回の image URI を使っている Lambda は、Lambda Version 発行と CodeDeploy deployment も skip する。これにより、一部 Lambda の CodeDeploy 成功後に後続 Lambda で失敗した場合でも、再実行で成功済み Lambda を重複 publish せず、未完了分だけ進められる。backend marker は全対象が成功した最後にだけ更新する。
 
 ## Frontend Pipeline
 
@@ -248,15 +263,19 @@ CodeDeploy Application / Deployment Group / Deployment Config / Lambda Alias は
 
 ### 実行内容
 
+frontend pipeline も Build / Deploy stage を分ける。
+
+Build stage は marker と差分を見て、配信が必要なら `npm ci` / `npm run build` を実行し、`frontend-plan.json` と `front-dist/` を artifact として渡す。
+
+Deploy stage は `frontend-plan.json` を読み、配信が必要な場合だけ次を実行する。
+
 ```text
-1. npm ci
-2. npm run build
-3. front/dist を frontend bucket へ sync
-4. CloudFront invalidation を作成する
-5. 成功したら frontend marker を head commit に更新する
+1. front-dist を frontend bucket へ sync
+2. CloudFront invalidation を作成する
+3. 成功したら frontend marker を head commit に更新する
 ```
 
-実行ロジックは `scripts/frontend-cd.sh` に置く。`front/**` または frontend deploy script に差分がある場合、または marker が `UNSET` の場合だけ配信する。差分がない場合は build/sync/invalidation を行わず marker だけ更新する。
+実行ロジックは `scripts/frontend-build.sh` と `scripts/frontend-deploy.sh` に置く。`front/**` または frontend deploy script に差分がある場合、または marker が `UNSET` の場合だけ配信する。差分がない場合は build/sync/invalidation を行わず marker だけ更新する。
 
 CloudFront invalidation の完了待ちは初期実装では必須にしない。必要になったら `wait invalidation-completed` を追加する。
 

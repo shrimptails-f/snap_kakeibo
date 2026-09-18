@@ -37,15 +37,16 @@ func NewPipelineStack(scope constructs.Construct, id string, props *PipelineStac
 		}},
 	})
 
-	s.newServicePipeline("backend", props.Config, connectionARN, backendBuildSpec())
-	s.newServicePipeline("frontend", props.Config, connectionARN, frontendBuildSpec())
+	s.newServicePipeline("backend", props.Config, connectionARN, backendBuildSpec(), backendDeploySpec())
+	s.newServicePipeline("frontend", props.Config, connectionARN, frontendBuildSpec(), frontendDeploySpec())
 	return s
 }
 
-func (s *PipelineStack) newServicePipeline(name string, cfg config.Config, connectionARN *string, buildSpec awscodebuild.BuildSpec) {
+func (s *PipelineStack) newServicePipeline(name string, cfg config.Config, connectionARN *string, buildSpec awscodebuild.BuildSpec, deploySpec awscodebuild.BuildSpec) {
 	source := awscodepipeline.NewArtifact(jsii.String(constructID(name)+"Source"), nil)
-	project := awscodebuild.NewPipelineProject(s.Stack, jsii.String(constructID(name)+"BuildProject"), &awscodebuild.PipelineProjectProps{
-		ProjectName: jsii.String(cfg.ResourceName(name + "-cd")),
+	buildOutput := awscodepipeline.NewArtifact(jsii.String(constructID(name)+"Build"), nil)
+	buildProject := awscodebuild.NewPipelineProject(s.Stack, jsii.String(constructID(name)+"BuildProject"), &awscodebuild.PipelineProjectProps{
+		ProjectName: jsii.String(cfg.ResourceName(name + "-build")),
 		Environment: &awscodebuild.BuildEnvironment{
 			BuildImage:  awscodebuild.LinuxBuildImage_STANDARD_7_0(),
 			ComputeType: awscodebuild.ComputeType_SMALL,
@@ -57,7 +58,22 @@ func (s *PipelineStack) newServicePipeline(name string, cfg config.Config, conne
 			"PROJECT": {Value: jsii.String(common.ProjectResourceName)},
 		},
 	})
-	grantCDProject(project, cfg, name, connectionARN)
+	grantCDProject(buildProject, cfg, name, connectionARN)
+
+	deployProject := awscodebuild.NewPipelineProject(s.Stack, jsii.String(constructID(name)+"DeployProject"), &awscodebuild.PipelineProjectProps{
+		ProjectName: jsii.String(cfg.ResourceName(name + "-deploy")),
+		Environment: &awscodebuild.BuildEnvironment{
+			BuildImage:  awscodebuild.LinuxBuildImage_STANDARD_7_0(),
+			ComputeType: awscodebuild.ComputeType_SMALL,
+			Privileged:  jsii.Bool(false),
+		},
+		BuildSpec: deploySpec,
+		EnvironmentVariables: &map[string]*awscodebuild.BuildEnvironmentVariable{
+			"STAGE":   {Value: jsii.String(string(cfg.Stage))},
+			"PROJECT": {Value: jsii.String(common.ProjectResourceName)},
+		},
+	})
+	grantCDProject(deployProject, cfg, name, connectionARN)
 
 	pipeline := awscodepipeline.NewPipeline(s.Stack, jsii.String(constructID(name)+"Pipeline"), &awscodepipeline.PipelineProps{
 		PipelineName:             jsii.String(cfg.ResourceName(name)),
@@ -78,12 +94,23 @@ func (s *PipelineStack) newServicePipeline(name string, cfg config.Config, conne
 		},
 	})
 	pipeline.AddStage(&awscodepipeline.StageOptions{
+		StageName: jsii.String("Build"),
+		Actions: &[]awscodepipeline.IAction{
+			awscodepipelineactions.NewCodeBuildAction(&awscodepipelineactions.CodeBuildActionProps{
+				ActionName: jsii.String("Build"),
+				Project:    buildProject,
+				Input:      source,
+				Outputs:    &[]awscodepipeline.Artifact{buildOutput},
+			}),
+		},
+	})
+	pipeline.AddStage(&awscodepipeline.StageOptions{
 		StageName: jsii.String("Deploy"),
 		Actions: &[]awscodepipeline.IAction{
 			awscodepipelineactions.NewCodeBuildAction(&awscodepipelineactions.CodeBuildActionProps{
 				ActionName: jsii.String("Deploy"),
-				Project:    project,
-				Input:      source,
+				Project:    deployProject,
+				Input:      buildOutput,
 			}),
 		},
 	})
@@ -104,7 +131,25 @@ func backendBuildSpec() awscodebuild.BuildSpec {
 				},
 			},
 			"build": map[string]any{
-				"commands": []string{"bash scripts/backend-cd.sh"},
+				"commands": []string{"bash scripts/backend-build.sh"},
+			},
+		},
+		"artifacts": map[string]any{
+			"base-directory": "build",
+			"files":          []string{"**/*"},
+		},
+	})
+}
+
+func backendDeploySpec() awscodebuild.BuildSpec {
+	return awscodebuild.BuildSpec_FromObject(&map[string]any{
+		"version": "0.2",
+		"phases": map[string]any{
+			"pre_build": map[string]any{
+				"commands": []string{"chmod +x scripts/*.sh", "aws --version"},
+			},
+			"build": map[string]any{
+				"commands": []string{"bash scripts/backend-deploy.sh backend-plan.json"},
 			},
 		},
 	})
@@ -121,7 +166,25 @@ func frontendBuildSpec() awscodebuild.BuildSpec {
 				"commands": []string{"chmod +x scripts/*.sh", "node --version", "npm --version"},
 			},
 			"build": map[string]any{
-				"commands": []string{"bash scripts/frontend-cd.sh"},
+				"commands": []string{"bash scripts/frontend-build.sh"},
+			},
+		},
+		"artifacts": map[string]any{
+			"base-directory": "build",
+			"files":          []string{"**/*"},
+		},
+	})
+}
+
+func frontendDeploySpec() awscodebuild.BuildSpec {
+	return awscodebuild.BuildSpec_FromObject(&map[string]any{
+		"version": "0.2",
+		"phases": map[string]any{
+			"pre_build": map[string]any{
+				"commands": []string{"chmod +x scripts/*.sh", "aws --version"},
+			},
+			"build": map[string]any{
+				"commands": []string{"bash scripts/frontend-deploy.sh frontend-plan.json"},
 			},
 		},
 	})
@@ -150,7 +213,7 @@ func grantCDProject(project awscodebuild.PipelineProject, cfg config.Config, nam
 			Actions: jsii.Strings(
 				"ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:CompleteLayerUpload", "ecr:DescribeImages",
 				"ecr:GetAuthorizationToken", "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart",
-				"lambda:GetAlias", "lambda:UpdateFunctionCode",
+				"lambda:GetAlias", "lambda:GetFunction", "lambda:UpdateFunctionCode",
 				"codedeploy:CreateDeployment", "codedeploy:GetDeployment",
 			),
 			Resources: jsii.Strings("*"),

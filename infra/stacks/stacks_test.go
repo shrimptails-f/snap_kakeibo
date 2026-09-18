@@ -229,7 +229,7 @@ func TestPipelineStackResources(t *testing.T) {
 	pipeline := synthPipeline(t, cfg)
 
 	pipeline.ResourceCountIs(jsii.String("AWS::CodePipeline::Pipeline"), jsii.Number(2))
-	pipeline.ResourceCountIs(jsii.String("AWS::CodeBuild::Project"), jsii.Number(2))
+	pipeline.ResourceCountIs(jsii.String("AWS::CodeBuild::Project"), jsii.Number(4))
 	pipeline.HasResourceProperties(jsii.String("AWS::CodePipeline::Pipeline"), map[string]any{
 		"Name": "dev-snap-kakeibo-backend",
 		"Stages": assertions.Match_ArrayWith(&[]any{
@@ -245,16 +245,30 @@ func TestPipelineStackResources(t *testing.T) {
 					}),
 				}),
 			}),
+			assertions.Match_ObjectLike(&map[string]any{"Name": "Build"}),
+			assertions.Match_ObjectLike(&map[string]any{"Name": "Deploy"}),
 		}),
 	})
 	pipeline.HasResourceProperties(jsii.String("AWS::CodeBuild::Project"), map[string]any{
-		"Name": "dev-snap-kakeibo-backend-cd",
+		"Name": "dev-snap-kakeibo-backend-build",
 		"Environment": assertions.Match_ObjectLike(&map[string]any{
 			"PrivilegedMode": true,
 		}),
 	})
 	pipeline.HasResourceProperties(jsii.String("AWS::CodeBuild::Project"), map[string]any{
-		"Name": "dev-snap-kakeibo-frontend-cd",
+		"Name": "dev-snap-kakeibo-backend-deploy",
+		"Environment": assertions.Match_ObjectLike(&map[string]any{
+			"PrivilegedMode": false,
+		}),
+	})
+	pipeline.HasResourceProperties(jsii.String("AWS::CodeBuild::Project"), map[string]any{
+		"Name": "dev-snap-kakeibo-frontend-build",
+		"Environment": assertions.Match_ObjectLike(&map[string]any{
+			"PrivilegedMode": false,
+		}),
+	})
+	pipeline.HasResourceProperties(jsii.String("AWS::CodeBuild::Project"), map[string]any{
+		"Name": "dev-snap-kakeibo-frontend-deploy",
 		"Environment": assertions.Match_ObjectLike(&map[string]any{
 			"PrivilegedMode": false,
 		}),

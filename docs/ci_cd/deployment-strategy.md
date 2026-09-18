@@ -6,6 +6,33 @@ API Gateway 経由の Lambda は、Lambda 関数本体ではなく `live` Alias 
 
 コードデプロイは CodeDeploy for Lambda で行い、本番相当の環境では `LambdaCanary10Percent5Minutes` を使う。
 
+Lambda の参照関係は次の形に固定する。
+
+```text
+ECR image tag
+  -> Lambda Version
+       -> Lambda Alias: live
+            -> API Gateway
+```
+
+ECR image tag はコンテナイメージを指すラベルで、`aws lambda update-function-code --image-uri ... --publish` により新しい Lambda Version を発行する。Lambda Version はその時点の code/image を固定したリリース単位とする。
+
+API Gateway は Version を直接参照せず、常に `live` Alias を参照する。リリースごとに Alias を増やすのではなく、`live` Alias は各 Lambda につき1つに固定する。通常デプロイでは新 Version を作り、CodeDeploy が `live` Alias の向きを旧 Version から新 Version へ切り替える。
+
+```text
+before:
+  API Gateway -> live -> version 11
+
+deploy:
+  publish version 12
+  CodeDeploy updates live
+
+after:
+  API Gateway -> live -> version 12
+```
+
+古い Version は Alias から外れるだけで即削除しない。ロールバックや監査で必要になるため、削除ポリシーは別途検討する。
+
 ```text
 API Gateway HTTP API
   |
