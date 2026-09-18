@@ -1,0 +1,6 @@
+model = "gpt-5.4-codex"
+model_reasoning_effort = "xhigh"
+
+[tui]
+status_line = ["model-with-reasoning", "current-dir", "thread-name", "five-hour-limit", "weekly-limit"]
+status_line_use_colors = true

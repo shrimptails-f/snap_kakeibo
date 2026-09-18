@@ -6,10 +6,8 @@
 * AWS Lambda
 * Amazon API Gateway
 * DynamoDB
-* Amazon Textract
-* OpenAI Responses API
+* OpenAI Responses API(画像入力 + Structured Outputs)
 * S3 Presigned URL
-* SNS
 * SQS
 * SSM Parameter Store
 
@@ -51,7 +49,7 @@ PATCH /billings/{billing_id}
   v
 upload_histories
   |
-  | Textract解析成功後
+  | 解析成功後
   v
 billings
   |
@@ -77,7 +75,7 @@ billings.final_amount
 
 ユーザーは複数画像を一括でアップロードできる。
 
-Textract解析は画像1枚単位で実行する。
+解析は画像1枚単位で実行する。
 
 ```text
 1. React
@@ -101,64 +99,70 @@ Textract解析は画像1枚単位で実行する。
 
 6. S3
    ObjectCreatedイベント発火
-   StartTextract Queue (SQS) へ送信
+   Analyze Queue (SQS) へ送信
 
-7. StartTextract Lambda
-   画像1枚に対してStartExpenseAnalysis実行
-   DocumentLocation.S3Object.Bucket = 画像保存S3バケット
-   DocumentLocation.S3Object.Name = upload_histories.s3_key
-   ClientRequestToken = {upload_id}#{attempt}
-   JobTag = {user_id}#{upload_id}#{attempt}
-
-8. StartTextract Lambda
+7. Analyze Lambda
+   S3キーからuser_id / upload_idを復元(attempt = 1)
    upload_histories.status = ANALYZING
-   textract_job_idを保存
-   Condition: attempt = :attempt
+   Condition: status IN (UPLOADING, ANALYZING) AND attempt = :attempt
+   条件失敗は処理済みか古い試行なので正常終了
 
-9. Textract
-   非同期解析
+8. Analyze Lambda
+   S3から画像取得、長辺2048pxに縮小、JPEGでBase64
+   OpenAI Responses APIに画像と指示文を渡し、JSON Schemaで結果を受け取る
+   店名 / 購入日 / 合計金額 / 明細(品目名・金額・数量・カテゴリ)
+   生レスポンスを S3 analysis-results/{user_id}/{upload_id}/{attempt}/{response_id}.json に保存
 
-10. Textract
-    SNSへ完了通知
-    ResultHandler Queue (SQS) へ送信
+9. Analyze Lambda
+   解析結果を検証(「検証」の表)
+   合計金額なし・範囲外 / 購入日なし・不正 / 明細50件超
+   いずれかに該当すればupload_historiesをFAILEDにして正常終了
+   明細0件(レシートでない画像を含む)ならstatus = NO_DATAにして正常終了
 
-11. ResultHandler Lambda
-   通知のStatusを確認
-   FAILED / PARTIAL_SUCCESSならattemptに応じて自動再実行またはFAILEDにして正常終了
-   SUCCEEDEDならGetExpenseAnalysis実行
-   JobTagからuser_id / upload_id / attemptを復元
-   更新条件は status = ANALYZING AND attempt = :attempt
-
-12. ResultHandler Lambda
-    解析結果を検証
-    合計金額なし / 購入日なし / 明細50件超
-    いずれかに該当すればupload_historiesをFAILEDにして正常終了
-    明細0件ならstatus = NO_DATAにして正常終了
-
-13. ResultHandler Lambda
-    OpenAI Responses APIで明細のカテゴリ分類を行う
-    JSON Schemaで構造化された分類結果を受け取る
-    AI分類に失敗した明細はcategory = unknownとして扱う
-
-14. DynamoDB
+10. DynamoDB
     TransactWriteItems
-    upload_histories更新
+    upload_histories更新(Condition: status = ANALYZING AND attempt = :attempt)
     billings作成
     billing_details作成
-    monthly_summaries更新
+    monthly_summaries更新(すべて ADD。map の SET はしない)
 
-15. status = SUCCEEDED
+11. status = SUCCEEDED
 ```
 
-「解析開始(s3_key → JobId)」「AI後処理(Textract結果 → カテゴリ分類)」「結果登録(job_id → DB)」はLambdaハンドラから分離した関数にする。解析開始と結果登録は、SQS経由でも再実行API経由でも同じ関数を呼ぶ。
+「画像取得と縮小」「OpenAI呼び出し」「検証」「結果登録」はLambdaハンドラから分離した関数にする。S3イベント経由でも再実行API経由のメッセージでも、`user_id + upload_id + attempt` に解決したあとは同じ関数を呼ぶ。
+
+### Analyze Queue のメッセージ
+
+```text
+S3 イベント通知   S3 のキーから user_id / upload_id を取り出す。attempt = 1 とみなす
+再実行 API        {"user_id": "...", "upload_id": "...", "attempt": 2, "trigger": "RETRY"}
+```
+
+`attempt` はメッセージ側で固定し、DynamoDB から「現在の attempt」を読んで使うことはしない。遅れて届いた古いメッセージや重複した S3 イベントが、新しい試行として処理されるのを防ぐため。
+
+### 試行の排除
+
+開始・登録・失敗のすべての更新に `attempt = :attempt` を条件に入れる。
+
+```text
+開始              Condition: status IN (UPLOADING, ANALYZING) AND attempt = :attempt
+登録(SUCCEEDED)   Condition: status = ANALYZING AND attempt = :attempt
+FAILED / NO_DATA  Condition: status = ANALYZING AND attempt = :attempt
+```
+
+開始条件に `ANALYZING` を含めるのは、SQS の再配信(一時エラーで Lambda がエラー終了した同じメッセージ)を通すため。`status = UPLOADING` だけにすると、2回目以降の配信が弾かれてリトライが機能しない。
+
+`FAILED` / `NO_DATA` にも条件を付けるのは、attempt 1 の遅い失敗処理が attempt 2 の成功結果を上書きしないため。
+
+同じ `attempt` の並行処理(S3 イベントの重複配信)は開始条件を両方通る。OpenAI を二重に呼び、SUCCEEDED / FAILED / NO_DATA を問わず**最初に終端状態を書いた方が勝ち**、後の方は `ConditionalCheckFailed` で正常終了する。片方が正常解析、もう片方が refusal で先に `FAILED` を書くと最終状態は `FAILED` になるが、手動再実行で回復できるため許容する(「許容するリスク」参照)。
 
 ---
 
-## AI後処理
+## レシート解析(OpenAI)
 
-Textractで取得した店舗名、購入日、合計金額、明細を元に、OpenAI Responses APIで明細カテゴリを分類する。
+読み取りとカテゴリ分類はOpenAI Responses APIへの1回の呼び出しで行う。OCRサービス(Textract)は日本語非対応のため使わない。
 
-AI後処理は `ResultHandler Lambda` の中で、DynamoDB登録前に実行する。別Lambdaには分けない。
+`Analyze Lambda` の中で、DynamoDB登録前に実行する。別Lambdaには分けない。
 
 理由:
 
@@ -170,40 +174,81 @@ billings は作成済みだがカテゴリだけ未反映、という中間状�
 初期構成では状態数とLambda数を増やさない
 ```
 
-AIには金額や日付の正本を決めさせない。月次集計に使う金額はTextract結果から検証した `billings.final_amount` を使い、AIは明細名の補正とカテゴリ分類に限定する。
-
 ### 入力
 
-```json
-{
-  "store_name": "スーパー",
-  "purchased_at": "2026-09-15",
-  "details": [
-    {
-      "detail_id": "01JITEMXXX",
-      "name": "牛乳",
-      "amount": 281
-    }
-  ]
-}
+```text
+model                = SSM の値(初期値 gpt-5-mini)
+reasoning.effort     = SSM の値(初期値 low)
+store                = false(レシートを OpenAI 側に保存させない)
+max_output_tokens    = 4096
+text.format          = json_schema(strict)
+
+instructions(固定文。cached input を効かせるため毎回同じにする)
+  レシート画像から店名・購入日・合計金額・明細を読み取り、明細を固定カテゴリに分類する
+  読めない項目は null にする。推測で埋めない
+  金額は税込の整数(円)。合計金額はレシートの「合計」「お買上げ計」など支払額の行を使う
+  明細は商品行のみ。小計・税・割引・預り金・お釣りの行は明細に含めない
+  レシートでない画像なら details を空にする
+
+input
+  input_image
+    image_url = data:image/jpeg;base64,...(長辺2048pxを上限に縮小したJPEG。拡大はしない)
+    detail    = high
 ```
+
+縮小の上限は環境変数 `IMAGE_MAX_EDGE`(初期値 2048)で変える。細長いレシートは縮小で文字が潰れやすいため、実画像で評価してから値を決める。
 
 ### 出力
 
-OpenAI Responses APIのStructured Outputs(JSON Schema)を使い、自由文ではなく固定形式のJSONで受け取る。
+Structured Outputs(JSON Schema、`strict: true`)で固定形式のJSONで受け取る。
 
 ```json
 {
+  "store_name": "ファミリーマート",
+  "purchased_at": "2024-01-05",
+  "total_amount": 106,
   "details": [
     {
-      "detail_id": "01JITEMXXX",
-      "normalized_name": "牛乳",
-      "category": "food",
-      "confidence": "high"
+      "name": "スイートオレンジ&温州",
+      "amount": 106,
+      "quantity": 1,
+      "category": "food"
     }
   ]
 }
 ```
+
+| 項目 | 型 | 備考 |
+| --- | --- | --- |
+| store_name | string / null | 読めなければ null。null でも登録は続ける |
+| purchased_at | string(YYYY-MM-DD) / null | 時刻を含めない。JSON Schemaでも形式を制約する。null なら `NO_DATE` |
+| total_amount | integer / null | null なら `NO_TOTAL_AMOUNT` |
+| details[].name | string | レシート表記のまま |
+| details[].amount | integer | 行の金額(数量をかけた後) |
+| details[].quantity | integer | 読めなければ 1 |
+| details[].category | enum | 下記の固定カテゴリ |
+
+### 検証
+
+JSON Schema に合っていてもレシートとして正しい値とは限らないので、登録前にアプリ側で意味検証する。
+
+| 項目 | 検証 | 違反時 |
+| --- | --- | --- |
+| purchased_at | null でない | `NO_DATE` |
+| purchased_at | `YYYY-MM-DD` として実在する日付(2月30日などを弾く) | `INVALID_DATE` |
+| purchased_at | 未来でない(タイムゾーン差を考慮して翌日まで許容) | `INVALID_DATE` |
+| purchased_at | 5年より前でない | `INVALID_DATE` |
+| total_amount | null でない | `NO_TOTAL_AMOUNT` |
+| total_amount | 1 以上 10,000,000 以下 | `INVALID_AMOUNT` |
+| details | 50件以下 | `TOO_MANY_DETAILS` |
+| details[].amount | 0 以上 10,000,000 以下 | `INVALID_AMOUNT` |
+| details[].quantity | 1 以上 999 以下 | `INVALID_AMOUNT` |
+| details[].name | 空でない | 該当明細を捨てる(他の明細は登録する) |
+| store_name / details[].name | 100 文字を超える分は切り詰める | 失敗にしない |
+
+明細の合計と `total_amount` が一致しなくても `FAILED` にしない。値引きや税の丸めで一致しないことが多く、月次集計には `total_amount` 由来の `billings.final_amount` を使うため明細の誤差は集計に影響しない。
+
+`INVALID_DATE` / `INVALID_AMOUNT` は読み取りミスの可能性が高いので、履歴画面から手動再実行できる。再実行でも直らない場合は画像側の問題(手ブレ、見切れ)として扱う。
 
 ### カテゴリ
 
@@ -222,28 +267,57 @@ other
 unknown
 ```
 
-AIが分類できない、レスポンス形式が不正、OpenAI APIが一時失敗した、のいずれかの場合もアップロード全体は `FAILED` にしない。該当明細は `category = unknown`、`category_source = UNKNOWN` として登録する。
+登録時は `category_source = AI` とする。ユーザーが請求詳細・編集画面でカテゴリを修正した場合は `category_source = USER`、`is_edited = true` とする。
 
-AI分類に成功した明細は `category_source = AI` とする。ユーザーが請求詳細・編集画面でカテゴリを修正した場合は `category_source = USER`、`is_edited = true` とする。
+### モデルと reasoning effort
+
+Analyze Lambda の環境変数として設定する。変更時は app スタックを再デプロイする。
+
+```text
+OPENAI_MODEL             初期値 gpt-5-mini
+OPENAI_REASONING_EFFORT  初期値 low
+```
+
+思考トークンは出力トークンとして課金されるため `low` か `minimal` にする。レスポンスの `usage.output_tokens_details.reasoning_tokens` と `usage.input_tokens` をログに出し、実測でどちらにするか決める。
+
+### レスポンスの判定
+
+Structured Outputs でも「JSON が返る」以外の終わり方がある。`status` と `output` を見て分類する。
+
+| レスポンス | 扱い |
+| --- | --- |
+| `status = completed`、`output_text` あり、JSON Schema でパース成功 | 正常解析 |
+| `status = completed` だが `output` に `refusal` | 恒久失敗 `ANALYSIS_FAILED`。`error_message` に refusal の内容 |
+| `status = completed` だが期待する output が無い | 恒久失敗 `ANALYSIS_FAILED` |
+| `status = incomplete`、`incomplete_details.reason = max_output_tokens` | 恒久失敗 `ANALYSIS_FAILED`(同じ入力で再試行しても同じ結果になる) |
+| `status = incomplete`、`reason = content_filter` | 恒久失敗 `ANALYSIS_FAILED` |
+| `status = failed` | 一時失敗。リトライ予算内で再試行 |
+| HTTP 429 / 5xx / ネットワークエラー | 一時失敗。リトライ予算内で再試行 |
+| HTTP 400 系(画像サイズ超過など) | 恒久失敗 `ANALYSIS_FAILED` |
+| JSON Schema でパース失敗 | 恒久失敗 `ANALYSIS_FAILED` |
+
+`max_output_tokens` は明細 50 件 + 余裕で足りる値(4,096)にする。思考トークンも `max_output_tokens` に含まれるため、reasoning effort を上げるときは合わせて見直す。
+
+OpenAI APIの失敗は `ERROR` レベルで、`upload_id`、`attempt`、HTTP status、OpenAIのerror type/code/message、`response_id`、生レスポンスのS3キーをログに出す。画像や生レスポンス本文そのものはログに出さない。refusalなど本文性の高い内容はerror codeとS3キーだけを出す。
 
 ### タイムアウトとリトライ
 
-ResultHandler Lambdaのタイムアウトは15分とする。
+Analyze Lambdaのタイムアウトは3分とする。
 
-OpenAI API呼び出しは、初期構成では合計60秒を上限にする。60秒の中でエクスポネンシャルバックオフ付きリトライを行う。
+OpenAI API呼び出しは合計120秒を上限にする。120秒の中でエクスポネンシャルバックオフ付きリトライを行う。
 
 ```text
-OpenAI API timeout budget = 60秒
+OpenAI API timeout budget = 120秒
 
 retry:
   429 / 500 / 502 / 503 / 504 / ネットワーク一時エラー
 
 no retry:
-  400系の恒久エラー
+  400系の恒久エラー(画像が大きすぎる、コンテンツ拒否など)
   JSON Schema不一致
 ```
 
-60秒以内に成功しない場合、アップロード全体は `FAILED` にしない。AI分類失敗として扱い、対象明細は `category = unknown`、`category_source = UNKNOWN` で登録する。
+120秒以内に成功しない場合はエラーを返し、SQSリトライに任せる。恒久エラーは `FAILED`(`ANALYSIS_FAILED`)を記録して正常終了する。
 
 ---
 
@@ -264,17 +338,17 @@ UPLOADING
 Presigned URL発行済み、画像アップロード待ち
 
 ANALYZING
-S3アップロード完了、Textract解析中
+S3アップロード完了、解析中
 
 SUCCEEDED
-Textract解析およびDynamoDB登録成功
+解析およびDynamoDB登録成功
 
 NO_DATA
-Textract解析は完了したが、登録対象の明細が0件
+解析は完了したが、登録対象の明細が0件(レシートでない画像を含む)
 billings / billing_details / monthly_summaries は作成・更新しない
 
 FAILED
-Textract解析または登録処理失敗
+解析または登録処理失敗
 error_codeに理由を持つ
 ```
 
@@ -287,12 +361,13 @@ error_codeに理由を持つ
                 UPLOADING ・・・ expires_at 超過は画面側で「期限切れ」表示
                      |
                      | S3 ObjectCreated
-                     | StartExpenseAnalysis 成功後に更新
-                     | Condition: attempt = :attempt
+                     | Analyze Lambda が処理開始時に更新
+                     | Condition: status IN (UPLOADING, ANALYZING)
+                     |            AND attempt = :attempt
                      v
                 ANALYZING <-------------------------------+
                   |   |                                   |
-  Textract成功   |   | 明細0件       Textract失敗       |
+  解析成功       |   | 明細0件       OpenAI 恒久失敗    |
   DB登録成功     |   |               内容不十分         |
   Condition:     |   |               明細上限超過       |
   status =       |   |               永久失敗           |
@@ -313,10 +388,11 @@ ANALYZING の停滞は画面側で「停滞」表示 + 再実行ボタン
 ### error_code
 
 ```text
-TEXTRACT_FAILED     Textractの起動または解析が失敗した
-TEXTRACT_PARTIAL_SUCCESS Textractの解析が部分成功で完了した
+ANALYSIS_FAILED     OpenAI APIが恒久エラーを返した、または応答がJSON Schemaに合わなかった
 NO_TOTAL_AMOUNT     合計金額が取得できなかった
+INVALID_AMOUNT      合計金額または明細の金額・数量が範囲外
 NO_DATE             購入日が取得できなかった
+INVALID_DATE        購入日が実在しない、未来、または5年より前
 TOO_MANY_DETAILS    明細件数が50件を超えた
 INTERNAL            上記以外のシステムエラー
 ```
@@ -342,46 +418,20 @@ POST /uploads/{upload_id}/retry
    Condition: status IN (FAILED, NO_DATA, ANALYZING)
    status = ANALYZING
    attempt = attempt + 1
-   textract_job_id / error_code / error_message / failed_at を削除
+   error_code / error_message / failed_at を削除
+   ReturnValues: UPDATED_NEW で新しい attempt を受け取る
 
-2. StartExpenseAnalysis実行
-   ClientRequestToken = {upload_id}#{attempt}
-   JobTag = {user_id}#{upload_id}#{attempt}
-   textract_job_idを保存
+2. Analyze Queue へ送信
+   {"user_id": "...", "upload_id": "...", "attempt": 2, "trigger": "RETRY"}
 ```
 
-再実行APIで `attempt` を進めた後、解析開始の共通関数を呼ぶ。共通関数は `StartExpenseAnalysis` を先に実行し、成功後に `textract_job_id` を保存する。
-
-`attempt` を `ClientRequestToken` と `JobTag` に含めることで、前回失敗したJobIdではなく新しいジョブが起動し、古いジョブの遅延通知はResultHandlerの条件で捨てられる。
+`attempt` を進めることで、停滞していた前回の処理がまだ動いていても、その登録・失敗記録は `attempt = :attempt` の条件失敗で捨てられる。
 
 ### 自動再実行
 
-Textractジョブの完了通知が `FAILED` または `PARTIAL_SUCCESS` の場合、ResultHandler Lambda は自動再実行を試みる。
+一時エラー(OpenAI の 429 / 5xx、Lambda タイムアウト、DynamoDB スロットリング)は SQS のリトライ(`maxReceiveCount = 3`)で自動再実行する。SQS リトライでは `attempt` を進めない。
 
-```text
-対象:
-  JobStatus = FAILED
-  JobStatus = PARTIAL_SUCCESS
-
-上限:
-  attempt <= 3
-  初回1回 + 自動リトライ2回
-
-処理:
-  attempt < 3:
-    attempt = attempt + 1
-    error_code / error_message / failed_at を削除
-    StartExpenseAnalysis を再実行
-
-  attempt >= 3:
-    status = FAILED
-    error_code = TEXTRACT_FAILED または TEXTRACT_PARTIAL_SUCCESS
-    error_message / failed_at を保存
-```
-
-自動再実行は最大3回までとする。3回使い切った後も、ユーザーによる手動再実行は上限なしで許可する。手動再実行でも `attempt` は増やし、`ClientRequestToken` と `JobTag` に新しい `attempt` を含める。
-
-自動再実行はTextract完了通知を処理するResultHandler Lambda内で行う。`FAILED` / `PARTIAL_SUCCESS` の通知では `GetExpenseAnalysis` を呼ばず、`attempt` の更新と `StartExpenseAnalysis` の再実行だけを行う。
+恒久エラーは自動再実行せず `FAILED` にする。ユーザーによる手動再実行は上限なしで許可する。
 
 Response:
 
@@ -487,7 +537,7 @@ Authorization: Bearer {JWT}
 
 ## DynamoDB
 
-DB設計の詳細は [DB設計](./database.md) に置く。
+DB設計の詳細は [DB設計](./infra/database.md) に置く。
 
 バックエンド処理で扱うテーブルは以下とする。
 
@@ -528,6 +578,7 @@ status = ANALYZING AND attempt = :attempt
 Update:
 status = SUCCEEDED
 billing_id = 01JBILLXXX
+raw_result_s3_key = analysis-results/{user_id}/{upload_id}/{attempt}/{response_id}.json
 
 2. billings
 
@@ -551,16 +602,18 @@ SET:
 type = if_not_exists(type, :type)
 user_id = if_not_exists(user_id, :user_id)
 year_month = if_not_exists(year_month, :year_month)
-category_totals = 更新後のカテゴリ別合計
 
 ADD:
 total_amount + final_amount
 billing_count + 1
 detail_count + detail_count
+category_total_{category} + カテゴリ別小計(登場したカテゴリのみ)
 version + 1
 ```
 
 これにより同一イベントが複数回処理されても月次集計への二重加算を防止する。
+
+カテゴリ別金額は map の `SET` ではなく、カテゴリごとのトップレベル数値属性への `ADD` にする。map を読んで計算した値を `SET` すると、同じ月のレシートを並行処理したときに後勝ちでもう一方の加算が消える。DynamoDB は同じ式の中で `SET category_totals = if_not_exists(...)` と `ADD category_totals.food` を書けず(パスの重複)、map が無い状態での nested path への `ADD` も失敗するため、map ではなく `category_total_food` のような属性に分ける。API はこれらを `category_totals` の map に組み立てて返す。
 
 TransactWriteItemsは100 itemまでのため、明細は50件を上限とする(Transaction内53 item)。これは初期構成のプロダクト仕様とし、超過した場合は `TOO_MANY_DETAILS` として `FAILED` にし、billingsとbilling_detailsは作成しない。
 
@@ -604,19 +657,19 @@ POST /monthly-summaries/{yyyy-MM}/recalculate
    GSI1PK = USER#{user_id}#MONTH#{yyyy-MM}
 
 4. 集計値を計算
-   total_amount    = SUM(billings.final_amount)
-   billing_count   = COUNT(billings)
-   detail_count    = COUNT(billing_details)
-   category_totals = SUM(billing_details.amount) GROUP BY category
+   total_amount             = SUM(billings.final_amount)
+   billing_count            = COUNT(billings)
+   detail_count             = COUNT(billing_details)
+   category_total_{category} = SUM(billing_details.amount) GROUP BY category(全カテゴリ。0 も SET)
 
 5. monthly_summaries更新
    Condition: attribute_not_exists(PK) OR version = :v
-   SET total_amount, billing_count, detail_count, category_totals
+   SET total_amount, billing_count, detail_count, category_total_{category} × 全カテゴリ
    SET type / user_id / year_month
    SET version = if_not_exists(version, 0) + 1
 ```
 
-条件失敗した場合(再計算中にResultHandlerが `ADD` した場合)は 1 からやり直す。数回リトライして諦める。個人利用では実質起きない。
+条件失敗した場合(再計算中にAnalyze Lambdaが `ADD` した場合)は 1 からやり直す。数回リトライして諦める。個人利用では実質起きない。
 
 月次集計は `user_id + year_month` で一意になるため、初回作成判定用のUUIDは持たない。UUIDを別カラムに追加しても、再計算時の競合制御には使えないため、初回作成は `attribute_not_exists(PK)` と `if_not_exists` で扱う。
 
@@ -701,20 +754,20 @@ GSI1PK = USER#{user_id}#MONTH#{yyyy-MM}
 | 段階 | ケース | 対応 |
 | --- | --- | --- |
 | アップロード | Presigned URL発行後にPUTされない | `UPLOADING` のまま残す。画面が `expires_at` 超過で「期限切れ」表示 |
-| 解析開始 | S3イベント重複 | `ClientRequestToken` で同一JobId。`Condition: attempt = :attempt` で現在の試行だけを更新 |
-| 解析開始 | StartExpenseAnalysisが同期エラー | ValidationException系は `FAILED` (`TEXTRACT_FAILED`)。Throttlingはエラーを返してSQSリトライ |
-| 解析完了 | TextractジョブがFAILED | `attempt < 3` なら自動再実行。`attempt >= 3` なら `FAILED` (`TEXTRACT_FAILED`) |
-| 解析完了 | TextractジョブがPARTIAL_SUCCESS | `attempt < 3` なら自動再実行。`attempt >= 3` なら `FAILED` (`TEXTRACT_PARTIAL_SUCCESS`) |
-| 解析完了 | 合計金額 / 購入日が取れない | `FAILED` (`NO_TOTAL_AMOUNT` / `NO_DATE`)。billingsは作らない |
-| 解析完了 | 明細0件 | `NO_DATA`。解析は完了したが登録対象なしとして扱い、billingsと月次集計は作らない |
-| AI後処理 | OpenAI API呼び出し失敗 / JSON不正 | アップロード全体は失敗にしない。対象明細は `category = unknown` で登録 |
+| 解析 | S3イベント重複 / 古いメッセージの遅延配信 | 開始条件 `status IN (UPLOADING, ANALYZING) AND attempt = :attempt` で古い試行を弾く。同じ試行の並行は OpenAI を二重に呼ぶが、登録は条件で1回になる |
+| 解析 | OpenAI の refusal / incomplete(max_output_tokens, content_filter) | `FAILED` (`ANALYSIS_FAILED`)。`error_message` に理由 |
+| 解析 | OpenAI APIの一時エラー(429 / 5xx) | 120秒の予算内でリトライ。尽きたらエラーを返してSQSリトライ |
+| 解析 | OpenAI APIの恒久エラー / JSON Schema不一致 | `FAILED` (`ANALYSIS_FAILED`)。手動再実行で回復 |
+| 解析 | 合計金額 / 購入日が取れない | `FAILED` (`NO_TOTAL_AMOUNT` / `NO_DATE`)。billingsは作らない |
+| 解析 | 日付が実在しない・未来・古すぎる、金額や数量が範囲外 | `FAILED` (`INVALID_DATE` / `INVALID_AMOUNT`)。読み取りミスとして手動再実行 |
+| 解析 | 明細0件 / レシートでない画像 | `NO_DATA`。解析は完了したが登録対象なしとして扱い、billingsと月次集計は作らない |
 | 登録 | 明細50件超 | `FAILED` (`TOO_MANY_DETAILS`)。初期構成の仕様上、billingsは作らない |
-| 登録 | 古いTextract通知 / SNS通知重複 | `status = ANALYZING AND attempt = :attempt` で弾く。`ConditionalCheckFailed` は正常終了 |
-| 登録 | ResultHandlerが途中で落ちる | Transactionはall-or-nothing、S3保存は上書き冪等。SQSリトライで最初からやり直す |
+| 登録 | 停滞した前回処理の遅延登録・遅延失敗記録 | SUCCEEDED / FAILED / NO_DATA すべて `status = ANALYZING AND attempt = :attempt` で弾く。`ConditionalCheckFailed` は正常終了 |
+| 集計 | 同じ月のレシートの並行登録 | `category_total_*` を含めすべて `ADD` なので競合しない |
+| 登録 | Analyze Lambdaが途中で落ちる | Transactionはall-or-nothing。生レスポンスは response_id ごとの一意なS3キーへ保存し、SQSリトライで最初からやり直す |
 | 登録 | リトライ枯渇 | DLQに残る。CloudWatch Alarmでメール通知。redriveで再処理 |
-| 登録 | Textract結果の7日期限を過ぎた | redriveでは復旧できない。再実行APIでStartTextractからやり直す |
 | 検知 | イベント自体が届かない | DLQでは拾えない。画面の停滞表示で気づき、再実行APIで手動回復 |
-| 集計 | 再計算とResultHandlerの競合 | `version` の条件失敗でやり直す |
+| 集計 | 再計算とAnalyze Lambdaの競合 | `version` の条件失敗でやり直す |
 
 ### 冪等性
 
@@ -729,14 +782,15 @@ monthly_summaries
 担保する仕組み:
 
 ```text
-StartTextract    Condition: attempt = :attempt
-                 ClientRequestToken = {upload_id}#{attempt}
-                 JobTag = {user_id}#{upload_id}#{attempt}
+Analyze(開始)          Condition: status IN (UPLOADING, ANALYZING) AND attempt = :attempt
+                        attempt はメッセージ側の値(S3 イベントは 1)
 
-ResultHandler    Condition: status = ANALYZING AND attempt = :attempt
-                 TransactWriteItems
+Analyze(登録)          Condition: status = ANALYZING AND attempt = :attempt
+                        TransactWriteItems、月次集計は ADD のみ
 
-再計算           Condition: attribute_not_exists(PK) OR version = :v
+Analyze(FAILED/NO_DATA) Condition: status = ANALYZING AND attempt = :attempt
+
+再計算                  Condition: attribute_not_exists(PK) OR version = :v
 ```
 
 ### 許容するリスク
@@ -744,12 +798,17 @@ ResultHandler    Condition: status = ANALYZING AND attempt = :attempt
 個人利用のため、以下は対応せず運用で許容する。
 
 ```text
-イベント未達(S3 / SNS)の自動回復
+イベント未達(S3)の自動回復
   → 画面で気づいて手動再実行
 
-再計算とResultHandlerの競合が連続する
+再計算とAnalyze Lambdaの競合が連続する
   → version条件失敗のリトライ数回で諦める。実質起きない
 
-Textract結果の7日期限を過ぎたDLQメッセージ
-  → 再実行APIで最初からやり直す
+S3イベント重複によるOpenAIの二重呼び出し
+  → 1枚 ¥1 未満なので許容。登録は条件で1回になる
+  → 生レスポンスは response_id ごとの別キーに保存し、終端状態を確定した処理のキーだけを raw_result_s3_key に記録する
+
+同じattemptの並行処理で、成功した方ではなく先に終端状態を書いた方が勝つ
+  → 正常解析と refusal が並行し、refusal が先に FAILED を書けば最終状態は FAILED
+  → 手動再実行で回復できる。成功を優先するには永久失敗の確定を遅らせる仕組みが要るため、現状規模では持たない
 ```

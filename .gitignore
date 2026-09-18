@@ -3,6 +3,6 @@ dist/
 .env
 .env.*
 !.env.example
-.claude/
-.codex/
 tmp/*
+cdk.out/
+cdk.context.json

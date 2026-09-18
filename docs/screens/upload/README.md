@@ -45,7 +45,7 @@ POST /uploads
 画像ごとにS3 PUT
   |
   v
-画像ごとにTextract解析
+画像ごとにAI解析
 ```
 
 ---

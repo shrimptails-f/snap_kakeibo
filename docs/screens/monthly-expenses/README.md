@@ -26,7 +26,7 @@
 
 月合計は請求単位の `billings.final_amount` を正とする。
 
-円グラフの内訳は購入明細の `category` と `amount` から作る。Textract由来のカテゴリは参考値として扱い、ユーザー修正後の値を優先する。
+円グラフの内訳は購入明細の `category` と `amount` から作る。AI由来のカテゴリは参考値として扱い、ユーザー修正後の値を優先する。
 
 ---
 
@@ -73,7 +73,7 @@ Response:
       "category": "food",
       "amount": 281,
       "quantity": 1,
-      "source": "TEXTRACT",
+      "source": "AI",
       "is_edited": false,
       "store_name": "スーパー",
       "purchased_at": "2026-09-15"

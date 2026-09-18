@@ -18,10 +18,12 @@
 
 詳細設計は領域ごとに分割する。
 
-* [インフラ設計](./infrastructure.md)
+* [インフラ設計](./infra/infrastructure.md)
+* [DB設計](./infra/database.md)
+* [デプロイ戦略](./ci_cd/deployment-strategy.md)
+* [デプロイ戦略の技術調査](./ci_cd/deployment-strategy-research.md)
 * [バックエンド設計](./backend.md)
 * [フロントエンド設計](./frontend.md)
-* [DB設計](./database.md)
 
 画面ごとの設計は以下に置く。
 
@@ -57,7 +59,6 @@
 * API Gateway
 * Lambda
 * DynamoDB
-* Amazon Textract
 * SNS
 * SQS
 * CloudWatch Alarm
@@ -85,28 +86,12 @@ S3                         DynamoDB
   |
   | ObjectCreated
   v
-SQS (StartTextract Queue) ----> DLQ
+SQS (Analyze Queue) ----> DLQ
   |
   v
-StartTextract Lambda
+Analyze Lambda
   |
-  | StartExpenseAnalysis
-  v
-Textract
-  |
-  | 完了通知
-  v
-SNS
-  |
-  v
-SQS (ResultHandler Queue) ----> DLQ
-  |
-  v
-ResultHandler Lambda
-  |
-  | GetExpenseAnalysis
-  |
-  | 明細カテゴリ分類
+  | 画像を渡して読み取り + 明細カテゴリ分類
   v
 OpenAI API
   |
