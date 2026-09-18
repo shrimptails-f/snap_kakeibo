@@ -95,6 +95,44 @@ func TestStorageStackResources(t *testing.T) {
 	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{
 		"RouteKey": "GET /api/hello",
 	})
+	app.ResourceCountIs(jsii.String("AWS::Lambda::Alias"), jsii.Number(5))
+	app.ResourceCountIs(jsii.String("AWS::CodeDeploy::Application"), jsii.Number(1))
+	app.ResourceCountIs(jsii.String("AWS::CodeDeploy::DeploymentConfig"), jsii.Number(1))
+	app.ResourceCountIs(jsii.String("AWS::CodeDeploy::DeploymentGroup"), jsii.Number(5))
+	app.HasResourceProperties(jsii.String("AWS::CodeDeploy::Application"), map[string]any{
+		"ApplicationName": "dev-snap-kakeibo-lambda",
+		"ComputePlatform": "Lambda",
+	})
+	app.HasResourceProperties(jsii.String("AWS::CodeDeploy::DeploymentConfig"), map[string]any{
+		"DeploymentConfigName": "dev-snap-kakeibo-lambda-all-at-once",
+		"TrafficRoutingConfig": map[string]any{"Type": "AllAtOnce"},
+	})
+	app.HasResourceProperties(jsii.String("AWS::Lambda::Alias"), map[string]any{
+		"Name": "live",
+		"FunctionName": map[string]any{
+			"Ref": assertions.Match_StringLikeRegexp(jsii.String("^HelloFunction")),
+		},
+	})
+	app.HasResource(jsii.String("AWS::Lambda::Alias"), map[string]any{
+		"UpdatePolicy": map[string]any{
+			"CodeDeployLambdaAliasUpdate": assertions.Match_AnyValue(),
+		},
+	})
+	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Integration"), map[string]any{
+		"IntegrationUri": map[string]any{
+			"Ref": assertions.Match_StringLikeRegexp(jsii.String("^HelloLiveAlias")),
+		},
+	})
+	app.HasResourceProperties(jsii.String("AWS::CodeDeploy::DeploymentGroup"), map[string]any{
+		"DeploymentGroupName": "dev-snap-kakeibo-hello-deployment-group",
+		"DeploymentConfigName": map[string]any{
+			"Ref": assertions.Match_StringLikeRegexp(jsii.String("^LambdaDeploymentConfig")),
+		},
+		"DeploymentStyle": map[string]any{
+			"DeploymentOption": "WITH_TRAFFIC_CONTROL",
+			"DeploymentType":   "BLUE_GREEN",
+		},
+	})
 	app.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]any{
 		"FunctionName":  "dev-snap-kakeibo-hello",
 		"PackageType":   "Image",

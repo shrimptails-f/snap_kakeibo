@@ -99,6 +99,8 @@ const (
 )
 ```
 
+現在の CDK 実装では、API Gateway 同期呼び出し対象の Lambda に `live` Alias と CodeDeploy Deployment Group を作り、HTTP API の Integration は Alias を参照する。`dev` は `AllAtOnce` のカスタム Deployment Config を使う。
+
 CD の流れ:
 
 ```text

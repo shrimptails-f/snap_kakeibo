@@ -56,6 +56,9 @@ func Dev() Config {
 			Analyze: awscdk.Duration_Minutes(jsii.Number(3)),
 			API:     awscdk.Duration_Seconds(jsii.Number(29)),
 		},
+		Deployment: DeploymentConfig{
+			Strategy: DeploymentStrategyAllAtOnce,
+		},
 		MaxReceiveCount: 3,
 	}
 }

@@ -33,6 +33,7 @@ type Config struct {
 	Parameters       Parameters
 	OpenAI           OpenAIConfig
 	Timeouts         Timeouts
+	Deployment       DeploymentConfig
 	// MaxReceiveCount は一時エラーの再試行回数。超過したメッセージは DLQ へ移る
 	MaxReceiveCount float64
 }
@@ -119,6 +120,22 @@ type Timeouts struct {
 	API     awscdk.Duration
 }
 
+// DeploymentStrategy は CodeDeploy for Lambda のトラフィック切替方式。
+type DeploymentStrategy string
+
+const (
+	DeploymentStrategyAllAtOnce DeploymentStrategy = "all-at-once"
+	DeploymentStrategyCanary    DeploymentStrategy = "canary"
+	DeploymentStrategyLinear    DeploymentStrategy = "linear"
+)
+
+// DeploymentConfig は stage ごとの CodeDeploy for Lambda 設定。
+type DeploymentConfig struct {
+	Strategy        DeploymentStrategy
+	CanaryPercent   float64
+	IntervalMinutes float64
+}
+
 // Load は stage 名に対応する設定を返す。
 func Load(stage string) (Config, error) {
 	var cfg Config
@@ -151,6 +168,9 @@ func (c Config) Validate() error {
 	if c.OpenAI.Model == "" || c.OpenAI.ReasoningEffort == "" {
 		return fmt.Errorf("OpenAI model and reasoning effort are required")
 	}
+	if err := c.Deployment.Validate(); err != nil {
+		return err
+	}
 	for _, f := range c.Functions {
 		if f.Name == "" || f.ImageTagParameter == "" || f.LogGroup == "" {
 			return fmt.Errorf("function name and image tag parameter are required")
@@ -160,6 +180,23 @@ func (c Config) Validate() error {
 		}
 	}
 	return nil
+}
+
+func (d DeploymentConfig) Validate() error {
+	switch d.Strategy {
+	case DeploymentStrategyAllAtOnce:
+		return nil
+	case DeploymentStrategyCanary, DeploymentStrategyLinear:
+		if d.CanaryPercent <= 0 || d.CanaryPercent >= 100 {
+			return fmt.Errorf("deployment canary percent must be between 0 and 100")
+		}
+		if d.IntervalMinutes <= 0 {
+			return fmt.Errorf("deployment interval minutes must be positive")
+		}
+		return nil
+	default:
+		return fmt.Errorf("unknown deployment strategy %q", d.Strategy)
+	}
 }
 
 // Function は名前で関数設定を引く。
