@@ -1,0 +1,271 @@
+# CodePipeline 設計
+
+## 採用方針
+
+デプロイ単位が違うため、backend / frontend / infra の CodePipeline は分ける。
+
+```text
+backend pipeline
+  GitHub -> test -> ECR push -> Lambda publish -> CodeDeploy
+
+frontend pipeline
+  GitHub -> test/build -> S3 sync -> CloudFront invalidation
+
+infra pipeline
+  TODO
+```
+
+backend と frontend を同じ pipeline に入れると、片方の失敗がもう片方のデプロイや成功 marker 更新に影響する。アプリケーションとしては後方互換性を前提にし、backend と frontend は独立してデプロイできる構成にする。
+
+## Pipeline 一覧
+
+| pipeline | 対象 | 成功 marker | 方針 |
+| --- | --- | --- | --- |
+| `backend` | Lambda コンテナイメージ / Lambda Version / CodeDeploy | `/{stage}/snap-kakeibo/cicd/backend/last-successful-commit` | API Lambda を差分デプロイする |
+| `frontend` | React build / S3 / CloudFront | `/{stage}/snap-kakeibo/cicd/frontend/last-successful-commit` | front の差分があるときだけ配信する |
+| `infra` | CDK / CloudFormation | `/{stage}/snap-kakeibo/cicd/infra/last-successful-commit` | TODO。まずは手動 `cdk deploy` を継続する |
+
+GitHub 接続は pipeline 間で共有する。
+
+```text
+/{stage}/snap-kakeibo/cicd/github-connection-arn
+```
+
+## デプロイ対象ブランチ
+
+デプロイ対象ブランチは backend / frontend で分けず、stage ごとに共有する。
+
+```text
+deploy/dev -> dev
+deploy/stg -> stg
+deploy/prd -> prod
+```
+
+backend と frontend は同じモノレポ内の同じプロダクトなので、「この commit をこの stage に出す」という意思決定は stage ごとの deploy branch で一元化する。
+
+```text
+dev backend pipeline   watches deploy/dev
+dev frontend pipeline  watches deploy/dev
+
+stg backend pipeline   watches deploy/stg
+stg frontend pipeline  watches deploy/stg
+
+prod backend pipeline  watches deploy/prd
+prod frontend pipeline watches deploy/prd
+```
+
+backend / frontend の独立性は branch ではなく、pipeline 分離、成功 marker 分離、差分検出、後方互換性で担保する。
+
+通常の昇格は deploy branch を進めることで表す。
+
+```bash
+git checkout deploy/dev
+git merge main
+git push origin deploy/dev
+
+git checkout deploy/stg
+git merge deploy/dev
+git push origin deploy/stg
+
+git checkout deploy/prd
+git merge deploy/stg
+git push origin deploy/prd
+```
+
+`deploy/prd` はブランチ名だけ短縮し、AWS 上の stage 名と SSM prefix は `prod` とする。
+
+## SSM Parameter
+
+pipeline が更新する運用状態は CDK の `StringParameter` として値を管理しない。既存の Lambda image tag parameter と同じく、`ensure-parameters` で「無ければ作る、既存値は上書きしない」形にする。
+
+必要な SSM parameter:
+
+```text
+/{stage}/snap-kakeibo/cicd/github-connection-arn
+/{stage}/snap-kakeibo/cicd/backend/last-successful-commit
+/{stage}/snap-kakeibo/cicd/frontend/last-successful-commit
+/{stage}/snap-kakeibo/cicd/infra/last-successful-commit
+```
+
+初期値は `UNSET` とする。
+
+`github-connection-arn` は事前に AWS CodeConnections / CodeStar Connections で作った connection ARN を手動設定する。`UNSET` のまま Pipeline stack をデプロイしようとした場合は失敗させる。
+
+## 差分検出
+
+各 pipeline は自分の成功 marker と今回の source revision を比較して、対象差分を判定する。
+
+```text
+base = SSM last-successful-commit
+head = CodePipeline source revision
+
+if base == UNSET:
+  deploy all for this pipeline
+else:
+  git diff --name-status base head
+```
+
+marker は pipeline ごとに分ける。backend が成功して frontend が失敗した場合でも、backend marker だけを更新できる。
+
+差分は `--name-status` で取得する。追加・変更だけでなく、削除(`D`)や rename(`R`)を検出するため。
+
+## Backend Pipeline
+
+### 対象
+
+初期対象は API Gateway 同期呼び出しの Lambda とする。
+
+```text
+hello
+upload
+retry-upload
+list-uploads
+get-billing
+```
+
+`analyze-receipt` は CodeDeploy 初期対象外。ただし `last-successful-commit` が `UNSET` の初回 backend deploy では、ECR image と image tag SSM parameter は全 backend 関数分を揃える。
+
+```text
+ECR push / image-tag 更新:
+  backend/cmd/* 全部
+
+CodeDeploy:
+  hello
+  upload
+  retry-upload
+  list-uploads
+  get-billing
+```
+
+### 差分ルール
+
+backend は単純な path prefix だけではなく、Go の package 依存関係で影響範囲を判定する。方針は `codepipeline_monorepo_practice` と同じく、Git 差分と `go list -deps` を組み合わせる。
+
+| 変更 | deploy 対象 |
+| --- | --- |
+| `backend/cmd/{function}/**` | 対応する関数 |
+| `backend/internal/**` の既存 Go package | その package に依存する API 対象 Lambda |
+| `backend/go.mod`, `backend/go.sum` | API 対象 Lambda 全て |
+| `backend/Dockerfile` | API 対象 Lambda 全て |
+| `scripts/` の backend deploy 関連 | API 対象 Lambda 全て |
+| `infra/` | backend pipeline では扱わない。infra pipeline の TODO |
+| 削除、rename、判定不能な共有 package | API 対象 Lambda 全て |
+| docs のみ | deploy なし |
+| test file のみ | test は実行するが deploy 対象にはしない |
+
+初回や marker が `UNSET` の場合は全 backend 関数の ECR image を push し、CodeDeploy 対象の 5 関数を deploy する。
+
+### Package 依存判定
+
+API 対象 Lambda ごとに `go list -deps` で依存 package の集合を作る。
+
+```bash
+cd backend
+go list -deps -f '{{.ImportPath}}' ./cmd/hello
+go list -deps -f '{{.ImportPath}}' ./cmd/upload
+go list -deps -f '{{.ImportPath}}' ./cmd/retry-upload
+go list -deps -f '{{.ImportPath}}' ./cmd/list-uploads
+go list -deps -f '{{.ImportPath}}' ./cmd/get-billing
+```
+
+変更された `.go` ファイルのディレクトリを package として解決し、各 Lambda の依存集合と照合する。
+
+```text
+changed package ∩ function dependencies != empty
+  -> deploy that function
+```
+
+これは関数・メソッド単位ではなく package 単位の判定とする。見逃しを避ける代わりに、同じ package 内の未使用関数だけを変更した場合でも deploy 対象になることがある。
+
+### 削除と rename
+
+削除された Go ファイルや rename された package は、現在の worktree だけでは旧 package の import path や旧依存関係を `go list` で確認できない。
+
+初期実装では、次の変更は安全側に倒して API 対象 Lambda 全てを deploy する。
+
+```text
+backend/internal 配下の Go ファイル削除
+backend/internal 配下の package rename
+backend/cmd 配下の function directory 削除または rename
+判定スクリプトが package を解決できない変更
+```
+
+将来精度を上げる場合は、`base` と `head` の両方の worktree で依存グラフを作り、旧依存と新依存の和集合で影響範囲を判定する。
+
+```text
+affected functions =
+  functions depending on changed package at base
+  ∪ functions depending on changed package at head
+```
+
+この方法なら削除された package に依存していた Lambda も検出できる。
+
+### 実行内容
+
+CodeBuild は関数ごとに次を実行する。
+
+```text
+1. テストを実行する
+2. 対象 Lambda image を ECR へ push する
+3. aws lambda update-function-code --publish で新 Version を発行する
+4. live Alias の現在 Version を取得する
+5. Lambda AppSpec を生成する
+6. aws deploy create-deployment を実行する
+7. deployment 成功を待つ
+8. live Alias が新 Version を向いたことを確認する
+9. 成功したら backend marker を head commit に更新する
+```
+
+CodeDeploy Application / Deployment Group / Deployment Config / Lambda Alias は AppStack が作る。
+
+## Frontend Pipeline
+
+### 差分ルール
+
+| 変更 | deploy 対象 |
+| --- | --- |
+| `front/**` | frontend |
+| frontend deploy 関連 script | frontend |
+| `infra/` | frontend pipeline では扱わない。infra pipeline の TODO |
+
+初回や marker が `UNSET` の場合は frontend をデプロイする。
+
+### 実行内容
+
+```text
+1. npm ci
+2. npm run build
+3. front/dist を frontend bucket へ sync
+4. CloudFront invalidation を作成する
+5. 成功したら frontend marker を head commit に更新する
+```
+
+CloudFront invalidation の完了待ちは初期実装では必須にしない。必要になったら `wait invalidation-completed` を追加する。
+
+## Infra Pipeline
+
+infra pipeline は TODO とする。
+
+当面は次の手動操作を継続する。
+
+```text
+task infra:diff
+task infra:deploy:storage
+task infra:deploy:app
+```
+
+将来 infra pipeline を作る場合は、アプリ deploy pipeline とは分ける。CDK deploy は Lambda image push / frontend sync とは責務が違い、失敗時の影響範囲も大きいため。
+
+## 後方互換性
+
+backend と frontend は別 pipeline で独立して進むため、backend は古い frontend と動く後方互換性を保つ。
+
+破壊的変更は 1 回の deploy にまとめない。
+
+```text
+1. backend に新旧両対応を入れる
+2. frontend を新仕様へ移す
+3. backend から旧仕様を消す
+```
+
+必要に応じて feature flag を使い、新 backend / 新 frontend の有効化タイミングを deploy から切り離す。

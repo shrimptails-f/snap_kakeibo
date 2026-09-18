@@ -120,3 +120,5 @@ CD の流れ:
 ## 補足
 
 方式比較とトレードオフは [デプロイ戦略の技術調査](./deployment-strategy-research.md) に置く。
+
+CodePipeline の分割方針と差分検出は [CodePipeline 設計](./codepipeline-design.md) に置く。
