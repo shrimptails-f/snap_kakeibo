@@ -57,6 +57,10 @@ func parametersFor(cfg config.Config) []parameter {
 		{Name: cfg.Parameters.PasswordPepper, Type: types.ParameterTypeSecureString, Value: randomSecret()},
 		{Name: cfg.Parameters.JWTSecret, Type: types.ParameterTypeSecureString, Value: randomSecret()},
 		{Name: cfg.Parameters.OpenAIAPIKey, Type: types.ParameterTypeSecureString, Value: envOr("OPENAI_API_KEY", common.UnsetParameterValue)},
+		{Name: cfg.CI.Parameters.GitHubConnectionARN, Type: types.ParameterTypeString, Value: common.UnsetParameterValue},
+		{Name: cfg.CI.Parameters.BackendLastSuccessfulCommit, Type: types.ParameterTypeString, Value: common.UnsetParameterValue},
+		{Name: cfg.CI.Parameters.FrontendLastSuccessfulCommit, Type: types.ParameterTypeString, Value: common.UnsetParameterValue},
+		{Name: cfg.CI.Parameters.InfraLastSuccessfulCommit, Type: types.ParameterTypeString, Value: common.UnsetParameterValue},
 	}
 	for _, f := range cfg.Functions {
 		params = append(params, parameter{Name: f.ImageTagParameter, Type: types.ParameterTypeString, Value: common.UnsetParameterValue})

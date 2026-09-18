@@ -6,10 +6,10 @@
 
 ```text
 backend pipeline
-  GitHub -> test -> ECR push -> Lambda publish -> CodeDeploy
+  GitHub -> CodeBuild(test -> ECR push -> Lambda publish -> CodeDeploy)
 
 frontend pipeline
-  GitHub -> test/build -> S3 sync -> CloudFront invalidation
+  GitHub -> CodeBuild(test/build -> S3 sync -> CloudFront invalidation)
 
 infra pipeline
   TODO
@@ -90,6 +90,20 @@ pipeline が更新する運用状態は CDK の `StringParameter` として値�
 初期値は `UNSET` とする。
 
 `github-connection-arn` は事前に AWS CodeConnections / CodeStar Connections で作った connection ARN を手動設定する。`UNSET` のまま Pipeline stack をデプロイしようとした場合は失敗させる。
+
+Connection は Pipeline stack と同じリージョンに作る。現行の dev 環境は `ap-northeast-2` なので、`arn:aws:codeconnections:ap-northeast-2:...` の ARN を設定する。`ap-northeast-1` など別リージョンの connection ARN は使わない。
+
+現行実装では CDK が `dev-snap-kakeibo-pipeline` に backend / frontend の 2 本の CodePipeline を作る。Source action は `CodeBuildCloneOutput` を有効にし、CodeBuild 内で `.git` を使えるようにする。これは `git diff --name-status base head` と `go list -deps` による差分判定に必要。
+
+```bash
+task infra:parameters
+aws ssm put-parameter \
+  --name /dev/snap-kakeibo/cicd/github-connection-arn \
+  --type String \
+  --value arn:aws:codeconnections:ap-northeast-2:<account-id>:connection/<connection-id> \
+  --overwrite
+task infra:deploy:pipeline
+```
 
 ## 差分検出
 
@@ -218,6 +232,8 @@ CodeBuild は関数ごとに次を実行する。
 
 CodeDeploy Application / Deployment Group / Deployment Config / Lambda Alias は AppStack が作る。
 
+実行ロジックは `scripts/backend-cd.sh` に置く。初回または marker が `UNSET` の場合は `backend/cmd/*` 全関数の ECR image/tag を揃え、CodeDeploy deployment は同期 API 5本だけ作る。通常時は `git diff --name-status` で削除・rename を検出し、`backend/internal` の既存 Go package 変更は `go list -deps` の依存集合で API Lambda に絞る。
+
 ## Frontend Pipeline
 
 ### 差分ルール
@@ -239,6 +255,8 @@ CodeDeploy Application / Deployment Group / Deployment Config / Lambda Alias は
 4. CloudFront invalidation を作成する
 5. 成功したら frontend marker を head commit に更新する
 ```
+
+実行ロジックは `scripts/frontend-cd.sh` に置く。`front/**` または frontend deploy script に差分がある場合、または marker が `UNSET` の場合だけ配信する。差分がない場合は build/sync/invalidation を行わず marker だけ更新する。
 
 CloudFront invalidation の完了待ちは初期実装では必須にしない。必要になったら `wait invalidation-completed` を追加する。
 

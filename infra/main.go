@@ -32,6 +32,11 @@ func main() {
 		Storage:    storage,
 	})
 
+	stacks.NewPipelineStack(app, cfg.PipelineStackName, &stacks.PipelineStackProps{
+		StackProps: props,
+		Config:     cfg,
+	})
+
 	app.Synth(nil)
 }
 

@@ -21,8 +21,9 @@ func Dev() Config {
 		// dev は作り直せればよいので残さない
 		RemovalPolicy: awscdk.RemovalPolicy_DESTROY,
 
-		StorageStackName: common.StorageStackName.Dev(),
-		AppStackName:     common.AppStackName.Dev(),
+		StorageStackName:  common.StorageStackName.Dev(),
+		AppStackName:      common.AppStackName.Dev(),
+		PipelineStackName: common.PipelineStackName.Dev(),
 		// 関数ごとに ECR を持つ。10 世代残し、同じタグの再 push はエラー
 		Functions: functions(common.StageDev, ECRConfig{
 			MaxImageCount:      10,
@@ -50,6 +51,17 @@ func Dev() Config {
 			PasswordPepper: common.PasswordPepperParameterName.Dev(),
 			JWTSecret:      common.JWTSecretParameterName.Dev(),
 			OpenAIAPIKey:   common.OpenAIAPIKeyParameterName.Dev(),
+		},
+		CI: CICDConfig{
+			GitHubOwner: "shrimptails-f",
+			GitHubRepo:  "snap_kakeibo",
+			Branch:      "deploy/dev",
+			Parameters: CICDParameters{
+				GitHubConnectionARN:          common.GitHubConnectionARNParameterName.Dev(),
+				BackendLastSuccessfulCommit:  common.BackendLastSuccessfulCommitParameterName.Dev(),
+				FrontendLastSuccessfulCommit: common.FrontendLastSuccessfulCommitParameterName.Dev(),
+				InfraLastSuccessfulCommit:    common.InfraLastSuccessfulCommitParameterName.Dev(),
+			},
 		},
 		OpenAI: OpenAIConfig{Model: "gpt-5-mini", ReasoningEffort: "low"},
 		Timeouts: Timeouts{

@@ -23,17 +23,19 @@ type Config struct {
 	// RETAIN なら削除保護も付ける。DESTROY なら中身ごと消せるようにする
 	RemovalPolicy awscdk.RemovalPolicy
 
-	StorageStackName string
-	AppStackName     string
-	Functions        []Function
-	Buckets          Buckets
-	Tables           Tables
-	Queues           Queues
-	Topics           Topics
-	Parameters       Parameters
-	OpenAI           OpenAIConfig
-	Timeouts         Timeouts
-	Deployment       DeploymentConfig
+	StorageStackName  string
+	AppStackName      string
+	PipelineStackName string
+	Functions         []Function
+	Buckets           Buckets
+	Tables            Tables
+	Queues            Queues
+	Topics            Topics
+	Parameters        Parameters
+	CI                CICDConfig
+	OpenAI            OpenAIConfig
+	Timeouts          Timeouts
+	Deployment        DeploymentConfig
 	// MaxReceiveCount は一時エラーの再試行回数。超過したメッセージは DLQ へ移る
 	MaxReceiveCount float64
 }
@@ -108,6 +110,21 @@ type Parameters struct {
 	OpenAIAPIKey   string
 }
 
+// CICDConfig は CodePipeline / CodeBuild の設定。
+type CICDConfig struct {
+	GitHubOwner string
+	GitHubRepo  string
+	Branch      string
+	Parameters  CICDParameters
+}
+
+type CICDParameters struct {
+	GitHubConnectionARN          string
+	BackendLastSuccessfulCommit  string
+	FrontendLastSuccessfulCommit string
+	InfraLastSuccessfulCommit    string
+}
+
 // OpenAIConfig は Analyze Lambda の環境変数として渡す非機密設定。
 type OpenAIConfig struct {
 	Model           string
@@ -156,7 +173,7 @@ func (c Config) Validate() error {
 	if c.Stage == "" || c.AccountID == "" || c.Region == "" {
 		return fmt.Errorf("stage, account ID, and region are required")
 	}
-	if c.StorageStackName == "" || c.AppStackName == "" {
+	if c.StorageStackName == "" || c.AppStackName == "" || c.PipelineStackName == "" {
 		return fmt.Errorf("stack names are required")
 	}
 	if c.RemovalPolicy == "" {
@@ -170,6 +187,12 @@ func (c Config) Validate() error {
 	}
 	if err := c.Deployment.Validate(); err != nil {
 		return err
+	}
+	if c.CI.GitHubOwner == "" || c.CI.GitHubRepo == "" || c.CI.Branch == "" {
+		return fmt.Errorf("CI GitHub owner, repo, and branch are required")
+	}
+	if c.CI.Parameters.GitHubConnectionARN == "" || c.CI.Parameters.BackendLastSuccessfulCommit == "" || c.CI.Parameters.FrontendLastSuccessfulCommit == "" || c.CI.Parameters.InfraLastSuccessfulCommit == "" {
+		return fmt.Errorf("CI parameter names are required")
 	}
 	for _, f := range c.Functions {
 		if f.Name == "" || f.ImageTagParameter == "" || f.LogGroup == "" {

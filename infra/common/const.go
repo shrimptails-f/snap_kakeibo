@@ -16,7 +16,11 @@ const (
 // Stage はデプロイ先の環境。
 type Stage string
 
-const StageDev Stage = "dev"
+const (
+	StageDev  Stage = "dev"
+	StageStg  Stage = "stg"
+	StageProd Stage = "prod"
+)
 
 // ResourceName は stage を除いたリソース名。For / Dev で実際の名前になる。
 //
@@ -42,8 +46,9 @@ func (n ParameterName) Dev() string { return n.For(StageDev) }
 
 // スタック
 const (
-	StorageStackName ResourceName = "storage"
-	AppStackName     ResourceName = "app"
+	StorageStackName  ResourceName = "storage"
+	AppStackName      ResourceName = "app"
+	PipelineStackName ResourceName = "pipeline"
 )
 
 // FunctionNames は Lambda の一覧。backend/cmd/{name} と 1:1 で、関数ごとに ECR リポジトリと
@@ -106,6 +111,14 @@ const (
 	PasswordPepperParameterName ParameterName = "auth/password-pepper"
 	JWTSecretParameterName      ParameterName = "auth/jwt-secret"
 	OpenAIAPIKeyParameterName   ParameterName = "openai/api-key"
+)
+
+// CI/CD 用 SSM Parameter Store。値は CDK で作らず ensure-parameters と pipeline が管理する
+const (
+	GitHubConnectionARNParameterName          ParameterName = "cicd/github-connection-arn"
+	BackendLastSuccessfulCommitParameterName  ParameterName = "cicd/backend/last-successful-commit"
+	FrontendLastSuccessfulCommitParameterName ParameterName = "cicd/frontend/last-successful-commit"
+	InfraLastSuccessfulCommitParameterName    ParameterName = "cicd/infra/last-successful-commit"
 )
 
 // Lambda 環境変数名。backend の実装と揃える

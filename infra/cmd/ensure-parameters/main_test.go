@@ -39,8 +39,8 @@ func TestEnsureAllCreatesOnlyMissing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// API key 以外の共通パラメータ + 関数ごとのイメージタグ
-	if want := 2 + len(cfg.Functions); len(store.puts) != want {
+	// API key 以外の共通パラメータ + CI/CD パラメータ + 関数ごとのイメージタグ
+	if want := 2 + 4 + len(cfg.Functions); len(store.puts) != want {
 		t.Fatalf("expected %d puts, got %d", want, len(store.puts))
 	}
 	for _, f := range cfg.Functions {
@@ -50,6 +50,16 @@ func TestEnsureAllCreatesOnlyMissing(t *testing.T) {
 	}
 	if got := store.existing[cfg.Parameters.OpenAIAPIKey]; got != "sk-existing" {
 		t.Errorf("existing value was overwritten: %q", got)
+	}
+	for _, name := range []string{
+		cfg.CI.Parameters.GitHubConnectionARN,
+		cfg.CI.Parameters.BackendLastSuccessfulCommit,
+		cfg.CI.Parameters.FrontendLastSuccessfulCommit,
+		cfg.CI.Parameters.InfraLastSuccessfulCommit,
+	} {
+		if got := store.existing[name]; got != common.UnsetParameterValue {
+			t.Errorf("%s = %q, want %q", name, got, common.UnsetParameterValue)
+		}
 	}
 	for _, p := range store.puts {
 		if *p.Overwrite {

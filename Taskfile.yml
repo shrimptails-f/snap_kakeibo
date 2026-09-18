@@ -110,6 +110,13 @@ tasks:
       - '{{.AWS}} bash scripts/check-image-tags.sh {{.STAGE}} {{.PROJECT}}'
       - cd infra && {{.AWS}} cdk deploy {{.STAGE}}-{{.PROJECT}}-app --exclusively -c stage={{.STAGE}} {{.CLI_ARGS}}
 
+  infra:deploy:pipeline:
+    desc: "Deploy the CD pipeline stack. Set /<stage>/snap-kakeibo/cicd/github-connection-arn before running"
+    dir: infra
+    cmds:
+      - task: infra:parameters
+      - '{{.AWS}} cdk deploy {{.STAGE}}-{{.PROJECT}}-pipeline --exclusively -c stage={{.STAGE}} {{.CLI_ARGS}}'
+
   infra:bootstrap:
     desc: Bootstrap the CDK toolkit stack in the target account (one time)
     dir: infra

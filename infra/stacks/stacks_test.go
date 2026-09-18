@@ -19,6 +19,13 @@ func synth(t *testing.T, cfg config.Config) (assertions.Template, assertions.Tem
 	return assertions.Template_FromStack(storage.Stack, nil), assertions.Template_FromStack(appStack.Stack, nil)
 }
 
+func synthPipeline(t *testing.T, cfg config.Config) assertions.Template {
+	t.Helper()
+	app := awscdk.NewApp(nil)
+	pipeline := NewPipelineStack(app, cfg.PipelineStackName, &PipelineStackProps{Config: cfg})
+	return assertions.Template_FromStack(pipeline.Stack, nil)
+}
+
 func TestStorageStackResources(t *testing.T) {
 	cfg := config.Dev()
 	cfg.AlertEmail = "alert@example.com"
@@ -215,6 +222,47 @@ func TestAlertEmailIsOptional(t *testing.T) {
 	cfg.AlertEmail = ""
 	storage, _ := synth(t, cfg)
 	storage.ResourceCountIs(jsii.String("AWS::SNS::Subscription"), jsii.Number(0))
+}
+
+func TestPipelineStackResources(t *testing.T) {
+	cfg := config.Dev()
+	pipeline := synthPipeline(t, cfg)
+
+	pipeline.ResourceCountIs(jsii.String("AWS::CodePipeline::Pipeline"), jsii.Number(2))
+	pipeline.ResourceCountIs(jsii.String("AWS::CodeBuild::Project"), jsii.Number(2))
+	pipeline.HasResourceProperties(jsii.String("AWS::CodePipeline::Pipeline"), map[string]any{
+		"Name": "dev-snap-kakeibo-backend",
+		"Stages": assertions.Match_ArrayWith(&[]any{
+			assertions.Match_ObjectLike(&map[string]any{
+				"Name": "Source",
+				"Actions": assertions.Match_ArrayWith(&[]any{
+					assertions.Match_ObjectLike(&map[string]any{
+						"Configuration": assertions.Match_ObjectLike(&map[string]any{
+							"BranchName":           "deploy/dev",
+							"FullRepositoryId":     "shrimptails-f/snap_kakeibo",
+							"OutputArtifactFormat": "CODEBUILD_CLONE_REF",
+						}),
+					}),
+				}),
+			}),
+		}),
+	})
+	pipeline.HasResourceProperties(jsii.String("AWS::CodeBuild::Project"), map[string]any{
+		"Name": "dev-snap-kakeibo-backend-cd",
+		"Environment": assertions.Match_ObjectLike(&map[string]any{
+			"PrivilegedMode": true,
+		}),
+	})
+	pipeline.HasResourceProperties(jsii.String("AWS::CodeBuild::Project"), map[string]any{
+		"Name": "dev-snap-kakeibo-frontend-cd",
+		"Environment": assertions.Match_ObjectLike(&map[string]any{
+			"PrivilegedMode": false,
+		}),
+	})
+	pipeline.HasParameter(jsii.String("*"), map[string]any{
+		"Type":    "AWS::SSM::Parameter::Value<String>",
+		"Default": "/dev/snap-kakeibo/cicd/github-connection-arn",
+	})
 }
 
 func TestUnknownStageIsRejected(t *testing.T) {
