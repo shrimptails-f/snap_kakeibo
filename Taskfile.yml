@@ -34,12 +34,12 @@ tasks:
     desc: Install React dependencies when front/package.json exists
     cmds:
       - |
-        if [ -f front/package-lock.json ]; then
+        if [ -f front/pnpm-lock.yaml ]; then
           cd front
-          npm ci
+          pnpm install --frozen-lockfile
         elif [ -f front/package.json ]; then
           cd front
-          npm install
+          pnpm install
         fi
 
   infra:setup:
@@ -142,7 +142,7 @@ tasks:
         test "$(id -un)" = dev
         go version
         node --version
-        npm --version
+        pnpm --version
         task --version
         aws --version
         cdk --version
@@ -160,13 +160,19 @@ tasks:
     desc: Start the React development server on the forwarded port
     dir: front
     cmds:
-      - npm run dev -- --host 0.0.0.0
+      - pnpm dev --host 0.0.0.0
 
   web:build:
     desc: Build the React app
     dir: front
     cmds:
-      - npm run build
+      - pnpm build
+
+  web:test:
+    desc: Run the React tests (vitest)
+    dir: front
+    cmds:
+      - pnpm test
 
   codex:
     desc: Codex を起動（コンテナ内）

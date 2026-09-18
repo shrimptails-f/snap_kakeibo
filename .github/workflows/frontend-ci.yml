@@ -1,0 +1,58 @@
+# front/(React + TypeScript / Vite)の CI。CD は CodePipeline 側(docs/ci_cd/codepipeline-design.md)。
+name: Frontend CI
+
+on:
+  push:
+    paths:
+      - front/**
+      - .github/workflows/frontend-ci.yml
+
+defaults:
+  run:
+    working-directory: front
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # front/package.json の packageManager(pnpm@x.y.z)を読む
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: front/package.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          # devcontainer(node 22)に合わせる
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: front/pnpm-lock.yaml
+
+      # pnpm install 時のマルウェアをブロックする(pnpm もラップ対象)。
+      # 公開 48h 未満のブロックも持つが、lockfile は pnpm の minimumReleaseAge(同じ 48h)で作られるので通常は当たらない
+      - name: Set up safe-chain
+        env:
+          SAFE_CHAIN_VERSION: 1.5.20
+          SAFE_CHAIN_INSTALLER_SHA256: 0ad25efe15d1fa56105157a454d647223e78eb0c53d1f85e3d10afcd722e7bfd
+        run: |
+          curl -fsSL "https://github.com/AikidoSec/safe-chain/releases/download/${SAFE_CHAIN_VERSION}/install-safe-chain.sh" -o /tmp/install-safe-chain.sh
+          echo "${SAFE_CHAIN_INSTALLER_SHA256}  /tmp/install-safe-chain.sh" | sha256sum -c -
+          sh /tmp/install-safe-chain.sh --ci
+          rm /tmp/install-safe-chain.sh
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      # `tsc -b && vite build` なので型チェックも兼ねる
+      - name: Build
+        run: pnpm build

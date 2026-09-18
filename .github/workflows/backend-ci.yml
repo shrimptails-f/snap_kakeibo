@@ -1,0 +1,15 @@
+# backend/(Lambda 用 Go モジュール)の CI。CD は CodePipeline 側(docs/ci_cd/codepipeline-design.md)。
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - backend/**
+      - .github/workflows/backend-ci.yml
+      - .github/workflows/_go-module.yml
+
+jobs:
+  go:
+    uses: ./.github/workflows/_go-module.yml
+    with:
+      module: backend

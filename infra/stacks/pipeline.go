@@ -113,6 +113,9 @@ func backendBuildAndDeploySpec() awscodebuild.BuildSpec {
 	})
 }
 
+// CodeBuild に入れる pnpm の版。front/package.json の packageManager と .devcontainer/Dockerfile の PNPM_VERSION も同じ値にする
+const pnpmVersion = "12.4.2"
+
 func frontendBuildAndDeploySpec() awscodebuild.BuildSpec {
 	return awscodebuild.BuildSpec_FromObject(&map[string]any{
 		"version": "0.2",
@@ -121,7 +124,13 @@ func frontendBuildAndDeploySpec() awscodebuild.BuildSpec {
 				"runtime-versions": map[string]any{"nodejs": "latest"},
 			},
 			"pre_build": map[string]any{
-				"commands": []string{"chmod +x scripts/*.sh", "node --version", "npm --version"},
+				"commands": []string{
+					"chmod +x scripts/*.sh",
+					"node --version",
+					// front/package.json の packageManager と揃える
+					"npm install --global pnpm@" + pnpmVersion,
+					"pnpm --version",
+				},
 			},
 			"build": map[string]any{
 				"commands": []string{

@@ -25,7 +25,7 @@ func ResizeJPEG(data []byte, maxEdge int) ([]byte, error) {
 	}
 	dst := img
 	if w > maxEdge || h > maxEdge {
-		nw, nh := w, h
+		var nw, nh int
 		if w >= h {
 			nw = maxEdge
 			nh = max(1, h*maxEdge/w)

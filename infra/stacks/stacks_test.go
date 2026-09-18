@@ -11,6 +11,9 @@ import (
 	"snap_kakeibo/infra/config"
 )
 
+// このパッケージのテストは t.Parallel() を呼ばない。
+// jsii-runtime-go は Node プロセスへのリクエストを排他せず、Node 側のカーネルも単一スレッド前提なので、
+// 並行に呼ぶと data race / segfault になる(awscdk.NewApp や config.Dev() 内の Duration_Minutes も jsii 経由)。
 func synth(t *testing.T, cfg config.Config) (assertions.Template, assertions.Template) {
 	t.Helper()
 	app := awscdk.NewApp(nil)

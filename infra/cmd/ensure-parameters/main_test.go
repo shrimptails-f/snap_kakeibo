@@ -29,6 +29,7 @@ func (f *fakeStore) PutParameter(_ context.Context, in *ssm.PutParameterInput, _
 	return &ssm.PutParameterOutput{}, nil
 }
 
+// config.Dev() が jsii(awscdk.Duration)を呼ぶので、このパッケージでは t.Parallel() を使わない(stacks_test.go 参照)。
 func TestEnsureAllCreatesOnlyMissing(t *testing.T) {
 	cfg := config.Dev()
 	store := &fakeStore{existing: map[string]string{

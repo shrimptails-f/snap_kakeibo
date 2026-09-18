@@ -1,0 +1,6 @@
+# pnpm の設定(pnpm 10 以降は .npmrc ではなくこのファイルに書く)
+
+# 公開から 48 時間(2880 分)経っていない版は推移的依存も含めて解決しない。
+# CI の safe-chain が同じ 48h ルールでダウンロードをブロックするので、値は必ず揃える。
+# 範囲内に 48h 経った版が無い場合は失敗する(minimumReleaseAgeStrict は明示設定時 true)
+minimumReleaseAge: 2880

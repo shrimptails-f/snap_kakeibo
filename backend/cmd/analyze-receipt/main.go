@@ -156,7 +156,7 @@ func process(ctx context.Context, j job) error {
 		return err
 	}
 	data, err := io.ReadAll(io.LimitReader(out.Body, 30<<20))
-	out.Body.Close()
+	_ = out.Body.Close()
 	if err != nil {
 		return err
 	}
