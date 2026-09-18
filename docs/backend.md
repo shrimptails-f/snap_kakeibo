@@ -537,7 +537,7 @@ Authorization: Bearer {JWT}
 
 ## DynamoDB
 
-DB設計の詳細は [DB設計](./database.md) に置く。
+DB設計の詳細は [DB設計](./infra/database.md) に置く。
 
 バックエンド処理で扱うテーブルは以下とする。
 

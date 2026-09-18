@@ -18,10 +18,12 @@
 
 詳細設計は領域ごとに分割する。
 
-* [インフラ設計](./infrastructure.md)
+* [インフラ設計](./infra/infrastructure.md)
+* [DB設計](./infra/database.md)
+* [デプロイ戦略](./ci_cd/deployment-strategy.md)
+* [デプロイ戦略の技術調査](./ci_cd/deployment-strategy-research.md)
 * [バックエンド設計](./backend.md)
 * [フロントエンド設計](./frontend.md)
-* [DB設計](./database.md)
 
 画面ごとの設計は以下に置く。
 

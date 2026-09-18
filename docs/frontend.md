@@ -25,7 +25,7 @@ API Gateway
 
 ## 配信
 
-ビルド成果物(`front/dist`)を S3 の frontend バケットに置き、CloudFront から OAC で配信する。詳細は [インフラ設計](./infrastructure.md#cloudfront)。
+ビルド成果物(`front/dist`)を S3 の frontend バケットに置き、CloudFront から OAC で配信する。詳細は [インフラ設計](./infra/infrastructure.md#cloudfront)。
 
 ```text
 npm run build
