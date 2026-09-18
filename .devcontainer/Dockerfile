@@ -27,6 +27,7 @@ RUN apk add --no-cache \
     chown -R dev:dev /workspace /home/dev
 
 COPY --chown=dev:dev .devcontainer/.bashrc /home/dev/.bashrc
+COPY --chown=dev:dev .devcontainer/infra/go/config.toml /home/dev/.codex/config.toml
 
 WORKDIR /workspace/snap_kakeibo
 USER dev
