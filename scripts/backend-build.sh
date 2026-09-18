@@ -102,6 +102,18 @@ else
   push_functions=("${deploy_functions[@]}")
 fi
 
+# 対象をログで一目で分かるようにまとめて出す
+list_or_none() { if [[ $# -eq 0 ]]; then echo "  (none)"; else printf '  %s\n' "$@"; fi; }
+echo "------------------------------------------------------------"
+echo "backend deploy plan"
+echo "  base : ${base_commit}"
+echo "  head : ${head_commit} (image tag ${short_sha})"
+echo "ECR push:"
+list_or_none "${push_functions[@]}"
+echo "CodeDeploy (live alias):"
+list_or_none "${deploy_functions[@]}"
+echo "------------------------------------------------------------"
+
 if [[ ${#push_functions[@]} -gt 0 ]]; then
   bash scripts/push-image.sh "${stage}" "${project}" "${short_sha}" "${push_functions[@]}"
 fi

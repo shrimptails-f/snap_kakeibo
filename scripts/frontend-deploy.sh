@@ -9,6 +9,11 @@ deploy="$(jq -r '.deploy' "${plan}")"
 bucket="$(jq -r '.bucket' "${plan}")"
 stack_name="$(jq -r '.stackName' "${plan}")"
 
+echo "------------------------------------------------------------"
+echo "frontend deploy: deploy=${deploy} -> ${head_commit}"
+echo "  bucket: s3://${bucket}"
+echo "------------------------------------------------------------"
+
 if [[ "${deploy}" != "true" ]]; then
   echo "no frontend deploy target; updating marker only"
   aws ssm put-parameter --name "${marker}" --type String --value "${head_commit}" --overwrite >/dev/null

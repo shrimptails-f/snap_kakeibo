@@ -8,6 +8,11 @@ marker="$(jq -r '.marker' "${plan}")"
 application_name="$(jq -r '.applicationName' "${plan}")"
 function_count="$(jq '.functions | length' "${plan}")"
 
+echo "------------------------------------------------------------"
+echo "backend deploy: ${function_count} function(s) -> ${head_commit}"
+jq -r '.functions[] | "  \(.functionName)  <-  \(.imageUri)"' "${plan}"
+echo "------------------------------------------------------------"
+
 if [[ "${function_count}" == "0" ]]; then
   echo "no backend deploy target; updating marker only"
   aws ssm put-parameter --name "${marker}" --type String --value "${head_commit}" --overwrite >/dev/null
@@ -20,6 +25,7 @@ for i in $(seq 0 $((function_count - 1))); do
   function_name="$(jq -r ".functions[${i}].functionName" "${plan}")"
   deployment_group="$(jq -r ".functions[${i}].deploymentGroup" "${plan}")"
 
+  echo "--- [$((i + 1))/${function_count}] ${function_name} ---"
   live_image_uri="$(aws lambda get-function --function-name "${function_name}" --qualifier live --query Code.ImageUri --output text)"
   if [[ "${live_image_uri}" == "${image_uri}" ]]; then
     echo "${fn}: live already uses ${image_uri}; skipping Lambda publish and CodeDeploy"
@@ -70,12 +76,17 @@ JSON
     --output text)"
   rm -f "${appspec}" "${deploy_input}"
 
+  echo "${fn}: version ${current_version} -> ${new_version}, deployment ${deployment_id}"
   aws deploy wait deployment-successful --deployment-id "${deployment_id}"
   live_version="$(aws lambda get-alias --function-name "${function_name}" --name live --query FunctionVersion --output text)"
   if [[ "${live_version}" != "${new_version}" ]]; then
     echo "${fn}: live alias points to ${live_version}, want ${new_version}" >&2
     exit 1
   fi
+  echo "${fn}: live -> version ${live_version} (ok)"
 done
 
+echo "------------------------------------------------------------"
+echo "backend deploy done; marker ${marker} = ${head_commit}"
+echo "------------------------------------------------------------"
 aws ssm put-parameter --name "${marker}" --type String --value "${head_commit}" --overwrite >/dev/null
