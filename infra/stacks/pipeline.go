@@ -158,6 +158,7 @@ func grantCDProject(project awscodebuild.PipelineProject, cfg config.Config, nam
 				"ecr:GetAuthorizationToken", "ecr:InitiateLayerUpload", "ecr:PutImage", "ecr:UploadLayerPart",
 				"lambda:GetAlias", "lambda:GetFunction", "lambda:UpdateFunctionCode",
 				"codedeploy:CreateDeployment", "codedeploy:GetDeployment", "codedeploy:GetDeploymentConfig",
+				"codedeploy:RegisterApplicationRevision",
 			),
 			Resources: jsii.Strings("*"),
 		}))
