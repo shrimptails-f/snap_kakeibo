@@ -102,10 +102,10 @@ func TestStorageStackResources(t *testing.T) {
 	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{
 		"RouteKey": "GET /api/hello",
 	})
-	app.ResourceCountIs(jsii.String("AWS::Lambda::Alias"), jsii.Number(5))
+	app.ResourceCountIs(jsii.String("AWS::Lambda::Alias"), jsii.Number(len(cfg.Functions)))
 	app.ResourceCountIs(jsii.String("AWS::CodeDeploy::Application"), jsii.Number(1))
 	app.ResourceCountIs(jsii.String("AWS::CodeDeploy::DeploymentConfig"), jsii.Number(1))
-	app.ResourceCountIs(jsii.String("AWS::CodeDeploy::DeploymentGroup"), jsii.Number(5))
+	app.ResourceCountIs(jsii.String("AWS::CodeDeploy::DeploymentGroup"), jsii.Number(len(cfg.Functions)))
 	app.HasResourceProperties(jsii.String("AWS::CodeDeploy::Application"), map[string]any{
 		"ApplicationName": "dev-snap-kakeibo-lambda",
 		"ComputePlatform": "Lambda",
@@ -158,7 +158,16 @@ func TestStorageStackResources(t *testing.T) {
 			"OPENAI_MODEL": "gpt-5-mini", "OPENAI_REASONING_EFFORT": "low",
 		})},
 	})
-	app.HasResourceProperties(jsii.String("AWS::Lambda::EventSourceMapping"), map[string]any{"BatchSize": 1, "ScalingConfig": map[string]any{"MaximumConcurrency": 5}})
+	// SQS イベントソースは live Alias に付け、CodeDeploy の切り替えで解析側も更新できるようにする
+	app.HasResourceProperties(jsii.String("AWS::Lambda::EventSourceMapping"), map[string]any{
+		"BatchSize":     1,
+		"ScalingConfig": map[string]any{"MaximumConcurrency": 5},
+		// Alias 経由だと FunctionName は "<関数名>:live" の Fn::Join になる
+		"FunctionName": map[string]any{"Fn::Join": []any{"", assertions.Match_ArrayWith(&[]any{":live"})}},
+	})
+	app.HasResourceProperties(jsii.String("AWS::CodeDeploy::DeploymentGroup"), map[string]any{
+		"DeploymentGroupName": "dev-snap-kakeibo-analyze-receipt-deployment-group",
+	})
 	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{"RouteKey": "POST /api/uploads/{uploadId}/retry"})
 	app.HasParameter(jsii.String("*"), map[string]any{
 		"Type":    "AWS::SSM::Parameter::Value<String>",

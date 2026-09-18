@@ -95,7 +95,7 @@ CodeBuild が実行:
 
 ## 対象 Lambda
 
-まず API Gateway 同期呼び出しの Lambda を CodeDeploy 対象にする。
+`backend/cmd/*` の全 Lambda を CodeDeploy 対象にする。呼び出し元(API Gateway / SQS イベントソース)はすべて `live` Alias に向ける。
 
 | 関数 | 方針 |
 | --- | --- |
@@ -104,9 +104,11 @@ CodeBuild が実行:
 | `retry-upload` | 対象。SQS メッセージ互換性に注意 |
 | `list-uploads` | 対象。読み取り系 |
 | `get-billing` | 対象。読み取り系 |
-| `analyze-receipt` | 初期対象外。SQS 起動のため別途検討する |
+| `analyze-receipt` | 対象。SQS イベントソースを `live` Alias に付ける |
 
-`analyze-receipt` は OpenAI 呼び出しと DynamoDB 更新を伴う非同期処理なので、まずは DLQ / error / duration 監視を整えてから Alias / CodeDeploy 対象にするか決める。
+`analyze-receipt` は当初「SQS 起動かつ OpenAI 呼び出しと DynamoDB 更新を伴う非同期処理なので、監視を整えてから判断する」として対象外にしていた。
+しかし対象外のままだと pipeline は image push と SSM の image-tag 更新までしか行わず、関数本体は手動 `task infra:deploy:app` を待つことになり、SSM のタグと実際に動くイメージがずれる。
+dev は All-at-once なので新旧 Version が混在せず、同期 API と同じリスクで済むため対象に含めた。Canary / Linear へ切り替える stage では、新旧 Version が同時に SQS を消費する点(OpenAI 課金、DynamoDB への副作用の互換性)を改めて確認する。
 
 ## 実装方針
 

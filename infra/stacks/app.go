@@ -68,8 +68,9 @@ func NewAppStack(scope constructs.Construct, id string, props *AppStackProps) *A
 	s.storage.UploadHistoriesTable.GrantWriteData(upload.Handler)
 	s.storage.Bucket.GrantPut(upload.Handler, jsii.String("receipts/*"))
 
-	analyzeReceipt := s.newFunction("analyze-receipt", functionProps{MemorySize: 1024, Timeout: props.Config.Timeouts.Analyze})
-	analyzeReceipt.Function.AddEventSource(awslambdaeventsources.NewSqsEventSource(s.storage.AnalyzeQueue, &awslambdaeventsources.SqsEventSourceProps{
+	// SQS 起動だが live Alias にイベントソースを付け、API 関数と同じく CodeDeploy で切り替える
+	analyzeReceipt := s.newFunction("analyze-receipt", functionProps{MemorySize: 1024, Timeout: props.Config.Timeouts.Analyze, CodeDeploy: true})
+	analyzeReceipt.Handler.AddEventSource(awslambdaeventsources.NewSqsEventSource(s.storage.AnalyzeQueue, &awslambdaeventsources.SqsEventSourceProps{
 		BatchSize:      jsii.Number(1),
 		MaxConcurrency: jsii.Number(5),
 	}))
@@ -107,7 +108,7 @@ func NewAppStack(scope constructs.Construct, id string, props *AppStackProps) *A
 type functionProps struct {
 	MemorySize float64
 	Timeout    awscdk.Duration
-	// CodeDeploy を true にした関数は live Alias を API Gateway から呼び、CodeDeploy が alias を更新する。
+	// CodeDeploy を true にした関数は呼び出し元(API Gateway / SQS)を live Alias に向け、CodeDeploy が alias を更新する。
 	CodeDeploy bool
 	// Environment は共通環境変数に上書き・追加する
 	Environment map[string]*string

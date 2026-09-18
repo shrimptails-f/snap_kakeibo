@@ -7,7 +7,7 @@ head_commit="${CODEBUILD_RESOLVED_SOURCE_VERSION:-$(git rev-parse HEAD)}"
 short_sha="${head_commit:0:12}"
 marker="/${stage}/${project}/cicd/backend/last-successful-commit"
 
-api_functions=(hello upload retry-upload list-uploads get-billing)
+# backend/cmd 配下の全関数が live Alias + CodeDeploy の対象(analyze-receipt も SQS を Alias に付けている)
 all_functions=()
 for dir in backend/cmd/*/; do
   all_functions+=("$(basename "${dir}")")
@@ -34,17 +34,17 @@ add_deploy() {
   deploy_functions+=("${name}")
 }
 
-deploy_all_api() {
-  deploy_functions=("${api_functions[@]}")
+deploy_all() {
+  deploy_functions=("${all_functions[@]}")
 }
 
 if [[ "${base_commit}" == "UNSET" || -z "${base_commit}" || "${base_commit}" == "None" ]]; then
   push_functions=("${all_functions[@]}")
-  deploy_all_api
+  deploy_all
 else
   if ! git cat-file -e "${base_commit}^{commit}" 2>/dev/null; then
-    echo "base commit ${base_commit} is not available; deploying all API functions" >&2
-    deploy_all_api
+    echo "base commit ${base_commit} is not available; deploying all functions" >&2
+    deploy_all
   else
     mapfile -t diff_lines < <(git diff --name-status "${base_commit}" "${head_commit}")
     unsafe_all=false
@@ -72,8 +72,8 @@ else
         unsafe_all=true
       elif [[ "${path}" == backend/cmd/* ]]; then
         fn="$(cut -d/ -f3 <<<"${path}")"
-        for api_fn in "${api_functions[@]}"; do
-          [[ "${fn}" == "${api_fn}" ]] && add_deploy "${fn}"
+        for known_fn in "${all_functions[@]}"; do
+          [[ "${fn}" == "${known_fn}" ]] && add_deploy "${fn}"
         done
       elif [[ "${path}" == backend/internal/* && "${path}" == *.go ]]; then
         changed_packages+=("./$(dirname "${path#backend/}")")
@@ -81,16 +81,16 @@ else
     done
 
     if [[ "${unsafe_all}" == true ]]; then
-      deploy_all_api
+      deploy_all
     elif [[ ${#changed_packages[@]} -gt 0 ]]; then
       cd backend
       for pkg in "${changed_packages[@]}"; do
         if ! import_path="$(go list -f '{{.ImportPath}}' "${pkg}" 2>/dev/null)"; then
           cd ..
-          deploy_all_api
+          deploy_all
           break
         fi
-        for fn in "${api_functions[@]}"; do
+        for fn in "${all_functions[@]}"; do
           if go list -deps -f '{{.ImportPath}}' "./cmd/${fn}" | grep -Fxq "${import_path}"; then
             add_deploy "${fn}"
           fi

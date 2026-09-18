@@ -21,7 +21,7 @@ backend と frontend を同じ pipeline に入れると、片方の失敗がも�
 
 | pipeline | 対象 | 成功 marker | 方針 |
 | --- | --- | --- | --- |
-| `backend` | Lambda コンテナイメージ / Lambda Version / CodeDeploy | `/{stage}/snap-kakeibo/cicd/backend/last-successful-commit` | API Lambda を差分デプロイする |
+| `backend` | Lambda コンテナイメージ / Lambda Version / CodeDeploy | `/{stage}/snap-kakeibo/cicd/backend/last-successful-commit` | Lambda を差分デプロイする |
 | `frontend` | React build / S3 / CloudFront | `/{stage}/snap-kakeibo/cicd/frontend/last-successful-commit` | front の差分があるときだけ配信する |
 | `infra` | CDK / CloudFormation | `/{stage}/snap-kakeibo/cicd/infra/last-successful-commit` | TODO。まずは手動 `cdk deploy` を継続する |
 
@@ -127,7 +127,7 @@ marker は pipeline ごとに分ける。backend が成功して frontend が失
 
 ### 対象
 
-初期対象は API Gateway 同期呼び出しの Lambda とする。
+`backend/cmd/*` の全 Lambda を対象にする。API Gateway 同期呼び出しの関数も SQS 起動の `analyze-receipt` も、呼び出し元を `live` Alias に向けて CodeDeploy で切り替える(経緯は `deployment-strategy.md` の「対象 Lambda」を参照)。
 
 ```text
 hello
@@ -135,21 +135,10 @@ upload
 retry-upload
 list-uploads
 get-billing
+analyze-receipt
 ```
 
-`analyze-receipt` は CodeDeploy 初期対象外。ただし `last-successful-commit` が `UNSET` の初回 backend deploy では、ECR image と image tag SSM parameter は全 backend 関数分を揃える。
-
-```text
-ECR push / image-tag 更新:
-  backend/cmd/* 全部
-
-CodeDeploy:
-  hello
-  upload
-  retry-upload
-  list-uploads
-  get-billing
-```
+対象関数の一覧はスクリプトに列挙せず、`backend/cmd/*/` から求める。関数を足すときは AppStack 側でも `CodeDeploy: true` にして `live` Alias を作る。
 
 ### 差分ルール
 
@@ -158,20 +147,20 @@ backend は単純な path prefix だけではなく、Go の package 依存関�
 | 変更 | deploy 対象 |
 | --- | --- |
 | `backend/cmd/{function}/**` | 対応する関数 |
-| `backend/internal/**` の既存 Go package | その package に依存する API 対象 Lambda |
-| `backend/go.mod`, `backend/go.sum` | API 対象 Lambda 全て |
-| `backend/Dockerfile` | API 対象 Lambda 全て |
-| `scripts/` の backend deploy 関連 | API 対象 Lambda 全て |
+| `backend/internal/**` の既存 Go package | その package に依存する Lambda |
+| `backend/go.mod`, `backend/go.sum` | Lambda 全て |
+| `backend/Dockerfile` | Lambda 全て |
+| `scripts/` の backend deploy 関連 | Lambda 全て |
 | `infra/` | backend pipeline では扱わない。infra pipeline の TODO |
-| 削除、rename、判定不能な共有 package | API 対象 Lambda 全て |
+| 削除、rename、判定不能な共有 package | Lambda 全て |
 | docs のみ | deploy なし |
 | test file のみ | test は実行するが deploy 対象にはしない |
 
-初回や marker が `UNSET` の場合は全 backend 関数の ECR image を push し、CodeDeploy 対象の 5 関数を deploy する。
+初回や marker が `UNSET` の場合は全 backend 関数の ECR image を push し、全関数を CodeDeploy で deploy する。
 
 ### Package 依存判定
 
-API 対象 Lambda ごとに `go list -deps` で依存 package の集合を作る。
+Lambda ごとに `go list -deps` で依存 package の集合を作る。
 
 ```bash
 cd backend
@@ -180,6 +169,7 @@ go list -deps -f '{{.ImportPath}}' ./cmd/upload
 go list -deps -f '{{.ImportPath}}' ./cmd/retry-upload
 go list -deps -f '{{.ImportPath}}' ./cmd/list-uploads
 go list -deps -f '{{.ImportPath}}' ./cmd/get-billing
+go list -deps -f '{{.ImportPath}}' ./cmd/analyze-receipt
 ```
 
 変更された `.go` ファイルのディレクトリを package として解決し、各 Lambda の依存集合と照合する。
@@ -195,7 +185,7 @@ changed package ∩ function dependencies != empty
 
 削除された Go ファイルや rename された package は、現在の worktree だけでは旧 package の import path や旧依存関係を `go list` で確認できない。
 
-初期実装では、次の変更は安全側に倒して API 対象 Lambda 全てを deploy する。
+初期実装では、次の変更は安全側に倒して Lambda 全てを deploy する。
 
 ```text
 backend/internal 配下の Go ファイル削除
@@ -235,7 +225,7 @@ backend pipeline は BuildAndDeploy stage の CodeBuild で次を実行する。
 
 CodeDeploy Application / Deployment Group / Deployment Config / Lambda Alias は AppStack が作る。
 
-実行ロジックは `scripts/backend-build.sh` と `scripts/backend-deploy.sh` に置く。初回または marker が `UNSET` の場合は `backend/cmd/*` 全関数の ECR image/tag を揃え、CodeDeploy deployment は同期 API 5本だけ作る。通常時は `git diff --name-status` で削除・rename を検出し、`backend/internal` の既存 Go package 変更は `go list -deps` の依存集合で API Lambda に絞る。
+実行ロジックは `scripts/backend-build.sh` と `scripts/backend-deploy.sh` に置く。初回または marker が `UNSET` の場合は `backend/cmd/*` 全関数の ECR image/tag を揃え、全関数の CodeDeploy deployment を作る。通常時は `git diff --name-status` で削除・rename を検出し、`backend/internal` の既存 Go package 変更は `go list -deps` の依存集合で対象 Lambda に絞る。
 
 再実行時は、同じ commit tag の ECR image が既に存在すれば build / push を skip する。さらに `live` Alias が既に今回の image URI を使っている Lambda は、Lambda Version 発行と CodeDeploy deployment も skip する。これにより、一部 Lambda の CodeDeploy 成功後に後続 Lambda で失敗した場合でも、再実行で成功済み Lambda を重複 publish せず、未完了分だけ進められる。backend marker は全対象が成功した最後にだけ更新する。
 
