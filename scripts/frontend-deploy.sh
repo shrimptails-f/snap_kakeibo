@@ -2,6 +2,8 @@
 set -euo pipefail
 
 plan="${1:-frontend-plan.json}"
+# front-dist は plan と同じディレクトリ(build/)にある。CodeBuild は repo ルートから build/... を渡してくるので plan 基準で解決する
+build_dir="$(dirname "${plan}")"
 
 head_commit="$(jq -r '.headCommit' "${plan}")"
 marker="$(jq -r '.marker' "${plan}")"
@@ -20,7 +22,7 @@ if [[ "${deploy}" != "true" ]]; then
   exit 0
 fi
 
-aws s3 sync front-dist "s3://${bucket}" --delete
+aws s3 sync "${build_dir}/front-dist" "s3://${bucket}" --delete
 dist_id="$(aws cloudformation describe-stacks \
   --stack-name "${stack_name}" \
   --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" \
