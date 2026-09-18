@@ -6,12 +6,10 @@
 
 ```text
 backend pipeline
-  GitHub -> Build(CodeBuild: test -> ECR push -> deployment plan)
-         -> Deploy(CodeBuild: Lambda publish -> CodeDeploy -> marker)
+  GitHub -> BuildAndDeploy(CodeBuild: test -> ECR push -> Lambda publish -> CodeDeploy -> marker)
 
 frontend pipeline
-  GitHub -> Build(CodeBuild: test/build -> deployment plan + dist)
-         -> Deploy(CodeBuild: S3 sync -> CloudFront invalidation -> marker)
+  GitHub -> BuildAndDeploy(CodeBuild: test/build -> S3 sync -> CloudFront invalidation -> marker)
 
 infra pipeline
   TODO
@@ -95,7 +93,7 @@ pipeline が更新する運用状態は CDK の `StringParameter` として値�
 
 Connection は Pipeline stack と同じリージョンに作る。現行の dev 環境は `ap-northeast-2` なので、`arn:aws:codeconnections:ap-northeast-2:...` の ARN を設定する。`ap-northeast-1` など別リージョンの connection ARN は使わない。
 
-現行実装では CDK が `dev-snap-kakeibo-pipeline` に backend / frontend の 2 本の CodePipeline を作る。各 pipeline は `Source` / `Build` / `Deploy` stage に分ける。Source action は `CodeBuildCloneOutput` を有効にし、Build stage の CodeBuild 内で `.git` を使えるようにする。これは `git diff --name-status base head` と `go list -deps` による差分判定に必要。
+現行実装では CDK が `dev-snap-kakeibo-pipeline` に backend / frontend の 2 本の CodePipeline を作る。各 pipeline は `Source` / `BuildAndDeploy` stage に分ける。Source action は `CodeBuildCloneOutput` を有効にし、BuildAndDeploy stage の CodeBuild 内で `.git` を使えるようにする。これは `git diff --name-status base head` と `go list -deps` による差分判定に必要。
 
 ```bash
 task infra:parameters
@@ -218,29 +216,21 @@ affected functions =
 
 ### 実行内容
 
-backend pipeline は Build / Deploy stage を分ける。
-
-Build stage は次を実行し、Deploy stage へ `backend-plan.json` を artifact として渡す。
+backend pipeline は BuildAndDeploy stage の CodeBuild で次を実行する。
 
 ```text
 1. テストを実行する
 2. 差分から対象 Lambda を判定する
 3. 対象 Lambda image を ECR へ push する
 4. 対象 Lambda 一覧、image URI、関数名、Deployment Group 名を backend-plan.json に書く
-```
-
-Deploy stage は `backend-plan.json` を読み、関数ごとに次を実行する。
-
-
-```text
-1. live Alias が既に今回の image URI を使っていれば skip する
-2. aws lambda update-function-code --publish で新 Version を発行する
-3. live Alias の現在 Version を取得する
-4. Lambda AppSpec を生成する
-5. aws deploy create-deployment を実行する
-6. deployment 成功を待つ
-7. live Alias が新 Version を向いたことを確認する
-8. 全対象が成功したら backend marker を head commit に更新する
+5. live Alias が既に今回の image URI を使っていれば skip する
+6. aws lambda update-function-code --publish で新 Version を発行する
+7. live Alias の現在 Version を取得する
+8. Lambda AppSpec を生成する
+9. aws deploy create-deployment を実行する
+10. deployment 成功を待つ
+11. live Alias が新 Version を向いたことを確認する
+12. 全対象が成功したら backend marker を head commit に更新する
 ```
 
 CodeDeploy Application / Deployment Group / Deployment Config / Lambda Alias は AppStack が作る。
@@ -263,16 +253,13 @@ CodeDeploy Application / Deployment Group / Deployment Config / Lambda Alias は
 
 ### 実行内容
 
-frontend pipeline も Build / Deploy stage を分ける。
-
-Build stage は marker と差分を見て、配信が必要なら `npm ci` / `npm run build` を実行し、`frontend-plan.json` と `front-dist/` を artifact として渡す。
-
-Deploy stage は `frontend-plan.json` を読み、配信が必要な場合だけ次を実行する。
+frontend pipeline も BuildAndDeploy stage の CodeBuild で marker と差分を見て、配信が必要な場合だけ次を実行する。
 
 ```text
-1. front-dist を frontend bucket へ sync
-2. CloudFront invalidation を作成する
-3. 成功したら frontend marker を head commit に更新する
+1. npm ci / npm run build を実行する
+2. front/dist を frontend bucket へ sync する
+3. CloudFront invalidation を作成する
+4. 成功したら frontend marker を head commit に更新する
 ```
 
 実行ロジックは `scripts/frontend-build.sh` と `scripts/frontend-deploy.sh` に置く。`front/**` または frontend deploy script に差分がある場合、または marker が `UNSET` の場合だけ配信する。差分がない場合は build/sync/invalidation を行わず marker だけ更新する。
