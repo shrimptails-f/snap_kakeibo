@@ -2,18 +2,10 @@ package application
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	authdomain "snap_kakeibo/backend/internal/auth/domain"
 	common "snap_kakeibo/backend/internal/common/domain"
-)
-
-var (
-	// ErrTooManyLoginAttempts はログイン試行が短時間の上限に達した場合に返す。
-	ErrTooManyLoginAttempts = errors.New("too many login attempts")
-	// ErrRefreshTokenNotFound はリポジトリが該当 refresh token を見つけられなかった場合に返す。
-	ErrRefreshTokenNotFound = errors.New("refresh token not found")
 )
 
 // UserRepository はメールアドレスで利用者を取得する。

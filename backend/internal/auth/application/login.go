@@ -11,13 +11,6 @@ import (
 	"snap_kakeibo/backend/internal/library/timewrapper"
 )
 
-var (
-	// ErrInvalidCredentials はメールアドレスまたはパスワードが不正な場合に返す。
-	ErrInvalidCredentials = errors.New("invalid credentials")
-	// ErrUserNotFound はリポジトリが該当ユーザーを見つけられなかった場合に返す。
-	ErrUserNotFound = errors.New("user not found")
-)
-
 // LoginInput はログインユースケースの入力。
 type LoginInput struct {
 	Email    string
