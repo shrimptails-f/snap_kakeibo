@@ -1,4 +1,6 @@
 # Show the current Git branch in interactive Bash prompts.
+source /usr/local/share/gh-wrappers.bash
+
 git_prompt_branch() {
   local branch
   branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null)" || return

@@ -17,6 +17,7 @@ services:
     volumes:
       - ..:/workspace/snap_kakeibo
       - ${HOME}/.aws:/home/dev/.aws:ro
+      - ${HOME}/.config/gh:/home/dev/.config/gh:ro
       - codex-home:/home/dev/.codex
       - claude-home:/home/dev/.claude
       - go-modules:/home/dev/go/pkg/mod

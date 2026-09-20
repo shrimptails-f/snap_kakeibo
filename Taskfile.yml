@@ -145,6 +145,7 @@ tasks:
         pnpm --version
         task --version
         aws --version
+        gh --version
         cdk --version
         codex --version
         claude --version

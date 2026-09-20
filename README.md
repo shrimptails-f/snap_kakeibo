@@ -21,3 +21,47 @@ Floci を同じ Compose 構成で起動し、開発コンテナ内の標準の A
 Alpine では Claude Code に `libgcc`、`libstdc++`、`ripgrep` と `USE_BUILTIN_RIPGREP=0` が必要です。Codex/Claude はコンテナで `codex` / `claude` として起動し、初回は各サービスへのログインが必要です。`task doctor` でツールと実行ユーザーを確認できます。アプリのポート 5173 と 8080 は VS Code Dev Containers で転送します。
 
 Bash のプロンプトには、Git リポジトリ内であれば現在のブランチ名を青色で表示します。
+
+## GitHub CLI (`gh`)
+
+開発コンテナに Alpine の `github-cli` を導入します。既存のコンテナでは VS Code の **Dev Containers: Rebuild Container** を実行し、`gh --version` または `task doctor` で確認してください。
+
+権限をリポジトリ単位に限定するため、[Fine-grained personal access token の作成画面](https://github.com/settings/personal-access-tokens/new)で Resource owner を選び、Repository access を **Only select repositories** にしてこのリポジトリだけを選択します。有効期限はまず 30 日を目安に設定します。Organization のポリシーによっては管理者の承認が必要です。
+
+Repository permissions は使う操作に合わせて設定します。最初は閲覧用で始め、必要な書き込み権限を追加してください。
+
+| 操作 | 権限の目安 |
+| --- | --- |
+| コード・PR の閲覧 | Contents: Read-only、Pull requests: Read-only |
+| PR の作成・編集・レビュー | Pull requests: Read and write |
+| この PAT で HTTPS の Git push | Contents: Read and write |
+| Issue の閲覧／作成・編集 | Issues: Read-only／Read and write |
+| Actions の実行結果・ログの閲覧 | Actions: Read-only |
+| Actions の手動実行・再実行 | Actions: Read and write |
+| この PAT で `.github/workflows/` を更新 | Contents と Workflows: Read and write |
+
+Metadata の読み取り権限は自動で含まれます。追加オプションや API によって別の権限が必要になるため、詳細は [GitHub の権限一覧](https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens)を確認してください。PR 作成時にブランチも push するなら、Git 側の書き込み認証も必要です。ブランチへの直接 push やマージの制限は GitHub の ruleset / branch protection で設定します。
+
+WSL ホストの `${HOME}/.config/gh` をコンテナの `/home/dev/.config/gh` に読み取り専用でマウントし、ホストに保存済みの `gh` 認証を共有します。ホストでこのリポジトリ専用の PAT を保存済みなら、コンテナや端末を再起動してもトークンの再入力は不要です。起動前にホストの設定ディレクトリが存在することを確認してください。この方式はトークンが設定ファイルに保存されている場合に利用できます。ホストの OS 資格情報ストアに保存したトークンは、このマウントだけでは共有できません。
+
+設定変更後は **Dev Containers: Rebuild Container** を実行し、コンテナ内で確認します。
+
+```bash
+gh auth status
+gh pr list --state closed
+```
+
+ログイン・トークン更新・ログアウトなど、共有した `gh` 設定への書き込みはホスト側で行います。ホスト側の認証変更はコンテナにも反映されます。読み取り専用なのは設定ファイルであり、GitHub 上の操作権限は PAT の設定に従います。コンテナ内のプロセスもこの認証を利用できるため、共有する認証はこのリポジトリに限定してください。トークンをチャット、Dockerfile、Compose の値、Git 管理ファイルへ貼り付けないでください。
+
+保存済み認証を一時的に上書きする場合のみ、コンテナ内の Bash で別の PAT を `GH_TOKEN` に入力できます。以下はトークンそのものをシェル履歴に残しません。`set -x` によるトレースが有効な場合は、先に `set +x` で無効にしてください。
+
+```bash
+read -rsp 'GitHub token: ' GH_TOKEN; printf '\n'
+export GH_TOKEN
+gh auth status
+gh pr list
+```
+
+`GH_TOKEN` があれば保存済み認証より優先され、`gh auth login` は不要です。Fine-grained PAT にはこの渡し方が[公式にも推奨されています](https://cli.github.com/manual/gh_auth_login)。この一時的な上書きはその端末と子プロセスだけに適用され、ファイルには保存されません。終了時は `unset GH_TOKEN` で保存済み認証に戻せますが、既に起動した子プロセスの環境変数は残るため、必要に応じて終了してください。
+
+HTTPS の Git にもこの認証を使う場合は `gh auth setup-git` を実行します。SSH の Git 認証は別管理です。ホストからの Git 資格情報転送や SSH agent 転送がある場合、PAT の権限だけではコンテナ全体の Git 操作を制限できません。
