@@ -11,7 +11,7 @@ import (
 )
 
 func TestNewAuthLoginContainerResolvesUsecaseInterface(t *testing.T) {
-	container, err := NewAuthLoginContainer(settings.LoginConfig{
+	container, err := NewAuthLoginContainer(settings.Config{
 		UsersTable: "users",
 		JWTSecret:  "test-secret",
 		Stage:      "test",

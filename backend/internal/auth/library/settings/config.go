@@ -8,8 +8,8 @@ import (
 	"snap_kakeibo/backend/internal/library/oswrapper"
 )
 
-// LoginConfig は auth-login に必要な設定値。
-type LoginConfig struct {
+// Config はトークンを発行する認証 Lambda（auth-login / auth-refresh）に必要な設定値。
+type Config struct {
 	UsersTable         string
 	JWTSecret          string
 	JWTSecretParameter string
@@ -17,21 +17,21 @@ type LoginConfig struct {
 	LogLevel           string
 }
 
-// LoadLoginConfig は必須設定を起動時に検証する。
-func LoadLoginConfig(osw oswrapper.Interface) (LoginConfig, error) {
+// Load は必須設定を起動時に検証する。
+func Load(osw oswrapper.Interface) (Config, error) {
 	usersTable, err := osw.GetEnv("USERS_TABLE")
 	if err != nil {
-		return LoginConfig{}, err
+		return Config{}, err
 	}
 	jwtSecret, jwtSecretErr := osw.GetEnv("JWT_SECRET")
 	jwtSecretParameter, parameterErr := osw.GetEnv("SSM_JWT_SECRET")
 	if jwtSecretErr != nil && parameterErr != nil {
-		return LoginConfig{}, fmt.Errorf("JWT_SECRET or SSM_JWT_SECRET is required: %w", errors.Join(jwtSecretErr, parameterErr))
+		return Config{}, fmt.Errorf("JWT_SECRET or SSM_JWT_SECRET is required: %w", errors.Join(jwtSecretErr, parameterErr))
 	}
 	stage, err := osw.GetEnv("STAGE")
 	if err != nil {
-		return LoginConfig{}, err
+		return Config{}, err
 	}
 	logLevel, _ := osw.GetEnv("LOG_LEVEL")
-	return LoginConfig{UsersTable: usersTable, JWTSecret: jwtSecret, JWTSecretParameter: jwtSecretParameter, Stage: stage, LogLevel: logLevel}, nil
+	return Config{UsersTable: usersTable, JWTSecret: jwtSecret, JWTSecretParameter: jwtSecretParameter, Stage: stage, LogLevel: logLevel}, nil
 }

@@ -34,7 +34,7 @@ var (
 
 func init() {
 	osw := oswrapper.New()
-	cfg, err := settings.LoadLoginConfig(osw)
+	cfg, err := settings.Load(osw)
 	if err != nil {
 		panic(err)
 	}

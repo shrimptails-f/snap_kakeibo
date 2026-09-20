@@ -3,17 +3,14 @@ package di
 
 import (
 	"fmt"
-	"time"
 
 	"snap_kakeibo/backend/internal/auth/application"
 	"snap_kakeibo/backend/internal/auth/infrastructure"
 	"snap_kakeibo/backend/internal/auth/library/password"
 	"snap_kakeibo/backend/internal/auth/library/settings"
-	"snap_kakeibo/backend/internal/auth/library/token"
 	libdynamodb "snap_kakeibo/backend/internal/library/dynamodb"
 	"snap_kakeibo/backend/internal/library/logger"
 	"snap_kakeibo/backend/internal/library/oswrapper"
-	libssm "snap_kakeibo/backend/internal/library/ssm"
 	"snap_kakeibo/backend/internal/library/timewrapper"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -21,31 +18,17 @@ import (
 )
 
 // NewAuthLoginContainer は共通コンテナへ auth-login 固有の依存性を追加する。
-func NewAuthLoginContainer(cfg settings.LoginConfig, awsCfg aws.Config, osw oswrapper.Interface, log logger.Interface) (*dig.Container, error) {
+func NewAuthLoginContainer(cfg settings.Config, awsCfg aws.Config, osw oswrapper.Interface, log logger.Interface) (*dig.Container, error) {
 	container, err := NewContainer(awsCfg, osw, log)
 	if err != nil {
 		return nil, fmt.Errorf("create auth-login container: %w", err)
 	}
+	if err := provideAuthTokenDependencies(container, "auth-login", cfg); err != nil {
+		return nil, err
+	}
 	if err := Provide(container, "auth-login",
-		func() settings.LoginConfig { return cfg },
-		func(client *libdynamodb.Client, cfg settings.LoginConfig) application.UserRepository {
-			return infrastructure.DynamoDBUserRepository{Table: client.Table(cfg.UsersTable)}
-		},
 		func() application.PasswordComparator { return password.Bcrypt{} },
-		func(cfg settings.LoginConfig, client *libssm.Client) token.SecretProvider {
-			if cfg.JWTSecret != "" {
-				return token.StaticSecretProvider{Value: cfg.JWTSecret}
-			}
-			return &token.SSMSecretProvider{Parameter: client.Parameter(cfg.JWTSecretParameter)}
-		},
-		func(secrets token.SecretProvider, cfg settings.LoginConfig, clock timewrapper.Interface) application.AccessTokenIssuer {
-			return token.JWTIssuer{Secrets: secrets, Issuer: issuer(cfg.Stage), Clock: clock, TTL: 15 * time.Minute}
-		},
-		func() application.RefreshTokenGenerator { return token.RefreshTokenGenerator{} },
-		func(client *libdynamodb.Client, cfg settings.LoginConfig) application.RefreshTokenRepository {
-			return infrastructure.DynamoDBRefreshTokenRepository{Table: client.Table(cfg.UsersTable)}
-		},
-		func(client *libdynamodb.Client, cfg settings.LoginConfig, clock timewrapper.Interface) application.LoginAttemptLimiter {
+		func(client *libdynamodb.Client, cfg settings.Config, clock timewrapper.Interface) application.LoginAttemptLimiter {
 			return infrastructure.DynamoDBLoginAttemptLimiter{Table: client.Table(cfg.UsersTable), Clock: clock}
 		},
 		application.NewLoginUsecase,
@@ -71,11 +54,4 @@ func ResolveAuthLoginUsecase(container *dig.Container) (application.LoginUsecase
 		return nil, fmt.Errorf("resolve auth-login usecase: %w", err)
 	}
 	return usecase, nil
-}
-
-func issuer(stage string) string {
-	if stage == "" {
-		return "snap-kakeibo"
-	}
-	return "snap-kakeibo-" + stage
 }
