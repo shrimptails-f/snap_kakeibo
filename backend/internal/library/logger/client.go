@@ -18,7 +18,7 @@ import (
 type Options struct {
 	Level       string    // Level は debug / info / warn / error。空や未知の値は info。
 	Service     string    // Service はサービス名(Lambda 関数名など)。空なら "unknown"。
-	Environment string    // Environment は環境名(dev / prod など)。空なら "unknown"。
+	Environment string    // Environment は環境名(dev / stg / prd など)。空なら "unknown"。
 	Writer      io.Writer // Writer は出力先。nil なら os.Stdout。
 }
 

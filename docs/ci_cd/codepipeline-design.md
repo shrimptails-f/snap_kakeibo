@@ -38,7 +38,7 @@ GitHub 接続は pipeline 間で共有する。
 ```text
 deploy/dev -> dev
 deploy/stg -> stg
-deploy/prd -> prod
+deploy/prd -> prd
 ```
 
 backend と frontend は同じモノレポ内の同じプロダクトなので、「この commit をこの stage に出す」という意思決定は stage ごとの deploy branch で一元化する。
@@ -50,8 +50,8 @@ dev frontend pipeline  watches deploy/dev
 stg backend pipeline   watches deploy/stg
 stg frontend pipeline  watches deploy/stg
 
-prod backend pipeline  watches deploy/prd
-prod frontend pipeline watches deploy/prd
+prd backend pipeline   watches deploy/prd
+prd frontend pipeline  watches deploy/prd
 ```
 
 backend / frontend の独立性は branch ではなく、pipeline 分離、成功 marker 分離、差分検出、後方互換性で担保する。
@@ -72,7 +72,7 @@ git merge deploy/stg
 git push origin deploy/prd
 ```
 
-`deploy/prd` はブランチ名だけ短縮し、AWS 上の stage 名と SSM prefix は `prod` とする。
+stage 名は dev / stg / prd で統一し、ブランチ名・AWS 上のリソース名・SSM prefix・Lambda の `STAGE` 環境変数で同じ値を使う。
 
 ## SSM Parameter
 

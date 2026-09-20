@@ -63,7 +63,7 @@ task infra:deploy:app                # SSM のタグが変わった関数だけ�
 - 関数を足すときは `backend/cmd/{name}` と `common.FunctionNames` の両方に追加する(テストで一致を確認している)。storage を deploy し直すと ECR と SSM ができる
 - `image:push` は Docker が必要。開発コンテナには Docker ソケットを渡していないので、ホストか CI で実行する
 
-stage は `STAGE=prod task infra:deploy:storage` のように環境変数で切り替える(既定 dev)。
+stage は `STAGE=prd task infra:deploy:storage` のように環境変数で切り替える(既定 dev)。
 
 ## Context
 

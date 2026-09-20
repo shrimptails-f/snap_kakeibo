@@ -208,6 +208,7 @@ func (s *AppStack) newLambdaDeploymentConfig() awscodedeploy.ILambdaDeploymentCo
 func (s *AppStack) commonEnvironment() map[string]*string {
 	st := s.storage
 	return map[string]*string{
+		common.EnvStage:                 jsii.String(string(s.cfg.Stage)),
 		common.EnvUsersTable:            st.UsersTable.TableName(),
 		common.EnvMonthlySummariesTable: st.MonthlySummariesTable.TableName(),
 		common.EnvUploadHistoriesTable:  st.UploadHistoriesTable.TableName(),

@@ -57,7 +57,7 @@ CodeDeploy の Canary / Linear の待ち時間は分単位で扱う。秒単位�
 | --- | --- | --- |
 | `dev` | `AllAtOnce` | CodeDeploy 経路は通しつつ、待ち時間をなくす |
 | `stg` | `Canary 10% / 1分` | 短時間で canary の流れを確認する |
-| `prod` | `Canary 10% / 5分` | 本番相当の段階デプロイ |
+| `prd` | `Canary 10% / 5分` | 本番相当の段階デプロイ |
 
 `dev` でも直更新には戻さない。待ち時間だけを短くし、Version / Alias / CodeDeploy の構成は全環境で揃える。
 

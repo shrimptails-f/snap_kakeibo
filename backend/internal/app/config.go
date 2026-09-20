@@ -16,7 +16,7 @@ type Config struct {
 	OpenAIModel           string
 	OpenAIReasoningEffort string
 	ImageMaxEdge          string
-	Stage                 string // Stage は dev / prod などの環境名。ログの environment に載せる。
+	Stage                 string // Stage は dev / stg / prd などの環境名。ログの environment に載せる。
 	LogLevel              string // LogLevel は debug / info / warn / error。空なら info。
 }
 
