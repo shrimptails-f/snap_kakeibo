@@ -17,6 +17,7 @@ import (
 // TestFlociTemporaryTables は実際の DynamoDB API(ローカルの Floci)に対して
 // 作成 → 読み書き → GSI 検索 → テスト終了時の削除 を通す。STAGE が local / ci のときだけ動く。
 func TestFlociTemporaryTables(t *testing.T) {
+	t.Parallel()
 	env := dynamodbtest.Connect(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

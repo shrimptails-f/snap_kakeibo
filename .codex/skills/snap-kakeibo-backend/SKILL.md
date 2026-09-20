@@ -39,4 +39,4 @@ git diff --exit-code -- go.mod go.sum
 
 `go mod tidy` が依存ファイルを意図どおり変更するタスクでは、最後の差分検査を失敗条件にせず、その差分が必要かを確認する。
 
-テストを並列化する場合は、`t.Setenv`、`t.Chdir`、変更可能な package-level state、共有外部サービス、cleanup 順序への依存がないことを確認してから `t.Parallel()` を追加する。
+テストを並列化する場合は、環境やファイルへの依存を `oswrappertest.Mock` などへ差し替える。Floci の AWS リソースにはテストごとのランダム ID を付け、`t.Cleanup` で自分のリソースだけを削除する。process-global state や他テストの cleanup 順序へ依存しない状態にしてから `t.Parallel()` を追加する。

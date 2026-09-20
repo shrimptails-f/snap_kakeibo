@@ -5,12 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"snap_kakeibo/backend/internal/library/awsconfig"
+	"snap_kakeibo/backend/internal/library/awstest"
 	"snap_kakeibo/backend/internal/library/logger"
 	"snap_kakeibo/backend/internal/library/oswrapper"
 	"snap_kakeibo/backend/internal/library/stage"
@@ -263,6 +263,7 @@ func TestRecordContextAndMessageContext(t *testing.T) {
 // TestFlociRoundTrip は実際の SQS API(ローカルの Floci)に対して送信 → 受信 → trace 取り出しを通す。
 // STAGE が local / ci のときだけ動く(devcontainer と CI)。それ以外はスキップする。
 func TestFlociRoundTrip(t *testing.T) {
+	t.Parallel()
 	osw := oswrapper.New()
 	if st, err := stage.FromEnv(osw); err != nil || !st.IsLocal() {
 		t.Skipf("STAGE is not local / ci (stage=%q err=%v); skipping Floci integration test", st, err)
@@ -278,7 +279,7 @@ func TestFlociRoundTrip(t *testing.T) {
 	endpoint := aws.ToString(cfg.BaseEndpoint)
 	api := awssqs.NewFromConfig(cfg)
 
-	queueName := fmt.Sprintf("sqs-roundtrip-%d", time.Now().UnixNano())
+	queueName := awstest.ResourceName("sqs-roundtrip")
 	created, err := api.CreateQueue(ctx, &awssqs.CreateQueueInput{QueueName: aws.String(queueName)})
 	if err != nil {
 		t.Fatalf("CreateQueue against %s failed: %v", endpoint, err)

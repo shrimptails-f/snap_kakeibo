@@ -110,11 +110,11 @@ internal/<feature>/
 
 - 独立した単体テストはテスト関数の先頭で `t.Parallel()` を呼ぶ。
 - 並列サブテストでは、range 変数や mutable な fixture をテスト間で共有しない。
-- 次のテストは原則として直列実行する。
-  - `t.Setenv`、`os.Setenv`、作業ディレクトリ変更など process-global state を変更するもの
-  - package-level の変更可能な変数を読み書きするもの
-  - Floci その他の共有外部サービスに対する統合テスト
-  - cleanup の順序や親子サブテストの完了順に依存するもの
+- 環境変数やファイルを読むコードの利用側テストでは、`oswrappertest.Mock` などの依存を注入し、`t.Setenv`、`os.Setenv`、`t.Chdir` による process-global state の変更を避ける。
+- OS wrapper 自体の境界テストなど、process-global state の操作が検証対象で代替できないものだけ直列実行する。
+- Floci その他の共有外部サービスを使う統合テストは、テストごとの Nano ID を付けた一時リソースを作成し、`t.Cleanup` で自分のリソースだけを削除する。リソースとデータが分離できれば並列実行する。
+- cleanup の順序に依存して後処理を検証する場合は、独立した subtest の終了を境界にするか cleanup 関数を明示的に呼び、他テストとの実行順へ依存させない。
+- 変更可能な package-level state が必要な設計は、可能なら instance へ閉じ込める。外部仕様として共有状態そのものを検証するテストだけ直列実行する。
 - 並列化後は `go test -race ./...` を実行し、race detector を通す。
 - `t.Parallel()` を件数合わせで追加しない。安全性を説明できないテストは直列のままにする。
 

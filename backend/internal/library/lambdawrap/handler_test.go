@@ -138,9 +138,9 @@ func TestHandleWithNilLoggerDoesNotPanic(t *testing.T) {
 }
 
 func TestInvocationContextUsesXRayHeader(t *testing.T) {
-	t.Setenv(xrayTraceIDEnv, "Root=1-5759e988-bd862e3fe1be46a994272793;Parent=53995c3f42cd8ad8;Sampled=1")
+	t.Parallel()
 
-	ctx := InvocationContext(context.Background())
+	ctx := invocationContext(context.Background(), "Root=1-5759e988-bd862e3fe1be46a994272793;Parent=53995c3f42cd8ad8;Sampled=1")
 
 	tc, ok := trace.FromContext(ctx)
 	if !ok || tc.TraceID != "5759e988bd862e3fe1be46a994272793" || tc.ParentSpanID != "53995c3f42cd8ad8" || tc.SpanID == "53995c3f42cd8ad8" {
@@ -149,9 +149,9 @@ func TestInvocationContextUsesXRayHeader(t *testing.T) {
 }
 
 func TestInvocationContextWithoutXRayStartsNewTrace(t *testing.T) {
-	t.Setenv(xrayTraceIDEnv, "")
+	t.Parallel()
 
-	ctx := InvocationContext(context.Background())
+	ctx := invocationContext(context.Background(), "")
 
 	if tc, ok := trace.FromContext(ctx); !ok || tc.ParentSpanID != "" {
 		t.Fatalf("tc=%+v ok=%v", tc, ok)

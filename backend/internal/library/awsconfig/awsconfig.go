@@ -34,17 +34,23 @@ const localCredential = "test"
 
 // Load は STAGE に応じた aws.Config を返す。
 func Load(ctx context.Context, osw oswrapper.Interface) (aws.Config, error) {
+	return load(ctx, osw, func(ctx context.Context) (aws.Config, error) {
+		return config.LoadDefaultConfig(ctx)
+	})
+}
+
+func load(ctx context.Context, osw oswrapper.Interface, loadDefault func(context.Context) (aws.Config, error)) (aws.Config, error) {
 	raw, err := osw.GetEnv(stage.EnvKey)
 	if err != nil {
 		// 未設定は AWS 上(Lambda)とみなす
-		return config.LoadDefaultConfig(ctx)
+		return loadDefault(ctx)
 	}
 	st, err := stage.Parse(raw)
 	if err != nil {
 		return aws.Config{}, err
 	}
 	if !st.IsLocal() {
-		return config.LoadDefaultConfig(ctx)
+		return loadDefault(ctx)
 	}
 	return loadLocal(osw)
 }

@@ -98,11 +98,15 @@ func HandleEvent[In any](log logger.Interface, fn EventHandler[In]) EventHandler
 // InvocationContext は Lambda 1 回の実行に共通するフィールドを ctx に積む。
 // Handle を使っていれば呼ぶ必要はない。
 func InvocationContext(ctx context.Context) context.Context {
+	return invocationContext(ctx, os.Getenv(xrayTraceIDEnv))
+}
+
+func invocationContext(ctx context.Context, xrayTraceHeader string) context.Context {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
-	if tc, ok := trace.ParseXRayTraceHeader(os.Getenv(xrayTraceIDEnv)); ok {
+	if tc, ok := trace.ParseXRayTraceHeader(xrayTraceHeader); ok {
 		// X-Ray が有効なら CloudWatch のログと X-Ray のトレースが同じ trace_id で紐づく。
 		// ヘッダの Parent は上流(Lambda サービス)のセグメントなので、この実行は子 span にする
 		ctx, _ = trace.StartFrom(ctx, tc)

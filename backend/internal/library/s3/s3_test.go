@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"snap_kakeibo/backend/internal/library/awsconfig"
+	"snap_kakeibo/backend/internal/library/awstest"
 	"snap_kakeibo/backend/internal/library/logger"
 	"snap_kakeibo/backend/internal/library/oswrapper"
 	"snap_kakeibo/backend/internal/library/stage"
@@ -177,6 +178,7 @@ func TestNilInputs(t *testing.T) {
 // TestFlociRoundTrip は実際の S3 API(ローカルの Floci)に対して put → get → 上限超過 → 未存在 → 署名付き URL への PUT を通す。
 // STAGE が local / ci のときだけ動く(devcontainer と CI)。それ以外はスキップする。
 func TestFlociRoundTrip(t *testing.T) {
+	t.Parallel()
 	osw := oswrapper.New()
 	if st, err := stage.FromEnv(osw); err != nil || !st.IsLocal() {
 		t.Skipf("STAGE is not local / ci (stage=%q err=%v); skipping Floci integration test", st, err)
@@ -191,7 +193,7 @@ func TestFlociRoundTrip(t *testing.T) {
 	log, buf := newTestLogger()
 	c := New(cfg, log)
 
-	bucket := fmt.Sprintf("s3-roundtrip-%d", time.Now().UnixNano())
+	bucket := awstest.ResourceName("s3-roundtrip")
 	raw := awss3.NewFromConfig(cfg, func(o *awss3.Options) { o.UsePathStyle = true })
 	if _, err := raw.CreateBucket(ctx, &awss3.CreateBucketInput{
 		Bucket:                    aws.String(bucket),
