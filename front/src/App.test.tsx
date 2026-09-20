@@ -10,7 +10,7 @@ function mockFetch(routes: Record<string, unknown>) {
       token_type: 'Bearer',
       expires_in: 3600,
     },
-    '/api/auth/me': {
+    '/api/auth/check': {
       user: { user_id: 'test-user', email: 'test@example.com' },
     },
   }

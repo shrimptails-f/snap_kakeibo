@@ -101,7 +101,7 @@ export default function App() {
 
   useEffect(() => {
     refreshAccessToken()
-      .then((token) => readJSON<{ user: AuthUser }>('/api/auth/me', undefined, token))
+      .then((token) => readJSON<{ user: AuthUser }>('/api/auth/check', undefined, token))
       .then((data) => setUser(data.user))
       .catch(() => undefined)
   }, [refreshAccessToken])

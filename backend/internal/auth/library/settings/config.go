@@ -54,3 +54,18 @@ func LoadLogout(osw oswrapper.Interface) (Config, error) {
 	logLevel, _ := osw.GetEnv("LOG_LEVEL")
 	return Config{RefreshTokensTable: refreshTokensTable, Stage: stage, LogLevel: logLevel}, nil
 }
+
+// LoadCheck は auth-check に必要な設定だけを起動時に検証して読み込む。
+func LoadCheck(osw oswrapper.Interface) (Config, error) {
+	jwtSecret, jwtSecretErr := osw.GetEnv("JWT_SECRET")
+	jwtSecretParameter, parameterErr := osw.GetEnv("SSM_JWT_SECRET")
+	if jwtSecretErr != nil && parameterErr != nil {
+		return Config{}, fmt.Errorf("JWT_SECRET or SSM_JWT_SECRET is required: %w", errors.Join(jwtSecretErr, parameterErr))
+	}
+	stage, err := osw.GetEnv("STAGE")
+	if err != nil {
+		return Config{}, err
+	}
+	logLevel, _ := osw.GetEnv("LOG_LEVEL")
+	return Config{JWTSecret: jwtSecret, JWTSecretParameter: jwtSecretParameter, Stage: stage, LogLevel: logLevel}, nil
+}

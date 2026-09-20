@@ -1,5 +1,5 @@
 // Package auth は移行前の access token 検証サービス。
-// auth-login / auth-refresh / auth-logout は application / infrastructure へ移行済み。
+// auth-login / auth-refresh / auth-logout / auth-check は application / infrastructure へ移行済み。
 package auth
 
 import (
