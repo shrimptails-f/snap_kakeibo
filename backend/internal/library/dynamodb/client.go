@@ -15,6 +15,7 @@ type API interface {
 	GetItem(ctx context.Context, params *awssdk.GetItemInput, optFns ...func(*awssdk.Options)) (*awssdk.GetItemOutput, error)
 	PutItem(ctx context.Context, params *awssdk.PutItemInput, optFns ...func(*awssdk.Options)) (*awssdk.PutItemOutput, error)
 	UpdateItem(ctx context.Context, params *awssdk.UpdateItemInput, optFns ...func(*awssdk.Options)) (*awssdk.UpdateItemOutput, error)
+	Query(ctx context.Context, params *awssdk.QueryInput, optFns ...func(*awssdk.Options)) (*awssdk.QueryOutput, error)
 }
 
 var _ API = (*awssdk.Client)(nil)
@@ -77,6 +78,19 @@ func (t *Table) UpdateItem(ctx context.Context, in *awssdk.UpdateItemInput, optF
 	bound := *in
 	bound.TableName = aws.String(t.name)
 	return t.client.api.UpdateItem(ctx, &bound, optFns...)
+}
+
+// Query は入力をこのテーブルに束縛して実行する。IndexName はそのまま渡す。
+func (t *Table) Query(ctx context.Context, in *awssdk.QueryInput, optFns ...func(*awssdk.Options)) (*awssdk.QueryOutput, error) {
+	if in == nil {
+		return nil, fmt.Errorf("dynamodb: QueryInput is nil")
+	}
+	if err := t.validateTable(aws.ToString(in.TableName)); err != nil {
+		return nil, err
+	}
+	bound := *in
+	bound.TableName = aws.String(t.name)
+	return t.client.api.Query(ctx, &bound, optFns...)
 }
 
 func (t *Table) validateTable(target string) error {
