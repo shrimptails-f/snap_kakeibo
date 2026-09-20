@@ -8,7 +8,6 @@ import (
 
 	"snap_kakeibo/backend/internal/analysis/application"
 	"snap_kakeibo/backend/internal/analysis/domain"
-	"snap_kakeibo/backend/internal/app"
 	libdynamodb "snap_kakeibo/backend/internal/library/dynamodb"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -109,7 +108,7 @@ func (r DynamoDBBillingRegistrar) transactItems(job domain.Job, billing domain.B
 	month := billing.YearMonth()
 
 	billingItem, err := attributevalue.MarshalMap(billingRecord{
-		PK: app.UserPK(billing.UserID), SK: app.BillingSK(billing.ID), Type: recordTypeBilling,
+		PK: UserPK(billing.UserID), SK: BillingSK(billing.ID), Type: recordTypeBilling,
 		BillingID: billing.ID, UploadID: billing.UploadID, StoreName: billing.StoreName, PurchasedAt: billing.PurchasedAt, YearMonth: month,
 		OriginalAmount: billing.TotalAmount, FinalAmount: billing.TotalAmount, Source: sourceAI, CreatedAt: timestamp, UpdatedAt: timestamp,
 	})
@@ -136,8 +135,8 @@ func (r DynamoDBBillingRegistrar) transactItems(job domain.Job, billing domain.B
 	}
 	for _, d := range billing.Details {
 		detailItem, err := attributevalue.MarshalMap(billingDetailRecord{
-			PK: app.DetailPK(billing.UserID, billing.ID), SK: app.DetailSK(d.ID),
-			GSI1PK: app.UploadMonthPK(billing.UserID, month), GSI1SK: app.DetailMonthSK(d.Amount, billing.PurchasedAt, d.ID),
+			PK: DetailPK(billing.UserID, billing.ID), SK: DetailSK(d.ID),
+			GSI1PK: UploadMonthPK(billing.UserID, month), GSI1SK: DetailMonthSK(d.Amount, billing.PurchasedAt, d.ID),
 			Type: recordTypeBillingDetail, DetailID: d.ID, BillingID: billing.ID, UploadID: billing.UploadID,
 			Name: d.Name, Category: d.Category, CategorySource: sourceAI, Amount: d.Amount, Quantity: d.Quantity, Source: sourceAI,
 			StoreName: billing.StoreName, PurchasedAt: billing.PurchasedAt, YearMonth: month, CreatedAt: timestamp, UpdatedAt: timestamp,
@@ -175,7 +174,7 @@ func (r DynamoDBBillingRegistrar) monthlySummaryItem(billing domain.Billing, mon
 	expr := "SET #type=if_not_exists(#type,:type),user_id=if_not_exists(user_id,:user),year_month=if_not_exists(year_month,:month),updated_at=:now ADD " + strings.Join(adds, ", ")
 	return ddbtypes.TransactWriteItem{Update: &ddbtypes.Update{
 		TableName:                 aws.String(r.MonthlySummaries.Name()),
-		Key:                       map[string]ddbtypes.AttributeValue{"PK": stringValue(app.UserPK(billing.UserID)), "SK": stringValue(app.MonthSK(month))},
+		Key:                       map[string]ddbtypes.AttributeValue{"PK": stringValue(UserPK(billing.UserID)), "SK": stringValue(MonthSK(month))},
 		UpdateExpression:          aws.String(expr),
 		ExpressionAttributeNames:  names,
 		ExpressionAttributeValues: values,

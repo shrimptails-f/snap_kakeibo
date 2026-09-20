@@ -2,7 +2,6 @@
 package settings
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 
@@ -18,9 +17,7 @@ type Config struct {
 	MonthlySummariesTable string
 	// ReceiptBucket は元画像と解析結果を置くバケット。
 	ReceiptBucket string
-	// OpenAIAPIKey は環境変数で直接渡された API key。ローカル実行向けで、空なら OpenAIAPIKeyParameter を使う。
-	OpenAIAPIKey string
-	// OpenAIAPIKeyParameter は API key を持つ SSM SecureString パラメータ名。
+	// OpenAIAPIKeyParameter は API key を持つ SSM SecureString パラメータ名。API key 自体は環境変数で受け取らない。
 	OpenAIAPIKeyParameter string
 	OpenAIModel           string
 	OpenAIReasoningEffort string
@@ -45,19 +42,13 @@ func Load(osw oswrapper.Interface) (Config, error) {
 		{"RECEIPT_BUCKET", &cfg.ReceiptBucket},
 		{"OPENAI_MODEL", &cfg.OpenAIModel},
 		{"OPENAI_REASONING_EFFORT", &cfg.OpenAIReasoningEffort},
+		{"SSM_OPENAI_API_KEY", &cfg.OpenAIAPIKeyParameter},
 		{"STAGE", &cfg.Stage},
 	} {
 		if *v.dst, err = osw.GetEnv(v.key); err != nil {
 			return Config{}, err
 		}
 	}
-	apiKey, apiKeyErr := osw.GetEnv("OPENAI_API_KEY")
-	parameter, parameterErr := osw.GetEnv("SSM_OPENAI_API_KEY")
-	if apiKeyErr != nil && parameterErr != nil {
-		return Config{}, fmt.Errorf("OPENAI_API_KEY or SSM_OPENAI_API_KEY is required: %w", errors.Join(apiKeyErr, parameterErr))
-	}
-	cfg.OpenAIAPIKey, cfg.OpenAIAPIKeyParameter = apiKey, parameter
-
 	cfg.ImageMaxEdge = image.DefaultMaxEdge
 	if raw, err := osw.GetEnv("IMAGE_MAX_EDGE"); err == nil {
 		edge, err := strconv.Atoi(raw)

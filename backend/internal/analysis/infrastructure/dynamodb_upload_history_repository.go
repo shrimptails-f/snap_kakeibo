@@ -7,7 +7,6 @@ import (
 
 	"snap_kakeibo/backend/internal/analysis/application"
 	"snap_kakeibo/backend/internal/analysis/domain"
-	"snap_kakeibo/backend/internal/app"
 	libdynamodb "snap_kakeibo/backend/internal/library/dynamodb"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -25,7 +24,7 @@ const (
 const maxErrorMessageRunes = 500
 
 // DynamoDBUploadHistoryRepository は upload_histories の状態遷移を条件付き UpdateItem で行う。
-// キーの形式(USER#<user_id> / UPLOAD#<upload_id>)は upload / list-uploads と共有する app パッケージの関数を使う。
+// キーの形式(USER#<user_id> / UPLOAD#<upload_id>)は keys.go で定義し、upload / list-uploads と揃える。
 type DynamoDBUploadHistoryRepository struct {
 	Table *libdynamodb.Table
 }
@@ -95,7 +94,7 @@ func (r DynamoDBUploadHistoryRepository) markTerminal(ctx context.Context, job d
 const terminalCondition = "#status=:analyzing AND attempt=:attempt"
 
 func uploadKey(job domain.Job) map[string]ddbtypes.AttributeValue {
-	return map[string]ddbtypes.AttributeValue{"PK": stringValue(app.UserPK(job.UserID)), "SK": stringValue(app.UploadSK(job.UploadID))}
+	return map[string]ddbtypes.AttributeValue{"PK": stringValue(UserPK(job.UserID)), "SK": stringValue(UploadSK(job.UploadID))}
 }
 
 // terminalValues は終端状態への遷移で共通の式の値を返す。rawResultKey は空でなければ :raw_key に載せる。

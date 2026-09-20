@@ -65,8 +65,9 @@ func (a OpenAIReceiptAnalyzer) Analyze(ctx context.Context, jpeg []byte) (applic
 	if err != nil {
 		var apiErr *openai.APIError
 		if errors.As(err, &apiErr) && !apiErr.Temporary() {
-			// 認証・不正なリクエストなどは何度送っても同じなので、このアップロードの失敗として記録する
-			return application.AnalysisResult{Failure: &domain.Failure{Code: domain.FailureAnalysisFailed, Message: fmt.Sprintf("OpenAI APIがHTTP %dを返しました", apiErr.StatusCode)}}, nil
+			// 認証・不正なリクエストなどは何度送っても同じなので、このアップロードの失敗として記録する。
+			// 本文は保存しないので、調査に必要な error object の type / code を error_message に残す
+			return application.AnalysisResult{Failure: &domain.Failure{Code: domain.FailureAnalysisFailed, Message: clientErrorMessage(apiErr)}}, nil
 		}
 		return application.AnalysisResult{}, err
 	}
@@ -81,6 +82,14 @@ func (a OpenAIReceiptAnalyzer) Analyze(ctx context.Context, jpeg []byte) (applic
 	}
 	result.Receipt, result.Failure = receiptFromResponse(resp)
 	return result, nil
+}
+
+func clientErrorMessage(apiErr *openai.APIError) string {
+	msg := fmt.Sprintf("OpenAI APIがHTTP %dを返しました", apiErr.StatusCode)
+	if apiErr.Type != "" || apiErr.Code != "" {
+		msg += fmt.Sprintf(" (%s/%s)", apiErr.Type, apiErr.Code)
+	}
+	return msg
 }
 
 // receiptFromResponse は応答本文をレシートに変換する。採用できない応答は Failure を返す。

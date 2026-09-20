@@ -59,17 +59,12 @@ func NewAnalyzeReceiptContainer(cfg settings.Config, awsCfg aws.Config, osw oswr
 	return container, nil
 }
 
-// newOpenAIClient は API key を解決して OpenAI client を作る。
-// key は環境変数(ローカル向け)があればそれを、なければ SSM から起動時に 1 回だけ取得する。
+// newOpenAIClient は SSM から API key を起動時に 1 回だけ取得して OpenAI client を作る。
 // 起動時なので request の context はなく、取得に失敗すれば Lambda の初期化として失敗させる。
 func newOpenAIClient(cfg settings.Config, ssmClient *libssm.Client, log logger.Interface, clock timewrapper.Interface) (infrastructure.ResponsesClient, error) {
-	apiKey := cfg.OpenAIAPIKey
-	if apiKey == "" {
-		key, err := ssmClient.Parameter(cfg.OpenAIAPIKeyParameter).Get(context.Background())
-		if err != nil {
-			return nil, fmt.Errorf("resolve OpenAI API key: %w", err)
-		}
-		apiKey = key
+	apiKey, err := ssmClient.Parameter(cfg.OpenAIAPIKeyParameter).Get(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("resolve OpenAI API key: %w", err)
 	}
 	client, err := openai.New(openai.Options{APIKey: apiKey, Logger: log, Clock: clock})
 	if err != nil {

@@ -102,7 +102,7 @@ func TestAnalyzeTreatsClientErrorsAsFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Analyze() error = %v", err)
 	}
-	if result.Failure == nil || result.Failure.Code != domain.FailureAnalysisFailed || !strings.Contains(result.Failure.Message, "400") {
+	if result.Failure == nil || result.Failure.Code != domain.FailureAnalysisFailed || !strings.Contains(result.Failure.Message, "400") || !strings.Contains(result.Failure.Message, "invalid_request_error/invalid_image") {
 		t.Fatalf("failure = %v", result.Failure)
 	}
 	if result.ResponseID != "" || result.Raw != nil {

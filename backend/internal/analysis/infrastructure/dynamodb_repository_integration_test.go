@@ -7,7 +7,6 @@ import (
 
 	"snap_kakeibo/backend/internal/analysis/domain"
 	"snap_kakeibo/backend/internal/analysis/infrastructure"
-	"snap_kakeibo/backend/internal/app"
 	libdynamodb "snap_kakeibo/backend/internal/library/dynamodb"
 	"snap_kakeibo/backend/internal/library/dynamodb/dynamodbtest"
 
@@ -45,8 +44,8 @@ func newTables(t *testing.T) *tables {
 func (tb *tables) seedUpload(t *testing.T, ctx context.Context, job domain.Job, status string) {
 	t.Helper()
 	_, err := tb.histories.Table.PutItem(ctx, &awssdk.PutItemInput{Item: map[string]ddbtypes.AttributeValue{
-		"PK":      &ddbtypes.AttributeValueMemberS{Value: app.UserPK(job.UserID)},
-		"SK":      &ddbtypes.AttributeValueMemberS{Value: app.UploadSK(job.UploadID)},
+		"PK":      &ddbtypes.AttributeValueMemberS{Value: infrastructure.UserPK(job.UserID)},
+		"SK":      &ddbtypes.AttributeValueMemberS{Value: infrastructure.UploadSK(job.UploadID)},
 		"status":  &ddbtypes.AttributeValueMemberS{Value: status},
 		"attempt": &ddbtypes.AttributeValueMemberN{Value: "1"},
 	}})
@@ -75,7 +74,7 @@ func (tb *tables) getItem(t *testing.T, ctx context.Context, table *libdynamodb.
 
 func (tb *tables) upload(t *testing.T, ctx context.Context, job domain.Job) map[string]any {
 	t.Helper()
-	return tb.getItem(t, ctx, tb.histories.Table, app.UserPK(job.UserID), app.UploadSK(job.UploadID))
+	return tb.getItem(t, ctx, tb.histories.Table, infrastructure.UserPK(job.UserID), infrastructure.UploadSK(job.UploadID))
 }
 
 func (tb *tables) countItems(t *testing.T, ctx context.Context, table *libdynamodb.Table, pk string) int {
@@ -154,7 +153,7 @@ func TestUploadHistoryTransitionsAgainstDynamoDB(t *testing.T) {
 	if item := tb.upload(t, ctx, firstJob); item["status"] != "FAILED" {
 		t.Errorf("terminal state was overwritten: %v", item)
 	}
-	if n := tb.countItems(t, ctx, tb.registrar.Billings, app.UserPK("user-1")); n != 0 {
+	if n := tb.countItems(t, ctx, tb.registrar.Billings, infrastructure.UserPK("user-1")); n != 0 {
 		t.Errorf("billings written for a FAILED upload: %d", n)
 	}
 
@@ -167,7 +166,7 @@ func TestUploadHistoryTransitionsAgainstDynamoDB(t *testing.T) {
 	// FAILED から NO_DATA へは遷移しないので、ANALYZING に戻してから確認する
 	tb.seedUpload(t, ctx, second, "ANALYZING")
 	if _, err := tb.histories.Table.UpdateItem(ctx, &awssdk.UpdateItemInput{
-		Key:                       map[string]ddbtypes.AttributeValue{"PK": &ddbtypes.AttributeValueMemberS{Value: app.UserPK(second.UserID)}, "SK": &ddbtypes.AttributeValueMemberS{Value: app.UploadSK(second.UploadID)}},
+		Key:                       map[string]ddbtypes.AttributeValue{"PK": &ddbtypes.AttributeValueMemberS{Value: infrastructure.UserPK(second.UserID)}, "SK": &ddbtypes.AttributeValueMemberS{Value: infrastructure.UploadSK(second.UploadID)}},
 		UpdateExpression:          aws.String("SET error_code=:c, error_message=:m, failed_at=:f"),
 		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{":c": &ddbtypes.AttributeValueMemberS{Value: "NO_DATE"}, ":m": &ddbtypes.AttributeValueMemberS{Value: "x"}, ":f": &ddbtypes.AttributeValueMemberS{Value: "y"}},
 	}); err != nil {
@@ -206,24 +205,24 @@ func TestRegisterBillingAgainstDynamoDB(t *testing.T) {
 	if upload["status"] != "SUCCEEDED" || upload["billing_id"] != "billing-1" || upload["raw_result_s3_key"] != rawKey || upload["updated_at"] != "2026-09-20T12:01:00Z" {
 		t.Errorf("upload = %v", upload)
 	}
-	got := tb.getItem(t, ctx, tb.registrar.Billings, app.UserPK("user-1"), app.BillingSK("billing-1"))
+	got := tb.getItem(t, ctx, tb.registrar.Billings, infrastructure.UserPK("user-1"), infrastructure.BillingSK("billing-1"))
 	if got["type"] != "BILLING" || got["upload_id"] != "upload-1" || got["store_name"] != "スーパー" || got["purchased_at"] != "2026-09-18" || got["year_month"] != "2026-09" || got["source"] != "AI" {
 		t.Errorf("billing = %v", got)
 	}
 	if got["original_amount"] != float64(350) || got["final_amount"] != float64(350) || got["discount_amount"] != float64(0) || got["is_edited"] != false || got["created_at"] != "2026-09-20T12:00:00Z" {
 		t.Errorf("billing amounts = %v", got)
 	}
-	detail := tb.getItem(t, ctx, tb.registrar.BillingDetails, app.DetailPK("user-1", "billing-1"), app.DetailSK("billing-1-d1"))
+	detail := tb.getItem(t, ctx, tb.registrar.BillingDetails, infrastructure.DetailPK("user-1", "billing-1"), infrastructure.DetailSK("billing-1-d1"))
 	if detail["type"] != "BILLING_DETAIL" || detail["name"] != "牛乳" || detail["category"] != "food" || detail["category_source"] != "AI" || detail["amount"] != float64(200) || detail["quantity"] != float64(1) {
 		t.Errorf("detail = %v", detail)
 	}
-	if detail["GSI1PK"] != app.UploadMonthPK("user-1", "2026-09") || detail["GSI1SK"] != app.DetailMonthSK(200, "2026-09-18", "billing-1-d1") {
+	if detail["GSI1PK"] != infrastructure.UploadMonthPK("user-1", "2026-09") || detail["GSI1SK"] != infrastructure.DetailMonthSK(200, "2026-09-18", "billing-1-d1") {
 		t.Errorf("detail GSI keys = %v", detail)
 	}
-	if n := tb.countItems(t, ctx, tb.registrar.BillingDetails, app.DetailPK("user-1", "billing-1")); n != 2 {
+	if n := tb.countItems(t, ctx, tb.registrar.BillingDetails, infrastructure.DetailPK("user-1", "billing-1")); n != 2 {
 		t.Errorf("detail count = %d", n)
 	}
-	summary := tb.getItem(t, ctx, tb.registrar.MonthlySummaries, app.UserPK("user-1"), app.MonthSK("2026-09"))
+	summary := tb.getItem(t, ctx, tb.registrar.MonthlySummaries, infrastructure.UserPK("user-1"), infrastructure.MonthSK("2026-09"))
 	if summary["type"] != "MONTHLY_SUMMARY" || summary["user_id"] != "user-1" || summary["year_month"] != "2026-09" || summary["updated_at"] != "2026-09-20T12:00:00Z" {
 		t.Errorf("summary = %v", summary)
 	}
@@ -235,10 +234,10 @@ func TestRegisterBillingAgainstDynamoDB(t *testing.T) {
 	if err := tb.registrar.Register(ctx, firstJob, sampleBilling("billing-dup", "upload-1"), rawKey, integrationNow); err != nil {
 		t.Fatalf("Register(again): %v", err)
 	}
-	if n := tb.countItems(t, ctx, tb.registrar.Billings, app.UserPK("user-1")); n != 1 {
+	if n := tb.countItems(t, ctx, tb.registrar.Billings, infrastructure.UserPK("user-1")); n != 1 {
 		t.Errorf("billing count after duplicate = %d", n)
 	}
-	if summary := tb.getItem(t, ctx, tb.registrar.MonthlySummaries, app.UserPK("user-1"), app.MonthSK("2026-09")); summary["billing_count"] != float64(1) {
+	if summary := tb.getItem(t, ctx, tb.registrar.MonthlySummaries, infrastructure.UserPK("user-1"), infrastructure.MonthSK("2026-09")); summary["billing_count"] != float64(1) {
 		t.Errorf("summary changed by duplicate: %v", summary)
 	}
 
@@ -251,7 +250,7 @@ func TestRegisterBillingAgainstDynamoDB(t *testing.T) {
 	if err := tb.registrar.Register(ctx, second, other, "", integrationNow); err != nil {
 		t.Fatalf("Register(second): %v", err)
 	}
-	summary = tb.getItem(t, ctx, tb.registrar.MonthlySummaries, app.UserPK("user-1"), app.MonthSK("2026-09"))
+	summary = tb.getItem(t, ctx, tb.registrar.MonthlySummaries, infrastructure.UserPK("user-1"), infrastructure.MonthSK("2026-09"))
 	if summary["total_amount"] != float64(550) || summary["billing_count"] != float64(2) || summary["detail_count"] != float64(3) || summary["version"] != float64(2) || summary["category_total_food"] != float64(400) || summary["category_total_daily_goods"] != float64(150) {
 		t.Errorf("summary after second billing = %v", summary)
 	}
