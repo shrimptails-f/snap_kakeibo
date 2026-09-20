@@ -161,67 +161,6 @@ func TestInvocationContextWithoutXRayStartsNewTrace(t *testing.T) {
 	}
 }
 
-func TestSQSRecordContext(t *testing.T) {
-	t.Parallel()
-	remote := trace.Context{TraceID: strings.Repeat("a", 32), SpanID: strings.Repeat("b", 16), Sampled: true}
-	xray := trace.Context{TraceID: "5759e988bd862e3fe1be46a994272793", SpanID: "53995c3f42cd8ad8", Sampled: true}
-	base, invocation := trace.Start(context.Background())
-
-	tests := []struct {
-		name       string
-		record     events.SQSMessage
-		wantTrace  string
-		wantParent string
-	}{
-		{
-			name: "traceparent attribute wins",
-			record: events.SQSMessage{
-				MessageId:         "m1",
-				MessageAttributes: map[string]events.SQSMessageAttribute{"traceparent": {DataType: "String", StringValue: strPtr(remote.Traceparent())}},
-				Attributes:        map[string]string{"AWSTraceHeader": xray.XRayTraceHeader()},
-			},
-			wantTrace:  remote.TraceID,
-			wantParent: remote.SpanID,
-		},
-		{
-			name:       "x-ray header",
-			record:     events.SQSMessage{MessageId: "m2", Attributes: map[string]string{"AWSTraceHeader": xray.XRayTraceHeader()}},
-			wantTrace:  xray.TraceID,
-			wantParent: xray.SpanID,
-		},
-		{
-			name:       "falls back to invocation trace",
-			record:     events.SQSMessage{MessageId: "m3"},
-			wantTrace:  invocation.TraceID,
-			wantParent: invocation.SpanID,
-		},
-		{
-			name:       "invalid header falls back",
-			record:     events.SQSMessage{MessageId: "m4", Attributes: map[string]string{"AWSTraceHeader": "garbage"}},
-			wantTrace:  invocation.TraceID,
-			wantParent: invocation.SpanID,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			ctx := SQSRecordContext(base, tt.record)
-
-			tc, ok := trace.FromContext(ctx)
-			if !ok || tc.TraceID != tt.wantTrace || tc.ParentSpanID != tt.wantParent {
-				t.Fatalf("tc=%+v ok=%v", tc, ok)
-			}
-			fields := logger.FieldsFromContext(ctx)
-			if len(fields) != 1 || fields[0].Key != "message_id" || fields[0].Value.String() != tt.record.MessageId {
-				t.Fatalf("fields=%v", fields)
-			}
-		})
-	}
-}
-
-func strPtr(s string) *string { return &s }
-
 func newTestLogger() (*logger.Logger, *bytes.Buffer) {
 	var buf bytes.Buffer
 	return logger.New(logger.Options{Level: "debug", Service: "test", Environment: "test", Writer: &buf}), &buf

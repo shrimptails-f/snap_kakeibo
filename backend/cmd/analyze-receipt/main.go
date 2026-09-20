@@ -18,6 +18,7 @@ import (
 	"snap_kakeibo/backend/internal/app"
 	"snap_kakeibo/backend/internal/library/lambdawrap"
 	"snap_kakeibo/backend/internal/library/logger"
+	libsqs "snap_kakeibo/backend/internal/library/sqs"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -121,7 +122,7 @@ func init() {
 func handler(ctx context.Context, event events.SQSEvent) error {
 	for _, record := range event.Records {
 		// レコードが運んできた trace を引き継ぎ、message_id を積む
-		rctx := lambdawrap.SQSRecordContext(ctx, record)
+		rctx := libsqs.RecordContext(ctx, record)
 		jobs, err := decodeJobs(record.Body)
 		if err != nil {
 			log.Error(rctx, "failed to decode queue message", logger.Event(eventQueueMessageInvalid), logger.Err(err))
