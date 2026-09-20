@@ -131,6 +131,142 @@ func TestDynamoDBRefreshTokenRepositorySaveReturnsDynamoDBError(t *testing.T) {
 	}
 }
 
+func TestDynamoDBRefreshTokenRepositoryFindByDigest(t *testing.T) {
+	createdAt := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
+	item, err := attributevalue.MarshalMap(refreshTokenRecord{
+		PK: "REFRESH#digest", Type: "REFRESH_TOKEN", UserID: "user-123", Email: "member@example.com",
+		ExpiresAt: createdAt.Add(30 * 24 * time.Hour), CreatedAt: createdAt, LastUsedAt: createdAt, RefreshHint: "abcd",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := &repositoryAPI{getOutput: &awssdk.GetItemOutput{Item: item}}
+	repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
+
+	token, err := repository.FindByDigest(context.Background(), "digest")
+	if err != nil {
+		t.Fatalf("FindByDigest() error = %v", err)
+	}
+	if got := aws.ToString(api.getInput.TableName); got != "users-test" {
+		t.Errorf("table name = %q, want users-test", got)
+	}
+	if got := api.getInput.Key["PK"].(*ddbtypes.AttributeValueMemberS).Value; got != "REFRESH#digest" {
+		t.Errorf("PK = %q, want REFRESH#digest", got)
+	}
+	if !aws.ToBool(api.getInput.ConsistentRead) {
+		t.Error("GetItem is not a consistent read")
+	}
+	if token.Digest != "digest" || token.UserID != "user-123" || token.Email != "member@example.com" || token.Hint != "abcd" {
+		t.Errorf("token = %#v", token)
+	}
+	if !token.ExpiresAt.Equal(createdAt.Add(30*24*time.Hour)) || !token.CreatedAt.Equal(createdAt) || !token.LastUsedAt.Equal(createdAt) {
+		t.Errorf("token timestamps = %#v", token)
+	}
+	if token.Revoked() {
+		t.Errorf("token without revoked_at is revoked: %#v", token)
+	}
+}
+
+func TestDynamoDBRefreshTokenRepositoryFindByDigestReadsRevokedAt(t *testing.T) {
+	revokedAt := time.Date(2026, 9, 20, 13, 0, 0, 0, time.UTC)
+	item, err := attributevalue.MarshalMap(refreshTokenRecord{PK: "REFRESH#digest", UserID: "user-123", RevokedAt: &revokedAt})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 移行前の実装が書いた RFC3339 文字列（ナノ秒なし）も読めること。
+	item["revoked_at"] = &ddbtypes.AttributeValueMemberS{Value: revokedAt.Format(time.RFC3339)}
+	api := &repositoryAPI{getOutput: &awssdk.GetItemOutput{Item: item}}
+	repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
+
+	token, err := repository.FindByDigest(context.Background(), "digest")
+	if err != nil {
+		t.Fatalf("FindByDigest() error = %v", err)
+	}
+	if !token.Revoked() || !token.RevokedAt.Equal(revokedAt) {
+		t.Errorf("revoked at = %v, want %v", token.RevokedAt, revokedAt)
+	}
+}
+
+func TestDynamoDBRefreshTokenRepositoryFindByDigestFailures(t *testing.T) {
+	sdkErr := errors.New("DynamoDB unavailable")
+	for _, tt := range []struct {
+		name    string
+		output  *awssdk.GetItemOutput
+		err     error
+		wantErr error
+	}{
+		{name: "not found", output: &awssdk.GetItemOutput{}, wantErr: application.ErrRefreshTokenNotFound},
+		{name: "blank user ID", output: &awssdk.GetItemOutput{Item: map[string]ddbtypes.AttributeValue{
+			"user_id": &ddbtypes.AttributeValueMemberS{Value: " "},
+		}}, wantErr: application.ErrRefreshTokenNotFound},
+		{name: "malformed item", output: &awssdk.GetItemOutput{Item: map[string]ddbtypes.AttributeValue{
+			"user_id": &ddbtypes.AttributeValueMemberSS{Value: []string{"user-1"}},
+		}}},
+		{name: "DynamoDB error", output: &awssdk.GetItemOutput{}, err: sdkErr, wantErr: sdkErr},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			api := &repositoryAPI{getOutput: tt.output, getErr: tt.err}
+			repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
+
+			_, err := repository.FindByDigest(context.Background(), "digest")
+			if err == nil {
+				t.Fatal("FindByDigest() error = nil")
+			}
+			if tt.wantErr != nil && !errors.Is(err, tt.wantErr) {
+				t.Errorf("FindByDigest() error = %v, want %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestDynamoDBRefreshTokenRepositoryRevoke(t *testing.T) {
+	api := &repositoryAPI{updateOutput: &awssdk.UpdateItemOutput{}}
+	repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
+	revokedAt := time.Date(2026, 9, 20, 21, 0, 0, 0, time.FixedZone("JST", 9*60*60))
+
+	if err := repository.Revoke(context.Background(), "digest", revokedAt); err != nil {
+		t.Fatalf("Revoke() error = %v", err)
+	}
+	if got := aws.ToString(api.updateInput.TableName); got != "users-test" {
+		t.Errorf("table name = %q, want users-test", got)
+	}
+	if got := api.updateInput.Key["PK"].(*ddbtypes.AttributeValueMemberS).Value; got != "REFRESH#digest" {
+		t.Errorf("PK = %q, want REFRESH#digest", got)
+	}
+	if got := aws.ToString(api.updateInput.ConditionExpression); got != "attribute_exists(PK)" {
+		t.Errorf("condition expression = %q", got)
+	}
+	var stored time.Time
+	if err := attributevalue.Unmarshal(api.updateInput.ExpressionAttributeValues[":revoked_at"], &stored); err != nil {
+		t.Fatalf("Unmarshal(:revoked_at) error = %v", err)
+	}
+	if !stored.Equal(revokedAt) {
+		t.Errorf(":revoked_at = %v, want %v", stored, revokedAt)
+	}
+}
+
+func TestDynamoDBRefreshTokenRepositoryRevokeFailures(t *testing.T) {
+	sdkErr := errors.New("DynamoDB unavailable")
+	for _, tt := range []struct {
+		name    string
+		err     error
+		wantErr error
+	}{
+		{name: "missing item", err: &ddbtypes.ConditionalCheckFailedException{}, wantErr: application.ErrRefreshTokenNotFound},
+		{name: "DynamoDB error", err: sdkErr, wantErr: sdkErr},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			api := &repositoryAPI{updateErr: tt.err}
+			repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
+
+			err := repository.Revoke(context.Background(), "digest", time.Now())
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("Revoke() error = %v, want %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestPersistenceKeys(t *testing.T) {
 	if got := UserPKByEmail(" MEMBER@Example.COM "); got != "EMAIL#member@example.com" {
 		t.Errorf("UserPKByEmail() = %q", got)
@@ -147,6 +283,10 @@ type repositoryAPI struct {
 	putInput  *awssdk.PutItemInput
 	putOutput *awssdk.PutItemOutput
 	putErr    error
+
+	updateInput  *awssdk.UpdateItemInput
+	updateOutput *awssdk.UpdateItemOutput
+	updateErr    error
 }
 
 func (a *repositoryAPI) GetItem(_ context.Context, in *awssdk.GetItemInput, _ ...func(*awssdk.Options)) (*awssdk.GetItemOutput, error) {
@@ -159,6 +299,7 @@ func (a *repositoryAPI) PutItem(_ context.Context, in *awssdk.PutItemInput, _ ..
 	return a.putOutput, a.putErr
 }
 
-func (a *repositoryAPI) UpdateItem(_ context.Context, _ *awssdk.UpdateItemInput, _ ...func(*awssdk.Options)) (*awssdk.UpdateItemOutput, error) {
-	return &awssdk.UpdateItemOutput{}, nil
+func (a *repositoryAPI) UpdateItem(_ context.Context, in *awssdk.UpdateItemInput, _ ...func(*awssdk.Options)) (*awssdk.UpdateItemOutput, error) {
+	a.updateInput = in
+	return a.updateOutput, a.updateErr
 }

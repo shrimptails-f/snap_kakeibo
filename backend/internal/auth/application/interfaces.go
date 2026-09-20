@@ -9,8 +9,12 @@ import (
 	common "snap_kakeibo/backend/internal/common/domain"
 )
 
-// ErrTooManyLoginAttempts はログイン試行が短時間の上限に達した場合に返す。
-var ErrTooManyLoginAttempts = errors.New("too many login attempts")
+var (
+	// ErrTooManyLoginAttempts はログイン試行が短時間の上限に達した場合に返す。
+	ErrTooManyLoginAttempts = errors.New("too many login attempts")
+	// ErrRefreshTokenNotFound はリポジトリが該当 refresh token を見つけられなかった場合に返す。
+	ErrRefreshTokenNotFound = errors.New("refresh token not found")
+)
 
 // UserRepository はメールアドレスで利用者を取得する。
 type UserRepository interface {
@@ -32,9 +36,26 @@ type RefreshTokenGenerator interface {
 	Generate(user common.User, now time.Time, expiresAt time.Time) (raw string, token authdomain.RefreshToken, err error)
 }
 
+// RefreshTokenDigester は raw refresh token から保存キーに使う digest を計算する。
+// RefreshTokenGenerator が保存時に使う算出方法と一致していなければならない。
+type RefreshTokenDigester interface {
+	Digest(raw string) string
+}
+
 // RefreshTokenRepository は refresh token を永続化する。
 type RefreshTokenRepository interface {
 	Save(ctx context.Context, token authdomain.RefreshToken) error
+}
+
+// RefreshTokenFinder は digest をキーに保存済みの refresh token を取得する。
+// 見つからない場合は ErrRefreshTokenNotFound を返す。
+type RefreshTokenFinder interface {
+	FindByDigest(ctx context.Context, digest string) (authdomain.RefreshToken, error)
+}
+
+// RefreshTokenRevoker は保存済みの refresh token を失効させる。
+type RefreshTokenRevoker interface {
+	Revoke(ctx context.Context, digest string, revokedAt time.Time) error
 }
 
 // LoginAttemptLimiter はログイン試行を識別子ごとに制限する。
