@@ -86,6 +86,7 @@ type Buckets struct {
 // Tables は DynamoDB テーブル名。
 type Tables struct {
 	Users            string
+	RefreshTokens    string
 	MonthlySummaries string
 	UploadHistories  string
 	Billings         string

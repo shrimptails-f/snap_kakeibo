@@ -45,6 +45,7 @@ type StorageStack struct {
 	FrontendBucket awss3.Bucket
 
 	UsersTable            awsdynamodb.Table
+	RefreshTokensTable    awsdynamodb.Table
 	MonthlySummariesTable awsdynamodb.Table
 	UploadHistoriesTable  awsdynamodb.Table
 	BillingsTable         awsdynamodb.Table
@@ -65,11 +66,17 @@ func NewStorageStack(scope constructs.Construct, id string, props *StorageStackP
 	s.Bucket = newReceiptBucket(stack, cfg)
 	s.FrontendBucket = newFrontendBucket(stack, cfg)
 
-	s.UsersTable = newTable(stack, "UsersTable", cfg, cfg.Tables.Users, false)
-	s.MonthlySummariesTable = newTable(stack, "MonthlySummariesTable", cfg, cfg.Tables.MonthlySummaries, true)
-	s.UploadHistoriesTable = newTable(stack, "UploadHistoriesTable", cfg, cfg.Tables.UploadHistories, true)
-	s.BillingsTable = newTable(stack, "BillingsTable", cfg, cfg.Tables.Billings, true)
-	s.BillingDetailsTable = newTable(stack, "BillingDetailsTable", cfg, cfg.Tables.BillingDetails, true)
+	// users にはユーザー本体とログイン試行カウンタを置く。TTL はカウンタの expires_at(Unix 秒)を対象にし、
+	// ユーザーアイテムは expires_at を持たないので消えない。
+	s.UsersTable = newTable(stack, "UsersTable", cfg, cfg.Tables.Users, false, jsii.String("expires_at"))
+	// refresh token はユーザーとは更新単位が異なるため専用テーブルに置き、期限切れは TTL で自動削除する。
+	// GSI でユーザー単位の一覧・一括失効(全端末ログアウト)ができるようにする。
+	s.RefreshTokensTable = newTable(stack, "RefreshTokensTable", cfg, cfg.Tables.RefreshTokens, false, jsii.String("expires_at"))
+	addGSI1(s.RefreshTokensTable, common.RefreshTokenUserIndex)
+	s.MonthlySummariesTable = newTable(stack, "MonthlySummariesTable", cfg, cfg.Tables.MonthlySummaries, true, nil)
+	s.UploadHistoriesTable = newTable(stack, "UploadHistoriesTable", cfg, cfg.Tables.UploadHistories, true, nil)
+	s.BillingsTable = newTable(stack, "BillingsTable", cfg, cfg.Tables.Billings, true, nil)
+	s.BillingDetailsTable = newTable(stack, "BillingDetailsTable", cfg, cfg.Tables.BillingDetails, true, nil)
 	addGSI1(s.UploadHistoriesTable, common.UploadMonthIndex)
 	addGSI1(s.BillingDetailsTable, common.DetailMonthAmountIndex)
 
@@ -206,7 +213,7 @@ func newFrontendBucket(scope constructs.Construct, cfg config.Config) awss3.Buck
 }
 
 // newTable は PK(+SK) の文字列キーを持つオンデマンドテーブルを作る。
-func newTable(scope constructs.Construct, id string, cfg config.Config, name string, withSortKey bool) awsdynamodb.Table {
+func newTable(scope constructs.Construct, id string, cfg config.Config, name string, withSortKey bool, timeToLiveAttribute *string) awsdynamodb.Table {
 	props := &awsdynamodb.TableProps{
 		TableName:          jsii.String(name),
 		PartitionKey:       &awsdynamodb.Attribute{Name: jsii.String("PK"), Type: awsdynamodb.AttributeType_STRING},
@@ -216,6 +223,7 @@ func newTable(scope constructs.Construct, id string, cfg config.Config, name str
 		PointInTimeRecoverySpecification: &awsdynamodb.PointInTimeRecoverySpecification{
 			PointInTimeRecoveryEnabled: jsii.Bool(true),
 		},
+		TimeToLiveAttribute: timeToLiveAttribute,
 	}
 	if withSortKey {
 		props.SortKey = &awsdynamodb.Attribute{Name: jsii.String("SK"), Type: awsdynamodb.AttributeType_STRING}

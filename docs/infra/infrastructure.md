@@ -29,10 +29,11 @@ CloudFront (OAC) ----> S3 (frontend bucket, React ビルド成果物)
   v
 API Gateway
   |
-  +--> Login Lambda
+  +--> Login / Refresh / Logout Lambda
   |      |
-  |      v
-  |   users
+  |      +--> users
+  |      |
+  |      +--> refresh_tokens
   |
   +--> Upload Lambda
   |      |
