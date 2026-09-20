@@ -33,4 +33,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.38.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.43.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.51.0 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
+	golang.org/x/crypto v0.57.0 // indirect
 )

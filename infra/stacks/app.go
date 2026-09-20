@@ -63,10 +63,29 @@ func NewAppStack(scope constructs.Construct, id string, props *AppStackProps) *A
 	hello := s.newFunction("hello", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
 	addRoute(s.API, awsapigatewayv2.HttpMethod_GET, APIPathPrefix+"/hello", hello.Handler)
 
+	authLogin := s.newFunction("auth-login", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
+	addRoute(s.API, awsapigatewayv2.HttpMethod_POST, APIPathPrefix+"/auth/login", authLogin.Handler)
+	s.storage.UsersTable.GrantReadWriteData(authLogin.Handler)
+	s.grantJWTSecretRead(authLogin.Function)
+
+	authRefresh := s.newFunction("auth-refresh", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
+	addRoute(s.API, awsapigatewayv2.HttpMethod_POST, APIPathPrefix+"/auth/refresh", authRefresh.Handler)
+	s.storage.UsersTable.GrantReadWriteData(authRefresh.Handler)
+	s.grantJWTSecretRead(authRefresh.Function)
+
+	authLogout := s.newFunction("auth-logout", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
+	addRoute(s.API, awsapigatewayv2.HttpMethod_POST, APIPathPrefix+"/auth/logout", authLogout.Handler)
+	s.storage.UsersTable.GrantWriteData(authLogout.Handler)
+
+	authMe := s.newFunction("auth-me", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
+	addRoute(s.API, awsapigatewayv2.HttpMethod_GET, APIPathPrefix+"/auth/me", authMe.Handler)
+	s.grantJWTSecretRead(authMe.Function)
+
 	upload := s.newFunction("upload", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
 	addRoute(s.API, awsapigatewayv2.HttpMethod_POST, APIPathPrefix+"/uploads", upload.Handler)
 	s.storage.UploadHistoriesTable.GrantWriteData(upload.Handler)
 	s.storage.Bucket.GrantPut(upload.Handler, jsii.String("receipts/*"))
+	s.grantJWTSecretRead(upload.Function)
 
 	// SQS 起動だが live Alias にイベントソースを付け、API 関数と同じく CodeDeploy で切り替える
 	analyzeReceipt := s.newFunction("analyze-receipt", functionProps{MemorySize: 1024, Timeout: props.Config.Timeouts.Analyze, CodeDeploy: true})
@@ -91,17 +110,29 @@ func NewAppStack(scope constructs.Construct, id string, props *AppStackProps) *A
 	addRoute(s.API, awsapigatewayv2.HttpMethod_POST, APIPathPrefix+"/uploads/{uploadId}/retry", retryUpload.Handler)
 	s.storage.UploadHistoriesTable.GrantReadWriteData(retryUpload.Handler)
 	s.storage.AnalyzeQueue.GrantSendMessages(retryUpload.Handler)
+	s.grantJWTSecretRead(retryUpload.Function)
 
 	listUploads := s.newFunction("list-uploads", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
 	addRoute(s.API, awsapigatewayv2.HttpMethod_GET, APIPathPrefix+"/months/{month}/uploads", listUploads.Handler)
 	s.storage.UploadHistoriesTable.GrantReadData(listUploads.Handler)
+	s.grantJWTSecretRead(listUploads.Function)
 
 	getBilling := s.newFunction("get-billing", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
 	addRoute(s.API, awsapigatewayv2.HttpMethod_GET, APIPathPrefix+"/billings/{billingId}", getBilling.Handler)
 	s.storage.BillingsTable.GrantReadData(getBilling.Handler)
 	s.storage.BillingDetailsTable.GrantReadData(getBilling.Handler)
+	s.grantJWTSecretRead(getBilling.Function)
 
 	return s
+}
+
+func (s *AppStack) grantJWTSecretRead(fn awslambda.IFunction) {
+	fn.AddToRolePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Actions: jsii.Strings("ssm:GetParameter"),
+		Resources: jsii.Strings(
+			fmt.Sprintf("arn:aws:ssm:%s:%s:parameter%s", s.cfg.Region, s.cfg.AccountID, s.cfg.Parameters.JWTSecret),
+		),
+	}))
 }
 
 // functionProps は newFunction に渡す関数ごとの差分。
