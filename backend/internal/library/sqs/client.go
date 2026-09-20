@@ -7,7 +7,8 @@
 //
 // 送信:
 //
-//	queue := libsqs.New(awssqs.NewFromConfig(awsCfg), log)
+//	awsCfg, err := awsconfig.Load(ctx, oswrapper.New()) // STAGE=local / ci なら Floci を向く
+//	queue := libsqs.New(awsCfg, log)
 //	msgID, err := queue.SendJSON(ctx, queueURL, payload) // traceparent を注入し sqs_send span を出す
 //
 // 受信(Lambda):
@@ -16,7 +17,7 @@
 //		rctx := libsqs.RecordContext(ctx, record) // 送信側の trace の子 span + message_id
 //	}
 //
-// ローカルでは AWS_ENDPOINT_URL を Floci に向ければ SDK がそのまま繋ぐ。パッケージ側に特別な設定はない。
+// 向き先(Floci か AWS か)は aws.Config で決まる。このパッケージは STAGE を見ない。
 package sqs
 
 import (
@@ -49,8 +50,13 @@ type Client struct {
 	log logger.Interface
 }
 
-// New は Client を生成する。log が nil なら何も出力しない。
-func New(api API, log logger.Interface) *Client {
+// New は cfg から SDK クライアントを作って Client を生成する。log が nil なら何も出力しない。
+func New(cfg aws.Config, log logger.Interface) *Client {
+	return NewWithAPI(awssqs.NewFromConfig(cfg), log)
+}
+
+// NewWithAPI は SDK クライアント(またはテスト用の差し替え)を受け取って Client を生成する。
+func NewWithAPI(api API, log logger.Interface) *Client {
 	if log == nil {
 		log = logger.NewNop()
 	}

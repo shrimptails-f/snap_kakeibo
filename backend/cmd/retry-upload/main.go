@@ -6,18 +6,18 @@ import (
 	"time"
 
 	"snap_kakeibo/backend/internal/app"
+	"snap_kakeibo/backend/internal/library/awsconfig"
 	"snap_kakeibo/backend/internal/library/lambdawrap"
 	"snap_kakeibo/backend/internal/library/logger"
+	"snap_kakeibo/backend/internal/library/oswrapper"
 	libsqs "snap_kakeibo/backend/internal/library/sqs"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	awssqs "github.com/aws/aws-sdk-go-v2/service/sqs"
 )
 
 var (
@@ -28,13 +28,14 @@ var (
 )
 
 func init() {
-	c, e := awsconfig.LoadDefaultConfig(context.Background())
+	// STAGE=local / ci なら Floci、それ以外は AWS を向く
+	c, e := awsconfig.Load(context.Background(), oswrapper.New())
 	if e != nil {
 		panic(e)
 	}
 	ddb = dynamodb.NewFromConfig(c)
 	// 送信時に ctx の trace を traceparent として付けるので、analyze-receipt 側のログが同じ trace_id で繋がる
-	queue = libsqs.New(awssqs.NewFromConfig(c), log)
+	queue = libsqs.New(c, log)
 }
 
 func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
