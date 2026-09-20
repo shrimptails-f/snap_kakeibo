@@ -145,7 +145,7 @@ func TestFieldsFromContext(t *testing.T) {
 	if got := FieldsFromContext(context.Background()); got != nil {
 		t.Fatalf("got %v want nil", got)
 	}
-	if got := FieldsFromContext(nil); got != nil { //nolint:staticcheck // nil ctx に対して panic しないことを確認する
+	if got := FieldsFromContext(nilContext); got != nil {
 		t.Fatalf("got %v want nil", got)
 	}
 
@@ -434,7 +434,7 @@ func TestNilContextDoesNotPanic(t *testing.T) {
 	t.Parallel()
 	log, buf := newTestLogger("debug")
 
-	log.Info(nil, "hello") //nolint:staticcheck // nil ctx に対して panic しないことを確認する
+	log.Info(nilContext, "hello")
 
 	assertField(t, singleEntry(t, buf), "message", "hello")
 }
@@ -450,6 +450,10 @@ func TestNewNopDoesNotPanic(t *testing.T) {
 	log.Error(ctx, "error", Err(errors.New("boom")))
 	log.With(Component("c")).Info(ctx, "child")
 }
+
+// nilContext は nil ctx を渡されても panic しないことを確認するためのもの。
+// リテラルの nil を渡すと staticcheck(SA1012)に弾かれるので変数にしている。
+var nilContext context.Context
 
 func newTestLogger(level string) (*Logger, *bytes.Buffer) {
 	var buf bytes.Buffer

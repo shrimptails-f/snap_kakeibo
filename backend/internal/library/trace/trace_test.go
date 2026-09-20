@@ -39,7 +39,9 @@ func TestContextRoundTrip(t *testing.T) {
 	if _, ok := FromContext(context.Background()); ok {
 		t.Fatal("empty ctx must not have trace")
 	}
-	if _, ok := FromContext(nil); ok { //nolint:staticcheck // nil ctx で panic しないことを確認
+	// nil ctx で panic しないことを確認する。リテラルの nil は staticcheck(SA1012)に弾かれるので変数にする
+	var nilContext context.Context
+	if _, ok := FromContext(nilContext); ok {
 		t.Fatal("nil ctx must not have trace")
 	}
 	if _, ok := FromContext(ContextWith(context.Background(), Context{TraceID: "bad"})); ok {
