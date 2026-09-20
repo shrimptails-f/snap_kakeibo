@@ -10,6 +10,8 @@ services:
     depends_on:
       - floci
     environment:
+      # backend の実行環境。local / ci のとき AWS SDK は Floci を向く(backend/internal/library/awsconfig)
+      STAGE: local
       AWS_PROFILE: ${AWS_PROFILE:-default}
       AWS_REGION: ${AWS_REGION:-ap-northeast-2}
       AWS_DEFAULT_REGION: ${AWS_REGION:-ap-northeast-2}

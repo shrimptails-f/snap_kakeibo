@@ -6,14 +6,18 @@ import (
 	"time"
 
 	"snap_kakeibo/backend/internal/app"
+	"snap_kakeibo/backend/internal/library/awsconfig"
+	"snap_kakeibo/backend/internal/library/lambdawrap"
+	"snap_kakeibo/backend/internal/library/logger"
+	"snap_kakeibo/backend/internal/library/oswrapper"
+	libs3 "snap_kakeibo/backend/internal/library/s3"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 type request struct {
@@ -47,18 +51,20 @@ type uploadHistory struct {
 }
 
 var (
-	cfg       = app.LoadConfig()
-	ddb       *dynamodb.Client
-	presigner *s3.PresignClient
+	cfg      = app.LoadConfig()
+	log      = logger.New(logger.Options{Level: cfg.LogLevel, Service: lambdacontext.FunctionName, Environment: cfg.Stage})
+	ddb      *dynamodb.Client
+	receipts *libs3.Bucket
 )
 
 func init() {
-	awsCfg, err := awsconfig.LoadDefaultConfig(context.Background())
+	// STAGE=local / ci なら Floci、それ以外は AWS を向く
+	awsCfg, err := awsconfig.Load(context.Background(), oswrapper.New())
 	if err != nil {
 		panic(err)
 	}
 	ddb = dynamodb.NewFromConfig(awsCfg)
-	presigner = s3.NewPresignClient(s3.NewFromConfig(awsCfg))
+	receipts = libs3.New(awsCfg, log).Bucket(cfg.ReceiptBucket)
 }
 
 func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
@@ -122,13 +128,7 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
 	}
 
-	put, err := presigner.PresignPutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(cfg.ReceiptBucket),
-		Key:         aws.String(s3Key),
-		ContentType: aws.String(in.ContentType),
-	}, func(opts *s3.PresignOptions) {
-		opts.Expires = 15 * time.Minute
-	})
+	putURL, err := receipts.PresignPutObject(ctx, s3Key, in.ContentType, 15*time.Minute)
 	if err != nil {
 		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
 	}
@@ -136,11 +136,11 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	return app.JSON(200, response{
 		UploadID:  uploadID,
 		S3Key:     s3Key,
-		PutURL:    put.URL,
+		PutURL:    putURL,
 		ExpiresAt: expiresAt,
 	})
 }
 
 func main() {
-	lambda.Start(handler)
+	lambda.Start(lambdawrap.Handle(log, handler))
 }

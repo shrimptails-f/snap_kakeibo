@@ -2,7 +2,8 @@ version: '3'
 
 vars:
   # 対象 stage。STAGE=prod task ... で切り替える
-  STAGE: '{{.STAGE | default "dev"}}'
+  # devcontainer は backend 用に STAGE=local を持つ(CI は ci)。これらはデプロイ先ではないので dev に読み替える
+  STAGE: '{{if or (eq .STAGE "local") (eq .STAGE "ci")}}dev{{else}}{{.STAGE | default "dev"}}{{end}}'
   PROJECT: snap-kakeibo
   # CDK は infra/common/const.go の AWSRegion を使う。aws CLI と scripts/ も同じリージョンを向くようにする。
   # Taskfile の env: はシェル側の環境変数(devcontainer の AWS_REGION など)に負けるので、コマンドごとに明示で渡す
