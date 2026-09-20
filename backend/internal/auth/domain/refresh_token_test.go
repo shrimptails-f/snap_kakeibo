@@ -20,6 +20,8 @@ func TestRefreshTokenUsable(t *testing.T) {
 		{name: "revoked", token: RefreshToken{ExpiresAt: expiresAt, RevokedAt: expiresAt.Add(-time.Hour)}, now: expiresAt.Add(-time.Second), want: false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			if got := tt.token.Usable(tt.now); got != tt.want {
 				t.Errorf("Usable() = %v, want %v", got, tt.want)
 			}

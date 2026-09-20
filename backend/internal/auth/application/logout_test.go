@@ -40,6 +40,8 @@ func TestLogoutIsIdempotentForMissingToken(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			revoker := &logoutRevoker{err: tt.revokeErr}
 			usecase := application.NewLogoutUsecase(token.RefreshTokenGenerator{}, revoker, timewrapper.NewFixed(time.Now()))
 			if err := usecase.Logout(context.Background(), application.LogoutInput{RefreshToken: tt.raw}); err != nil {

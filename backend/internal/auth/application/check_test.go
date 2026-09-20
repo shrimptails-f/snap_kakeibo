@@ -41,6 +41,8 @@ func TestCheckRejectsInvalidAuthorization(t *testing.T) {
 	t.Parallel()
 	for _, authorization := range []string{"", "Basic token", "Bearer", "Bearer   "} {
 		t.Run(authorization, func(t *testing.T) {
+			t.Parallel()
+
 			usecase := application.NewCheckUsecase(&accessTokenVerifierStub{})
 			_, err := usecase.Check(context.Background(), application.CheckInput{Authorization: authorization})
 			if !errors.Is(err, application.ErrUnauthorized) {

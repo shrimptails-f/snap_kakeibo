@@ -79,6 +79,8 @@ func TestDynamoDBUserRepositoryFindByEmailFailures(t *testing.T) {
 		{name: "DynamoDB error", output: &awssdk.GetItemOutput{Item: validItem}, err: sdkErr, wantErr: sdkErr},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			api := &repositoryAPI{getOutput: tt.output, getErr: tt.err}
 			repository := DynamoDBUserRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
 
@@ -222,6 +224,8 @@ func TestDynamoDBRefreshTokenRepositoryFindByDigestFailures(t *testing.T) {
 		{name: "DynamoDB error", output: &awssdk.GetItemOutput{}, err: sdkErr, wantErr: sdkErr},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			api := &repositoryAPI{getOutput: tt.output, getErr: tt.err}
 			repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
 
@@ -275,6 +279,8 @@ func TestDynamoDBRefreshTokenRepositoryRevokeFailures(t *testing.T) {
 		{name: "DynamoDB error", err: sdkErr, wantErr: sdkErr},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			api := &repositoryAPI{updateErr: tt.err}
 			repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
 
@@ -368,6 +374,8 @@ func TestDynamoDBRefreshTokenRepositoryRevokeAllByUserFailures(t *testing.T) {
 		}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(tt.api).Table("refresh-tokens-test")}
 			if err := repository.RevokeAllByUser(context.Background(), "user-123", time.Now()); !errors.Is(err, sdkErr) {
 				t.Errorf("RevokeAllByUser() error = %v, want %v", err, sdkErr)

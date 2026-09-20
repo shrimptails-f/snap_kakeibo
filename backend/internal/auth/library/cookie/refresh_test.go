@@ -41,6 +41,8 @@ func TestReadRefresh(t *testing.T) {
 		{name: "no cookies", cookies: nil, want: ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			if got := ReadRefresh(tt.cookies); got != tt.want {
 				t.Errorf("ReadRefresh() = %q, want %q", got, tt.want)
 			}

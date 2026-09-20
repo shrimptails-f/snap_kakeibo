@@ -80,6 +80,8 @@ func TestRefreshRejectsUnusableTokens(t *testing.T) {
 		{name: "user ID mismatch", raw: "token", stored: valid, user: common.User{ID: "user-2", Email: user.Email}, userOK: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			repository := &users{user: tt.user}
 			if !tt.userOK {
 				repository.err = application.ErrUserNotFound
