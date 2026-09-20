@@ -10,7 +10,7 @@ ENV TZ=Asia/Tokyo \
     PATH=/home/dev/.local/bin:/home/dev/go/bin:${PATH}
 
 RUN apk add --no-cache \
-      aws-cli bash build-base ca-certificates curl git libgcc libstdc++ \
+      aws-cli bash build-base ca-certificates curl git github-cli libgcc libstdc++ \
       nodejs npm ripgrep tar tzdata && \
     cp /usr/share/zoneinfo/${TZ} /etc/localtime && \
     echo "${TZ}" > /etc/timezone && \
@@ -29,6 +29,7 @@ RUN apk add --no-cache \
     chown -R dev:dev /workspace /home/dev
 
 COPY --chown=dev:dev .devcontainer/.bashrc /home/dev/.bashrc
+COPY scripts/gh-wrappers.bash /usr/local/share/gh-wrappers.bash
 COPY --chown=dev:dev .devcontainer/infra/go/config.toml /home/dev/.codex/config.toml
 
 WORKDIR /workspace/snap_kakeibo
@@ -38,4 +39,4 @@ RUN npm install --global @openai/codex@latest aws-cdk@2.1141.0 pnpm@${PNPM_VERSI
     curl -fsSL https://claude.ai/install.sh -o /tmp/install-claude.sh && \
     bash /tmp/install-claude.sh && \
     rm /tmp/install-claude.sh && \
-    task --version && pnpm --version && codex --version && claude --version && cdk --version
+    task --version && pnpm --version && gh --version && codex --version && claude --version && cdk --version
