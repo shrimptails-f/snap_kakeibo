@@ -72,3 +72,7 @@ func (a *loginAttemptAPI) UpdateItem(_ context.Context, input *awssdk.UpdateItem
 	a.input = input
 	return &awssdk.UpdateItemOutput{}, a.err
 }
+
+func (a *loginAttemptAPI) Query(context.Context, *awssdk.QueryInput, ...func(*awssdk.Options)) (*awssdk.QueryOutput, error) {
+	return &awssdk.QueryOutput{}, nil
+}

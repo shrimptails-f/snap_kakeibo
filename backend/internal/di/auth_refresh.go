@@ -28,7 +28,7 @@ func NewAuthRefreshContainer(cfg settings.Config, awsCfg aws.Config, osw oswrapp
 		// 保存時と同じ算出方法で digest を求めるため、generator を digester としても使う。
 		func(generator token.RefreshTokenGenerator) application.RefreshTokenDigester { return generator },
 		func(client *libdynamodb.Client, cfg settings.Config) (application.RefreshTokenFinder, application.RefreshTokenRevoker) {
-			repository := infrastructure.DynamoDBRefreshTokenRepository{Table: client.Table(cfg.UsersTable)}
+			repository := infrastructure.DynamoDBRefreshTokenRepository{Table: client.Table(cfg.RefreshTokensTable)}
 			return repository, repository
 		},
 		application.NewRefreshUsecase,

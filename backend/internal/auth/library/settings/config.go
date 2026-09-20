@@ -11,6 +11,7 @@ import (
 // Config はトークンを発行する認証 Lambda（auth-login / auth-refresh）に必要な設定値。
 type Config struct {
 	UsersTable         string
+	RefreshTokensTable string
 	JWTSecret          string
 	JWTSecretParameter string
 	Stage              string
@@ -20,6 +21,10 @@ type Config struct {
 // Load は必須設定を起動時に検証する。
 func Load(osw oswrapper.Interface) (Config, error) {
 	usersTable, err := osw.GetEnv("USERS_TABLE")
+	if err != nil {
+		return Config{}, err
+	}
+	refreshTokensTable, err := osw.GetEnv("REFRESH_TOKENS_TABLE")
 	if err != nil {
 		return Config{}, err
 	}
@@ -33,5 +38,5 @@ func Load(osw oswrapper.Interface) (Config, error) {
 		return Config{}, err
 	}
 	logLevel, _ := osw.GetEnv("LOG_LEVEL")
-	return Config{UsersTable: usersTable, JWTSecret: jwtSecret, JWTSecretParameter: jwtSecretParameter, Stage: stage, LogLevel: logLevel}, nil
+	return Config{UsersTable: usersTable, RefreshTokensTable: refreshTokensTable, JWTSecret: jwtSecret, JWTSecretParameter: jwtSecretParameter, Stage: stage, LogLevel: logLevel}, nil
 }
