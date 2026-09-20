@@ -23,6 +23,11 @@ type AccessTokenIssuer interface {
 	Issue(ctx context.Context, user common.User) (token string, expiresIn int64, err error)
 }
 
+// AccessTokenVerifier は access token を検証し、認証済み利用者を返す。
+type AccessTokenVerifier interface {
+	Verify(ctx context.Context, raw string) (common.User, error)
+}
+
 // RefreshTokenGenerator は保存用 digest を含む refresh token を生成する。
 type RefreshTokenGenerator interface {
 	Generate(user common.User, now time.Time, expiresAt time.Time) (raw string, token authdomain.RefreshToken, err error)

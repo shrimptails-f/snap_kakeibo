@@ -2,10 +2,12 @@ package token
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"snap_kakeibo/backend/internal/auth/application"
 	common "snap_kakeibo/backend/internal/common/domain"
 	"snap_kakeibo/backend/internal/library/timewrapper"
 
@@ -33,6 +35,40 @@ func TestJWTIssuerSetsExpiryFromClock(t *testing.T) {
 	}
 	if claims["exp"] != float64(now.Add(15*time.Minute).Unix()) || claims["sub"] != "user-1" {
 		t.Errorf("claims = %#v", claims)
+	}
+}
+
+func TestJWTVerifierVerifiesIssuedToken(t *testing.T) {
+	now := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
+	clock := timewrapper.NewFixed(now)
+	secrets := StaticSecretProvider{Value: "test-secret"}
+	issuer := JWTIssuer{Secrets: secrets, Issuer: "snap-kakeibo-test", Clock: clock, TTL: 15 * time.Minute}
+	raw, _, err := issuer.Issue(context.Background(), common.User{ID: common.UserID("user-1"), Email: "member@example.com"})
+	if err != nil {
+		t.Fatalf("Issue() error = %v", err)
+	}
+
+	user, err := (JWTVerifier{Secrets: secrets, Issuer: "snap-kakeibo-test", Clock: clock}).Verify(context.Background(), raw)
+	if err != nil {
+		t.Fatalf("Verify() error = %v", err)
+	}
+	if user.ID != common.UserID("user-1") || user.Email != "member@example.com" {
+		t.Errorf("Verify() = %#v", user)
+	}
+}
+
+func TestJWTVerifierRejectsExpiredToken(t *testing.T) {
+	issuedAt := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
+	secrets := StaticSecretProvider{Value: "test-secret"}
+	issuer := JWTIssuer{Secrets: secrets, Issuer: "snap-kakeibo-test", Clock: timewrapper.NewFixed(issuedAt), TTL: 15 * time.Minute}
+	raw, _, err := issuer.Issue(context.Background(), common.User{ID: common.UserID("user-1")})
+	if err != nil {
+		t.Fatalf("Issue() error = %v", err)
+	}
+
+	_, err = (JWTVerifier{Secrets: secrets, Issuer: "snap-kakeibo-test", Clock: timewrapper.NewFixed(issuedAt.Add(16 * time.Minute))}).Verify(context.Background(), raw)
+	if !errors.Is(err, application.ErrUnauthorized) {
+		t.Fatalf("Verify() error = %v, want ErrUnauthorized", err)
 	}
 }
 

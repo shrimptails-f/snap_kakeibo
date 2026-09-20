@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"snap_kakeibo/backend/internal/auth/application"
 	common "snap_kakeibo/backend/internal/common/domain"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -15,6 +16,42 @@ import (
 // SecretProvider は JWT 署名鍵を提供する。
 type SecretProvider interface {
 	Secret(ctx context.Context) (string, error)
+}
+
+// JWTVerifier は HS256 の access token を検証する。
+type JWTVerifier struct {
+	Secrets SecretProvider
+	Issuer  string
+	Clock   interface{ Now() time.Time }
+}
+
+type accessTokenClaims struct {
+	UserID string `json:"sub"`
+	Email  string `json:"email,omitempty"`
+	jwt.RegisteredClaims
+}
+
+// Verify は署名・issuer・期限を検証し、token の利用者情報を返す。
+func (v JWTVerifier) Verify(ctx context.Context, raw string) (common.User, error) {
+	secret, err := v.Secrets.Secret(ctx)
+	if err != nil {
+		return common.User{}, err
+	}
+	claims := &accessTokenClaims{}
+	parsed, err := jwt.ParseWithClaims(raw, claims, func(parsed *jwt.Token) (any, error) {
+		if parsed.Method != jwt.SigningMethodHS256 {
+			return nil, application.ErrUnauthorized
+		}
+		return []byte(secret), nil
+	}, jwt.WithIssuer(v.Issuer), jwt.WithExpirationRequired(), jwt.WithTimeFunc(v.Clock.Now))
+	if err != nil || !parsed.Valid {
+		return common.User{}, application.ErrUnauthorized
+	}
+	userID, ok := common.NewUserID(claims.UserID)
+	if !ok {
+		return common.User{}, application.ErrUnauthorized
+	}
+	return common.User{ID: userID, Email: claims.Email}, nil
 }
 
 // StaticSecretProvider は環境変数から取得済みの署名鍵を返す。

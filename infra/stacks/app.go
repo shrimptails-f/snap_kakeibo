@@ -81,9 +81,9 @@ func NewAppStack(scope constructs.Construct, id string, props *AppStackProps) *A
 	addRoute(s.API, awsapigatewayv2.HttpMethod_POST, APIPathPrefix+"/auth/logout", authLogout.Handler)
 	s.storage.RefreshTokensTable.GrantWriteData(authLogout.Handler)
 
-	authMe := s.newFunction("auth-me", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
-	addRoute(s.API, awsapigatewayv2.HttpMethod_GET, APIPathPrefix+"/auth/me", authMe.Handler)
-	s.grantJWTSecretRead(authMe.Function)
+	authCheck := s.newFunction("auth-check", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
+	addRoute(s.API, awsapigatewayv2.HttpMethod_GET, APIPathPrefix+"/auth/check", authCheck.Handler)
+	s.grantJWTSecretRead(authCheck.Function)
 
 	upload := s.newFunction("upload", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
 	addRoute(s.API, awsapigatewayv2.HttpMethod_POST, APIPathPrefix+"/uploads", upload.Handler)
