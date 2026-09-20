@@ -12,7 +12,7 @@ import (
 
 func TestNewUploadContainerResolvesUsecases(t *testing.T) {
 	t.Parallel()
-	cfg := settings.Config{UploadHistoriesTable: "upload-histories", ReceiptBucket: "receipts", JWTSecret: "test-secret", Stage: "test"}
+	cfg := settings.Config{UploadHistoriesTable: "upload-histories", ReceiptBucket: "receipts", JWTSecretParameter: "/test/jwt-secret", Stage: "test"}
 	container, err := NewUploadContainer(cfg, aws.Config{Region: "ap-northeast-1"}, oswrapper.New(), logger.NewNop())
 	if err != nil {
 		t.Fatalf("NewUploadContainer() error = %v", err)

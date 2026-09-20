@@ -29,20 +29,6 @@ func TestLoadReadsRequiredAndOptionalValues(t *testing.T) {
 	}
 }
 
-func TestLoadAcceptsStaticJWTSecretWithoutParameter(t *testing.T) {
-	t.Parallel()
-	env := validEnv()
-	delete(env, "SSM_JWT_SECRET")
-	env["JWT_SECRET"] = "secret"
-	cfg, err := Load(oswrappertest.New(env))
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-	if cfg.JWTSecret != "secret" || cfg.JWTSecretParameter != "" {
-		t.Errorf("cfg = %+v", cfg)
-	}
-}
-
 func TestLoadRejectsMissingValues(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -51,7 +37,7 @@ func TestLoadRejectsMissingValues(t *testing.T) {
 	}{
 		{"missing table", func(env map[string]string) { delete(env, "UPLOAD_HISTORIES_TABLE") }},
 		{"missing bucket", func(env map[string]string) { delete(env, "RECEIPT_BUCKET") }},
-		{"missing jwt secret and parameter", func(env map[string]string) { delete(env, "SSM_JWT_SECRET") }},
+		{"missing jwt secret parameter", func(env map[string]string) { delete(env, "SSM_JWT_SECRET") }},
 		{"missing stage", func(env map[string]string) { delete(env, "STAGE") }},
 	}
 	for _, tt := range tests {

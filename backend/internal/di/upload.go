@@ -23,7 +23,7 @@ func NewUploadContainer(cfg settings.Config, awsCfg aws.Config, osw oswrapper.In
 	if err != nil {
 		return nil, fmt.Errorf("create upload container: %w", err)
 	}
-	if err := provideAccessTokenVerification(container, "upload", cfg.JWTSecret, cfg.JWTSecretParameter, cfg.Stage); err != nil {
+	if err := provideAccessTokenVerification(container, "upload", cfg.JWTSecretParameter, cfg.Stage); err != nil {
 		return nil, err
 	}
 	if err := Provide(container, "upload",

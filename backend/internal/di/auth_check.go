@@ -18,7 +18,7 @@ func NewAuthCheckContainer(cfg settings.Config, awsCfg aws.Config, osw oswrapper
 	if err != nil {
 		return nil, fmt.Errorf("create auth-check container: %w", err)
 	}
-	if err := provideAccessTokenVerification(container, "auth-check", cfg.JWTSecret, cfg.JWTSecretParameter, cfg.Stage); err != nil {
+	if err := provideAccessTokenVerification(container, "auth-check", cfg.JWTSecretParameter, cfg.Stage); err != nil {
 		return nil, err
 	}
 	return container, nil

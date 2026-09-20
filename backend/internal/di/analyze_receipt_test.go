@@ -1,19 +1,14 @@
 package di
 
 import (
-	"context"
 	"testing"
-	"time"
 
 	"snap_kakeibo/backend/internal/analysis/library/settings"
 	"snap_kakeibo/backend/internal/library/awstest"
 	"snap_kakeibo/backend/internal/library/dynamodb/dynamodbtest"
 	"snap_kakeibo/backend/internal/library/logger"
 	"snap_kakeibo/backend/internal/library/oswrapper"
-
-	"github.com/aws/aws-sdk-go-v2/aws"
-	awsssm "github.com/aws/aws-sdk-go-v2/service/ssm"
-	ssmtypes "github.com/aws/aws-sdk-go-v2/service/ssm/types"
+	"snap_kakeibo/backend/internal/library/ssm/ssmtest"
 )
 
 func analyzeReceiptConfig(parameter string) settings.Config {
@@ -36,17 +31,8 @@ func analyzeReceiptConfig(parameter string) settings.Config {
 func TestNewAnalyzeReceiptContainerResolvesUsecaseInterface(t *testing.T) {
 	t.Parallel()
 	env := dynamodbtest.Connect(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
 
-	name := "/" + awstest.ResourceName("di-openai-api-key")
-	ssmClient := awsssm.NewFromConfig(env.Config)
-	if _, err := ssmClient.PutParameter(ctx, &awsssm.PutParameterInput{Name: aws.String(name), Value: aws.String("sk-test"), Type: ssmtypes.ParameterTypeSecureString}); err != nil {
-		t.Fatalf("PutParameter against %s: %v", aws.ToString(env.Config.BaseEndpoint), err)
-	}
-	t.Cleanup(func() {
-		_, _ = ssmClient.DeleteParameter(context.Background(), &awsssm.DeleteParameterInput{Name: aws.String(name)})
-	})
+	name := ssmtest.PutSecureString(t, env.Config, "di-openai-api-key", "sk-test")
 
 	container, err := NewAnalyzeReceiptContainer(analyzeReceiptConfig(name), env.Config, oswrapper.New(), logger.NewNop())
 	if err != nil {

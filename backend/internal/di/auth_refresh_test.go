@@ -15,7 +15,7 @@ func TestNewAuthRefreshContainerResolvesUsecaseInterface(t *testing.T) {
 	container, err := NewAuthRefreshContainer(settings.Config{
 		UsersTable:         "users",
 		RefreshTokensTable: "refresh-tokens",
-		JWTSecret:          "test-secret",
+		JWTSecretParameter: "/test/jwt-secret",
 		Stage:              "test",
 	}, aws.Config{Region: "ap-northeast-1"}, oswrapper.New(), logger.NewNop())
 	if err != nil {
