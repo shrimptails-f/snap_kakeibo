@@ -71,6 +71,7 @@ func LogGroupName(functionName string) ResourceName {
 // DynamoDB
 const (
 	UsersTableName            ResourceName = "users"
+	RefreshTokensTableName    ResourceName = "refresh-tokens"
 	MonthlySummariesTableName ResourceName = "monthly-summaries"
 	UploadHistoriesTableName  ResourceName = "upload-histories"
 	BillingsTableName         ResourceName = "billings"
@@ -85,6 +86,7 @@ const (
 
 // GSI
 const (
+	RefreshTokenUserIndex  = "refresh_token_user_index"
 	UploadMonthIndex       = "upload_month_index"
 	DetailMonthAmountIndex = "detail_month_amount_index"
 )
@@ -126,6 +128,7 @@ const (
 	// EnvStage は実行環境(dev / stg / prd)。backend の logger の environment と awsconfig の向き先に使う
 	EnvStage                 = "STAGE"
 	EnvUsersTable            = "USERS_TABLE"
+	EnvRefreshTokensTable    = "REFRESH_TOKENS_TABLE"
 	EnvMonthlySummariesTable = "MONTHLY_SUMMARIES_TABLE"
 	EnvUploadHistoriesTable  = "UPLOAD_HISTORIES_TABLE"
 	EnvBillingsTable         = "BILLINGS_TABLE"

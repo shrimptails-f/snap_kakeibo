@@ -51,6 +51,7 @@ type Env struct {
 // Tables は本番と同じ構成の一時テーブル一式。
 type Tables struct {
 	Users            *libdynamodb.Table
+	RefreshTokens    *libdynamodb.Table
 	MonthlySummaries *libdynamodb.Table
 	UploadHistories  *libdynamodb.Table
 	Billings         *libdynamodb.Table
@@ -99,11 +100,12 @@ func (e *Env) CreateTableWithPrefix(t testing.TB, prefix string, schema libdynam
 	return e.Client.Table(name)
 }
 
-// CreateAllTables は本番と同じ 5 テーブルを prefix 付きのランダムな名前で作り、テスト終了時にまとめて削除する。
+// CreateAllTables は本番と同じ 6 テーブルを prefix 付きのランダムな名前で作り、テスト終了時にまとめて削除する。
 func (e *Env) CreateAllTables(t testing.TB, prefix string) Tables {
 	t.Helper()
 	return Tables{
 		Users:            e.CreateTableWithPrefix(t, prefix, libdynamodb.UsersSchema),
+		RefreshTokens:    e.CreateTableWithPrefix(t, prefix, libdynamodb.RefreshTokensSchema),
 		MonthlySummaries: e.CreateTableWithPrefix(t, prefix, libdynamodb.MonthlySummariesSchema),
 		UploadHistories:  e.CreateTableWithPrefix(t, prefix, libdynamodb.UploadHistoriesSchema),
 		Billings:         e.CreateTableWithPrefix(t, prefix, libdynamodb.BillingsSchema),

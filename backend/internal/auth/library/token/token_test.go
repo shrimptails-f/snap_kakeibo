@@ -49,3 +49,17 @@ func TestRefreshTokenGeneratorStoresDigestOnly(t *testing.T) {
 		t.Errorf("hint = %q", stored.Hint)
 	}
 }
+
+func TestRefreshTokenGeneratorDigestMatchesStoredDigest(t *testing.T) {
+	generator := RefreshTokenGenerator{}
+	raw, stored, err := generator.Generate(common.User{ID: common.UserID("user-1")}, time.Time{}, time.Time{})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if got := generator.Digest(raw); got != stored.Digest {
+		t.Errorf("Digest(raw) = %q, want stored digest %q", got, stored.Digest)
+	}
+	if generator.Digest(raw+"x") == stored.Digest {
+		t.Error("Digest() of a different token matches the stored digest")
+	}
+}

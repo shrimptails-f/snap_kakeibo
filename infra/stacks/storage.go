@@ -45,6 +45,7 @@ type StorageStack struct {
 	FrontendBucket awss3.Bucket
 
 	UsersTable            awsdynamodb.Table
+	RefreshTokensTable    awsdynamodb.Table
 	MonthlySummariesTable awsdynamodb.Table
 	UploadHistoriesTable  awsdynamodb.Table
 	BillingsTable         awsdynamodb.Table
@@ -65,9 +66,13 @@ func NewStorageStack(scope constructs.Construct, id string, props *StorageStackP
 	s.Bucket = newReceiptBucket(stack, cfg)
 	s.FrontendBucket = newFrontendBucket(stack, cfg)
 
+	// users にはユーザー本体とログイン試行カウンタを置く。TTL はカウンタの expires_at(Unix 秒)を対象にし、
+	// ユーザーアイテムは expires_at を持たないので消えない。
 	s.UsersTable = newTable(stack, "UsersTable", cfg, cfg.Tables.Users, false, jsii.String("expires_at"))
-	// ログイン試行カウンタの expires_at は Unix 秒。ユーザーや refresh token の expires_at は
-	// 文字列なので TTL の対象にならず、数値属性を持つカウンタだけが自動削除される。
+	// refresh token はユーザーとは更新単位が異なるため専用テーブルに置き、期限切れは TTL で自動削除する。
+	// GSI でユーザー単位の一覧・一括失効(全端末ログアウト)ができるようにする。
+	s.RefreshTokensTable = newTable(stack, "RefreshTokensTable", cfg, cfg.Tables.RefreshTokens, false, jsii.String("expires_at"))
+	addGSI1(s.RefreshTokensTable, common.RefreshTokenUserIndex)
 	s.MonthlySummariesTable = newTable(stack, "MonthlySummariesTable", cfg, cfg.Tables.MonthlySummaries, true, nil)
 	s.UploadHistoriesTable = newTable(stack, "UploadHistoriesTable", cfg, cfg.Tables.UploadHistories, true, nil)
 	s.BillingsTable = newTable(stack, "BillingsTable", cfg, cfg.Tables.Billings, true, nil)

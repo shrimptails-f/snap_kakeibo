@@ -11,6 +11,7 @@ import (
 // テーブルの基本名(stage / prefix 抜き)。infra/common/const.go の *TableName と揃える。
 const (
 	UsersTableName            = "users"
+	RefreshTokensTableName    = "refresh-tokens"
 	MonthlySummariesTableName = "monthly-summaries"
 	UploadHistoriesTableName  = "upload-histories"
 	BillingsTableName         = "billings"
@@ -19,6 +20,7 @@ const (
 
 // GSI 名。infra/common/const.go と揃える。
 const (
+	RefreshTokenUserIndex  = "refresh_token_user_index"
 	UploadMonthIndex       = "upload_month_index"
 	DetailMonthAmountIndex = "detail_month_amount_index"
 )
@@ -46,6 +48,7 @@ type GSI struct {
 // 本番と同じキー構成のスキーマ。infra/stacks/storage.go を変更したらここも合わせる。
 var (
 	UsersSchema            = Schema{Name: UsersTableName, PartitionKey: "PK"}
+	RefreshTokensSchema    = Schema{Name: RefreshTokensTableName, PartitionKey: "PK", GSIs: []GSI{gsi1(RefreshTokenUserIndex)}}
 	MonthlySummariesSchema = Schema{Name: MonthlySummariesTableName, PartitionKey: "PK", SortKey: "SK"}
 	UploadHistoriesSchema  = Schema{Name: UploadHistoriesTableName, PartitionKey: "PK", SortKey: "SK", GSIs: []GSI{gsi1(UploadMonthIndex)}}
 	BillingsSchema         = Schema{Name: BillingsTableName, PartitionKey: "PK", SortKey: "SK"}
@@ -54,7 +57,7 @@ var (
 
 // AllSchemas は本番に存在するテーブルのスキーマをすべて返す。
 func AllSchemas() []Schema {
-	return []Schema{UsersSchema, MonthlySummariesSchema, UploadHistoriesSchema, BillingsSchema, BillingDetailsSchema}
+	return []Schema{UsersSchema, RefreshTokensSchema, MonthlySummariesSchema, UploadHistoriesSchema, BillingsSchema, BillingDetailsSchema}
 }
 
 func gsi1(name string) GSI { return GSI{Name: name, PartitionKey: "GSI1PK", SortKey: "GSI1SK"} }

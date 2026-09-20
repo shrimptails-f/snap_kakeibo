@@ -10,21 +10,21 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 )
 
-func TestNewAuthLoginContainerResolvesUsecaseInterface(t *testing.T) {
-	container, err := NewAuthLoginContainer(settings.Config{
+func TestNewAuthRefreshContainerResolvesUsecaseInterface(t *testing.T) {
+	container, err := NewAuthRefreshContainer(settings.Config{
 		UsersTable:         "users",
 		RefreshTokensTable: "refresh-tokens",
 		JWTSecret:          "test-secret",
 		Stage:              "test",
 	}, aws.Config{Region: "ap-northeast-1"}, oswrapper.New(), logger.NewNop())
 	if err != nil {
-		t.Fatalf("NewAuthLoginContainer() error = %v", err)
+		t.Fatalf("NewAuthRefreshContainer() error = %v", err)
 	}
-	usecase, err := ResolveAuthLoginUsecase(container)
+	usecase, err := ResolveAuthRefreshUsecase(container)
 	if err != nil {
-		t.Fatalf("ResolveAuthLoginUsecase() error = %v", err)
+		t.Fatalf("ResolveAuthRefreshUsecase() error = %v", err)
 	}
 	if usecase == nil {
-		t.Fatal("ResolveAuthLoginUsecase() returned nil")
+		t.Fatal("ResolveAuthRefreshUsecase() returned nil")
 	}
 }

@@ -32,6 +32,10 @@ func (RefreshTokenGenerator) Generate(user common.User, now, expiresAt time.Time
 	}, nil
 }
 
+// Digest は Generate が保存用に使う digest と同じ算出方法で raw token を変換する。
+// refresh 時に受け取った raw token から保存済みトークンを探すために使う。
+func (RefreshTokenGenerator) Digest(raw string) string { return Digest(raw) }
+
 // Digest は raw refresh token の保存用 SHA-256 digest を返す。
 func Digest(value string) string {
 	sum := sha256.Sum256([]byte(value))

@@ -6,6 +6,7 @@ const FixedUserID = "01JUSER0000000000000000000"
 
 type Config struct {
 	UsersTable            string
+	RefreshTokensTable    string
 	MonthlySummariesTable string
 	UploadHistoriesTable  string
 	BillingsTable         string
@@ -25,6 +26,7 @@ type Config struct {
 func LoadConfig() Config {
 	return Config{
 		UsersTable:            os.Getenv("USERS_TABLE"),
+		RefreshTokensTable:    os.Getenv("REFRESH_TOKENS_TABLE"),
 		MonthlySummariesTable: os.Getenv("MONTHLY_SUMMARIES_TABLE"),
 		UploadHistoriesTable:  os.Getenv("UPLOAD_HISTORIES_TABLE"),
 		BillingsTable:         os.Getenv("BILLINGS_TABLE"),
