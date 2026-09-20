@@ -24,7 +24,7 @@ var (
 	cfg   = app.LoadConfig()
 	log   = logger.New(logger.Options{Level: cfg.LogLevel, Service: lambdacontext.FunctionName, Environment: cfg.Stage})
 	ddb   *dynamodb.Client
-	queue *libsqs.Client
+	queue *libsqs.Queue
 )
 
 func init() {
@@ -35,7 +35,7 @@ func init() {
 	}
 	ddb = dynamodb.NewFromConfig(c)
 	// 送信時に ctx の trace を traceparent として付けるので、analyze-receipt 側のログが同じ trace_id で繋がる
-	queue = libsqs.New(c, log)
+	queue = libsqs.New(c, log).Queue(cfg.AnalyzeQueueURL)
 }
 
 func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
@@ -50,7 +50,7 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	attempt, _ := strconv.Atoi(out.Attributes["attempt"].(*ddbtypes.AttributeValueMemberN).Value)
 	ctx = logger.ContextWith(ctx, logger.UploadID(id), logger.Int("attempt", attempt))
 	body := map[string]any{"user_id": app.FixedUserID, "upload_id": id, "attempt": attempt, "trigger": "RETRY"}
-	if _, err = queue.SendJSON(ctx, cfg.AnalyzeQueueURL, body); err != nil {
+	if _, err = queue.SendJSON(ctx, body); err != nil {
 		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
 	}
 	return app.JSON(200, map[string]any{"upload_id": id, "status": "ANALYZING", "attempt": attempt})

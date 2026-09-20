@@ -8,8 +8,8 @@
 // 送信:
 //
 //	awsCfg, err := awsconfig.Load(ctx, oswrapper.New()) // STAGE=local / ci なら Floci を向く
-//	queue := libsqs.New(awsCfg, log)
-//	msgID, err := queue.SendJSON(ctx, queueURL, payload) // traceparent を注入し sqs_send span を出す
+//	analyzeQueue := libsqs.New(awsCfg, log).Queue(cfg.AnalyzeQueueURL) // キューに束縛(Queue 参照)
+//	msgID, err := analyzeQueue.SendJSON(ctx, payload)                  // traceparent を注入し sqs_send span を出す
 //
 // 受信(Lambda):
 //
