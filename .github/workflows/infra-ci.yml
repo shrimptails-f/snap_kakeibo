@@ -4,6 +4,13 @@ name: Infra CI
 
 on:
   push:
+    branches:
+      - main
+    paths:
+      - infra/**
+      - .github/workflows/infra-ci.yml
+      - .github/workflows/_go-module.yml
+  pull_request:
     paths:
       - infra/**
       - .github/workflows/infra-ci.yml

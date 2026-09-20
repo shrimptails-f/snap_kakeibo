@@ -3,6 +3,13 @@ name: Backend CI
 
 on:
   push:
+    branches:
+      - main
+    paths:
+      - backend/**
+      - .github/workflows/backend-ci.yml
+      - .github/workflows/_go-module.yml
+  pull_request:
     paths:
       - backend/**
       - .github/workflows/backend-ci.yml
