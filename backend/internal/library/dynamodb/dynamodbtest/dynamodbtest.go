@@ -70,7 +70,7 @@ func Connect(t testing.TB) *Env {
 	if err != nil {
 		t.Fatalf("dynamodbtest: load aws config: %v", err)
 	}
-	return &Env{Config: cfg, Client: libdynamodb.New(cfg), Manager: libdynamodb.NewManager(cfg)}
+	return &Env{Config: cfg, Client: libdynamodb.New(cfg, nil), Manager: libdynamodb.NewManager(cfg)}
 }
 
 // CreateTable はランダムな名前(DefaultPrefix + schema.Name + 乱数)でテーブルを作り、テスト終了時に削除する。

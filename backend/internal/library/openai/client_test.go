@@ -241,6 +241,7 @@ func TestResponsesDoesNotRetryClientErrors(t *testing.T) {
 	assertField(t, last, "http_status_code", float64(400))
 	assertField(t, last, "provider_type", "invalid_request_error")
 	assertField(t, last, "provider_code", "invalid_json_schema")
+	assertField(t, last, "provider_message", "bad schema")
 	assertField(t, last, "error_type", "openai.APIError")
 }
 

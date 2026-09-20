@@ -30,7 +30,7 @@ func TestDynamoDBUserRepositoryFindByEmail(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := &repositoryAPI{getOutput: &awssdk.GetItemOutput{Item: item}}
-	repository := DynamoDBUserRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
+	repository := DynamoDBUserRepository{Table: libdynamodb.NewWithAPI(api, nil).Table("users-test")}
 
 	user, err := repository.FindByEmail(context.Background(), " MEMBER@Example.COM ")
 	if err != nil {
@@ -82,7 +82,7 @@ func TestDynamoDBUserRepositoryFindByEmailFailures(t *testing.T) {
 			t.Parallel()
 
 			api := &repositoryAPI{getOutput: tt.output, getErr: tt.err}
-			repository := DynamoDBUserRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
+			repository := DynamoDBUserRepository{Table: libdynamodb.NewWithAPI(api, nil).Table("users-test")}
 
 			_, err := repository.FindByEmail(context.Background(), "member@example.com")
 			if err == nil {
@@ -98,7 +98,7 @@ func TestDynamoDBUserRepositoryFindByEmailFailures(t *testing.T) {
 func TestDynamoDBRefreshTokenRepositorySave(t *testing.T) {
 	t.Parallel()
 	api := &repositoryAPI{putOutput: &awssdk.PutItemOutput{}}
-	repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
+	repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api, nil).Table("users-test")}
 	createdAt := time.Date(2026, 9, 20, 12, 0, 0, 0, time.FixedZone("JST", 9*60*60))
 	token := authdomain.RefreshToken{
 		Digest: "digest", UserID: "user-123", Email: "member@example.com",
@@ -141,7 +141,7 @@ func TestDynamoDBRefreshTokenRepositorySaveReturnsDynamoDBError(t *testing.T) {
 	t.Parallel()
 	sdkErr := errors.New("conditional check failed")
 	api := &repositoryAPI{putOutput: &awssdk.PutItemOutput{}, putErr: sdkErr}
-	repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
+	repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api, nil).Table("users-test")}
 
 	err := repository.Save(context.Background(), authdomain.RefreshToken{Digest: "digest"})
 	if !errors.Is(err, sdkErr) {
@@ -160,7 +160,7 @@ func TestDynamoDBRefreshTokenRepositoryFindByDigest(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := &repositoryAPI{getOutput: &awssdk.GetItemOutput{Item: item}}
-	repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
+	repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api, nil).Table("users-test")}
 
 	token, err := repository.FindByDigest(context.Background(), "digest")
 	if err != nil {
@@ -194,7 +194,7 @@ func TestDynamoDBRefreshTokenRepositoryFindByDigestReadsRevokedAt(t *testing.T) 
 		t.Fatal(err)
 	}
 	api := &repositoryAPI{getOutput: &awssdk.GetItemOutput{Item: item}}
-	repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
+	repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api, nil).Table("users-test")}
 
 	token, err := repository.FindByDigest(context.Background(), "digest")
 	if err != nil {
@@ -227,7 +227,7 @@ func TestDynamoDBRefreshTokenRepositoryFindByDigestFailures(t *testing.T) {
 			t.Parallel()
 
 			api := &repositoryAPI{getOutput: tt.output, getErr: tt.err}
-			repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
+			repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api, nil).Table("users-test")}
 
 			_, err := repository.FindByDigest(context.Background(), "digest")
 			if err == nil {
@@ -243,7 +243,7 @@ func TestDynamoDBRefreshTokenRepositoryFindByDigestFailures(t *testing.T) {
 func TestDynamoDBRefreshTokenRepositoryRevoke(t *testing.T) {
 	t.Parallel()
 	api := &repositoryAPI{updateOutput: &awssdk.UpdateItemOutput{}}
-	repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
+	repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api, nil).Table("users-test")}
 	revokedAt := time.Date(2026, 9, 20, 21, 0, 0, 0, time.FixedZone("JST", 9*60*60))
 
 	if err := repository.Revoke(context.Background(), "digest", revokedAt); err != nil {
@@ -282,7 +282,7 @@ func TestDynamoDBRefreshTokenRepositoryRevokeFailures(t *testing.T) {
 			t.Parallel()
 
 			api := &repositoryAPI{updateErr: tt.err}
-			repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
+			repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api, nil).Table("users-test")}
 
 			err := repository.Revoke(context.Background(), "digest", time.Now())
 			if !errors.Is(err, tt.wantErr) {
@@ -305,7 +305,7 @@ func TestDynamoDBRefreshTokenRepositoryRevokeAllByUser(t *testing.T) {
 		},
 		updateOutput: &awssdk.UpdateItemOutput{},
 	}
-	repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("refresh-tokens-test")}
+	repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api, nil).Table("refresh-tokens-test")}
 	revokedAt := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
 
 	if err := repository.RevokeAllByUser(context.Background(), "user-123", revokedAt); err != nil {
@@ -351,7 +351,7 @@ func TestDynamoDBRefreshTokenRepositoryRevokeAllByUserSkipsExpiredItems(t *testi
 		// 一覧取得後に TTL で消えたアイテムは条件不一致になる
 		updateErr: &ddbtypes.ConditionalCheckFailedException{},
 	}
-	repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("refresh-tokens-test")}
+	repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api, nil).Table("refresh-tokens-test")}
 
 	if err := repository.RevokeAllByUser(context.Background(), "user-123", time.Now()); err != nil {
 		t.Fatalf("RevokeAllByUser() error = %v", err)
@@ -376,7 +376,7 @@ func TestDynamoDBRefreshTokenRepositoryRevokeAllByUserFailures(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(tt.api).Table("refresh-tokens-test")}
+			repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(tt.api, nil).Table("refresh-tokens-test")}
 			if err := repository.RevokeAllByUser(context.Background(), "user-123", time.Now()); !errors.Is(err, sdkErr) {
 				t.Errorf("RevokeAllByUser() error = %v, want %v", err, sdkErr)
 			}
@@ -447,4 +447,8 @@ func (a *repositoryAPI) Query(_ context.Context, in *awssdk.QueryInput, _ ...fun
 	out := a.queryOutputs[0]
 	a.queryOutputs = a.queryOutputs[1:]
 	return out, nil
+}
+
+func (a *repositoryAPI) TransactWriteItems(context.Context, *awssdk.TransactWriteItemsInput, ...func(*awssdk.Options)) (*awssdk.TransactWriteItemsOutput, error) {
+	return &awssdk.TransactWriteItemsOutput{}, nil
 }

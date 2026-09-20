@@ -177,8 +177,8 @@ billings は作成済みだがカテゴリだけ未反映、という中間状�
 ### 入力
 
 ```text
-model                = SSM の値(初期値 gpt-5-mini)
-reasoning.effort     = SSM の値(初期値 low)
+model                = 環境変数 OPENAI_MODEL の値(初期値 gpt-5-mini)
+reasoning.effort     = 環境変数 OPENAI_REASONING_EFFORT の値(初期値 low)
 store                = false(レシートを OpenAI 側に保存させない)
 max_output_tokens    = 4096
 text.format          = json_schema(strict)
