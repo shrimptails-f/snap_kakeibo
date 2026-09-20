@@ -37,6 +37,7 @@ is_edited
 
 ```mermaid
 erDiagram
+  USER ||--o{ REFRESH_TOKEN : signs_in_with
   USER ||--o{ MONTHLY_SUMMARY : has
   USER ||--o{ UPLOAD_HISTORY : uploads
   USER ||--o{ BILLING : owns
@@ -50,6 +51,16 @@ erDiagram
     string email
     string password_hash
     string created_at
+  }
+
+  REFRESH_TOKEN {
+    string digest
+    string user_id
+    string email
+    int expires_at
+    string created_at
+    string last_used_at
+    string revoked_at
   }
 
   MONTHLY_SUMMARY {
@@ -126,7 +137,11 @@ erDiagram
 
 | ユースケース | 主な呼び出し元 | 必要な検索条件 | 取得・更新対象 | DynamoDB操作 |
 | --- | --- | --- | --- | --- |
-| ログインする | `POST /auth/login` | emailでユーザーを1件取得 | User | GetItem |
+| ログインする | `POST /auth/login` | emailでユーザーを1件取得し、refresh tokenを発行 | users / refresh_tokens | GetItem / PutItem |
+| ログイン試行を制限する | `POST /auth/login` | IP・emailごとの試行回数を固定時間窓で加算 | users(LOGIN_ATTEMPT) | UpdateItem |
+| access tokenを更新する | `POST /auth/refresh` | Cookieのrefresh tokenのdigestで1件取得し、失効させて再発行 | refresh_tokens | GetItem / UpdateItem / PutItem |
+| ログアウトする | `POST /auth/logout` | Cookieのrefresh tokenのdigestで失効 | refresh_tokens | UpdateItem |
+| 全端末からログアウトする | パスワード変更など(未実装) | user_idで未失効のrefresh tokenを一覧し失効 | refresh_tokens | GSI Query + UpdateItem |
 | 月ごとの合計を見る | ダッシュボード画面 | user_idで月次集計を一覧取得 | monthly_summaries | Query |
 | 指定月の支出内訳を見る | 月別支出画面 | user_id + year_monthで購入明細を金額降順取得 | billing_details | GSI Query |
 | 指定月のアップロード履歴を見る | アップロード履歴画面 | user_id + year_monthでアップロード履歴を日時降順取得 | upload_histories | GSI Query |
@@ -146,6 +161,8 @@ erDiagram
 
 ```text
 users
+
+refresh_tokens
 
 monthly_summaries
 
@@ -189,6 +206,73 @@ user_idはJWTに入れて、ログイン後の各APIで利用する。
 ### GSI
 
 なし。
+
+### ログイン試行カウンタ
+
+ログインのレート制限用カウンタも `users` に置く。emailやIPアドレスをそのまま残さないよう識別子はSHA-256でハッシュ化し、固定時間窓(5分)ごとに1アイテム作る。
+
+`expires_at` はUnix秒で、テーブルのTTL属性として自動削除の対象になる。ユーザーアイテムは `expires_at` を持たないため消えない。
+
+```jsonc
+{
+  "PK": "LOGIN_ATTEMPT#{sha256(subject)}#{window_start_unix}", // subjectは "ip:..." または "email:..."
+
+  "attempt_count": 3, // 窓内の試行回数。ADDで原子的に加算し、上限に達したら条件式で拒否する
+  "expires_at": 1758369600 // TTL。窓の終了から1時間後に削除される
+}
+```
+
+---
+
+## refresh_tokens
+
+ログイン時に発行するrefresh tokenを保持する。ユーザー本体とは更新単位が異なる(ログイン・更新・ログアウトのたびに書き換わり、端末ごとに複数持つ)ため、`users` とは別テーブルにする。
+
+クライアントに返すraw tokenは保存せず、SHA-256のdigestだけを主キーに使う。refresh時はdigestで1件を強整合に取得し、使用済みトークンを失効させてから新しいトークンを発行する(rotation)。
+
+期限切れはTTLで自動削除する。失効済み(`revoked_at` あり)のトークンも期限までは残し、TTLで消える。
+
+### Primary Key
+
+| Key | Value |
+| --- | --- |
+| PK | `REFRESH#{digest}` |
+
+### GSI: refresh_token_user_index
+
+| Key | Value |
+| --- | --- |
+| GSI1PK | `USER#{user_id}` |
+| GSI1SK | `REFRESH_CREATED_AT#{created_at}#{digest}` |
+
+ユーザー単位の一覧・一括失効(全端末ログアウト、パスワード変更)に使う。GSIは結果整合のため、直前に発行されたトークンを取りこぼす可能性は許容する。
+
+### Query
+
+| 用途 | 条件 |
+| --- | --- |
+| refresh tokenを照合 | `PK = REFRESH#{digest}`(ConsistentRead) |
+| ユーザーの未失効トークン一覧 | `GSI1PK = USER#{user_id}` and `attribute_not_exists(revoked_at)` |
+
+### Item
+
+```jsonc
+{
+  "PK": "REFRESH#3f9a...", // raw tokenのSHA-256 digest。raw tokenは保存しない
+  "GSI1PK": "USER#01JUSERXXX", // ユーザー単位で一覧するGSIパーティションキー
+  "GSI1SK": "REFRESH_CREATED_AT#2026-09-15T12:00:00Z#3f9a...", // 発行日時順に並べるGSIソートキー
+
+  "type": "REFRESH_TOKEN", // レコード種別
+
+  "user_id": "01JUSERXXX", // トークンの所有者
+  "email": "user@example.com", // refresh時にユーザーを再取得するためのキー
+  "expires_at": 1760961600, // 有効期限(Unix秒)。TTL属性
+  "created_at": "2026-09-15T12:00:00Z", // 発行日時
+  "last_used_at": "2026-09-15T12:00:00Z", // 最後に使われた日時
+  "refresh_hint": "Ab3dEf9h", // raw tokenの末尾8文字。サポート時の突き合わせ用
+  "revoked_at": "2026-09-16T09:00:00Z" // 失効日時。未失効なら属性なし
+}
+```
 
 ---
 
