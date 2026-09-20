@@ -6,6 +6,7 @@ import (
 )
 
 func TestRefreshCookie(t *testing.T) {
+	t.Parallel()
 	parsed, err := http.ParseSetCookie(Refresh("token", 3600))
 	if err != nil {
 		t.Fatalf("ParseSetCookie() error = %v", err)
@@ -16,6 +17,7 @@ func TestRefreshCookie(t *testing.T) {
 }
 
 func TestRefreshCookieDeletion(t *testing.T) {
+	t.Parallel()
 	parsed, err := http.ParseSetCookie(Refresh("", -1))
 	if err != nil {
 		t.Fatalf("ParseSetCookie() error = %v", err)
@@ -26,6 +28,7 @@ func TestRefreshCookieDeletion(t *testing.T) {
 }
 
 func TestReadRefresh(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name    string
 		cookies []string

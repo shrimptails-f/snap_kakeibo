@@ -15,6 +15,7 @@ import (
 )
 
 func TestJWTIssuerSetsExpiryFromClock(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
 	clock := timewrapper.NewFixed(now)
 	issuer := JWTIssuer{
@@ -39,6 +40,7 @@ func TestJWTIssuerSetsExpiryFromClock(t *testing.T) {
 }
 
 func TestJWTVerifierVerifiesIssuedToken(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
 	clock := timewrapper.NewFixed(now)
 	secrets := StaticSecretProvider{Value: "test-secret"}
@@ -58,6 +60,7 @@ func TestJWTVerifierVerifiesIssuedToken(t *testing.T) {
 }
 
 func TestJWTVerifierRejectsExpiredToken(t *testing.T) {
+	t.Parallel()
 	issuedAt := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
 	secrets := StaticSecretProvider{Value: "test-secret"}
 	issuer := JWTIssuer{Secrets: secrets, Issuer: "snap-kakeibo-test", Clock: timewrapper.NewFixed(issuedAt), TTL: 15 * time.Minute}
@@ -73,6 +76,7 @@ func TestJWTVerifierRejectsExpiredToken(t *testing.T) {
 }
 
 func TestRefreshTokenGeneratorStoresDigestOnly(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
 	raw, stored, err := (RefreshTokenGenerator{}).Generate(common.User{ID: common.UserID("user-1"), Email: "member@example.com"}, now, now.Add(time.Hour))
 	if err != nil {
@@ -87,6 +91,7 @@ func TestRefreshTokenGeneratorStoresDigestOnly(t *testing.T) {
 }
 
 func TestRefreshTokenGeneratorDigestMatchesStoredDigest(t *testing.T) {
+	t.Parallel()
 	generator := RefreshTokenGenerator{}
 	raw, stored, err := generator.Generate(common.User{ID: common.UserID("user-1")}, time.Time{}, time.Time{})
 	if err != nil {

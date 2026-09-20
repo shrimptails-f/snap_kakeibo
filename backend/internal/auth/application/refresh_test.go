@@ -13,6 +13,7 @@ import (
 )
 
 func TestRefreshRotatesTokens(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
 	user := common.User{ID: common.UserID("user-1"), Email: "member@example.com", PasswordHash: "hash"}
 	stored := authdomain.RefreshToken{Digest: "digest:old", UserID: user.ID, Email: user.Email, ExpiresAt: now.Add(time.Hour)}
@@ -59,6 +60,7 @@ func TestRefreshRotatesTokens(t *testing.T) {
 }
 
 func TestRefreshRejectsUnusableTokens(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
 	user := common.User{ID: common.UserID("user-1"), Email: "member@example.com", PasswordHash: "hash"}
 	valid := authdomain.RefreshToken{Digest: "digest:token", UserID: user.ID, Email: user.Email, ExpiresAt: now.Add(time.Hour)}
@@ -111,6 +113,7 @@ func TestRefreshRejectsUnusableTokens(t *testing.T) {
 }
 
 func TestRefreshDoesNotIssueTokensWhenRevokeFails(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
 	user := common.User{ID: common.UserID("user-1"), Email: "member@example.com", PasswordHash: "hash"}
 	stored := authdomain.RefreshToken{Digest: "digest:token", UserID: user.ID, Email: user.Email, ExpiresAt: now.Add(time.Hour)}
@@ -139,6 +142,7 @@ func TestRefreshDoesNotIssueTokensWhenRevokeFails(t *testing.T) {
 }
 
 func TestRefreshPropagatesLookupErrors(t *testing.T) {
+	t.Parallel()
 	lookupErr := errors.New("DynamoDB unavailable")
 	usecase := application.RefreshUsecase{
 		Users:              &users{},

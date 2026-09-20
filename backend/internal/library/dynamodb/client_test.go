@@ -9,6 +9,7 @@ import (
 )
 
 func TestTableBindsNameToRequest(t *testing.T) {
+	t.Parallel()
 	api := &fakeAPI{}
 	table := NewWithAPI(api).Table("scenario-users-123")
 	if _, err := table.GetItem(context.Background(), &awssdk.GetItemInput{}); err != nil {

@@ -12,6 +12,7 @@ import (
 )
 
 func TestLogoutRevokesRefreshToken(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, time.September, 21, 12, 34, 56, 0, time.UTC)
 	revoker := &logoutRevoker{}
 	usecase := application.NewLogoutUsecase(token.RefreshTokenGenerator{}, revoker, timewrapper.NewFixed(now))
@@ -28,6 +29,7 @@ func TestLogoutRevokesRefreshToken(t *testing.T) {
 }
 
 func TestLogoutIsIdempotentForMissingToken(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		raw       string
@@ -51,6 +53,7 @@ func TestLogoutIsIdempotentForMissingToken(t *testing.T) {
 }
 
 func TestLogoutReturnsRepositoryError(t *testing.T) {
+	t.Parallel()
 	want := errors.New("dynamodb unavailable")
 	usecase := application.NewLogoutUsecase(token.RefreshTokenGenerator{}, &logoutRevoker{err: want}, timewrapper.NewFixed(time.Now()))
 	if err := usecase.Logout(context.Background(), application.LogoutInput{RefreshToken: "token"}); !errors.Is(err, want) {

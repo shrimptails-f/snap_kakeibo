@@ -10,6 +10,7 @@ import (
 )
 
 func TestParameterBindsNameToRequest(t *testing.T) {
+	t.Parallel()
 	api := &fakeAPI{}
 	parameter := NewWithAPI(api).Parameter("/scenario/secret-123")
 	value, err := parameter.Get(context.Background())
