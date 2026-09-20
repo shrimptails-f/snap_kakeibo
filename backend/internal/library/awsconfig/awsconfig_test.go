@@ -62,7 +62,7 @@ func TestLoadLocalRequiresEndpointAndRegion(t *testing.T) {
 
 func TestLoadRejectsUnknownStage(t *testing.T) {
 	isolateSharedConfig(t)
-	t.Setenv(stage.EnvKey, "prod")
+	t.Setenv(stage.EnvKey, "production")
 
 	if _, err := Load(context.Background(), oswrapper.New()); err == nil {
 		t.Fatal("unknown stage must be an error")

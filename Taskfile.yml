@@ -1,7 +1,7 @@
 version: '3'
 
 vars:
-  # 対象 stage。STAGE=prod task ... で切り替える
+  # 対象 stage。STAGE=prd task ... で切り替える
   # devcontainer は backend 用に STAGE=local を持つ(CI は ci)。これらはデプロイ先ではないので dev に読み替える
   STAGE: '{{if or (eq .STAGE "local") (eq .STAGE "ci")}}dev{{else}}{{.STAGE | default "dev"}}{{end}}'
   PROJECT: snap-kakeibo
