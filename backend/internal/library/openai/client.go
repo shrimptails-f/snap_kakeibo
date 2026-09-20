@@ -1,6 +1,6 @@
 // Package openai は OpenAI Responses API を薄くラップし、リトライ・タイムアウト・ログを 1 か所に持つ。
 //
-// プロンプト・JSON Schema・結果の解釈はアプリ側(internal/analyze など)の責務で、
+// プロンプト・JSON Schema・結果の解釈はアプリ側(internal/analysis/infrastructure など)の責務で、
 // このパッケージは「1 リクエストを投げて envelope を返す」ことだけをする。
 //
 //	client, err := openai.New(openai.Options{APIKey: key, Logger: log})
@@ -20,7 +20,8 @@
 //   - リトライで解決しなかった場合も最後のエラーをそのまま返すので、呼び出し側は IsTemporary で分類できる
 //
 // ログ: 1 呼び出しを openai_request span にし、model / http_status_code / response_id / openai_request_id /
-// input_tokens / output_tokens / reasoning_tokens を span_finished に載せる。生のレスポンス本文と画像は出さない。
+// input_tokens / output_tokens / reasoning_tokens を span_finished に載せる。4xx / 5xx では error object の
+// type / code / message(切り詰め済み)も載せる。生のレスポンス本文と画像は出さない。
 package openai
 
 import (
@@ -224,6 +225,7 @@ func (c *Client) Responses(ctx context.Context, req Request) (*Response, error) 
 				logger.String("openai_request_id", apiErr.RequestID),
 				logger.String("provider_type", apiErr.Type),
 				logger.String("provider_code", apiErr.Code),
+				logger.String("provider_message", apiErr.Message),
 			)
 		}
 		span.End(err)

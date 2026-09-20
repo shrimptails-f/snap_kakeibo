@@ -1,13 +1,32 @@
 // Package dynamodb は DynamoDB をテーブル名に束縛して扱う薄いラッパーを提供する。
 // 統合テストでは Client.Table にテストごとのランダムなテーブル名を渡せる。
+//
+// 各操作は 1 呼び出しを dynamodb_* span にし、テーブル名・インデックス名・件数だけを span_finished に載せる。
+// キーや属性値はログに出さない。
+//
+//	client := libdynamodb.New(cfg, log)
+//	histories := client.Table(cfg.UploadHistoriesTable)
+//	_, err := histories.UpdateItem(ctx, &awssdk.UpdateItemInput{...})   // dynamodb_update_item span
+//	_, err = client.TransactWriteItems(ctx, &awssdk.TransactWriteItemsInput{...}) // dynamodb_transact_write span
 package dynamodb
 
 import (
 	"context"
 	"fmt"
 
+	"snap_kakeibo/backend/internal/library/logger"
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awssdk "github.com/aws/aws-sdk-go-v2/service/dynamodb"
+)
+
+// span 名のうち dynamodb が出すもの。
+const (
+	SpanGetItem       = "dynamodb_get_item"
+	SpanPutItem       = "dynamodb_put_item"
+	SpanUpdateItem    = "dynamodb_update_item"
+	SpanQuery         = "dynamodb_query"
+	SpanTransactWrite = "dynamodb_transact_write"
 )
 
 // API は Client が使う DynamoDB 操作。*awssdk.Client が満たす。
@@ -16,21 +35,44 @@ type API interface {
 	PutItem(ctx context.Context, params *awssdk.PutItemInput, optFns ...func(*awssdk.Options)) (*awssdk.PutItemOutput, error)
 	UpdateItem(ctx context.Context, params *awssdk.UpdateItemInput, optFns ...func(*awssdk.Options)) (*awssdk.UpdateItemOutput, error)
 	Query(ctx context.Context, params *awssdk.QueryInput, optFns ...func(*awssdk.Options)) (*awssdk.QueryOutput, error)
+	TransactWriteItems(ctx context.Context, params *awssdk.TransactWriteItemsInput, optFns ...func(*awssdk.Options)) (*awssdk.TransactWriteItemsOutput, error)
 }
 
 var _ API = (*awssdk.Client)(nil)
 
 // Client は DynamoDB 操作の起点。
-type Client struct{ api API }
+type Client struct {
+	api API
+	log logger.Interface
+}
 
-// New は cfg から DynamoDB client を生成する。
-func New(cfg aws.Config) *Client { return NewWithAPI(awssdk.NewFromConfig(cfg)) }
+// New は cfg から DynamoDB client を生成する。log が nil なら何も出力しない。
+func New(cfg aws.Config, log logger.Interface) *Client {
+	return NewWithAPI(awssdk.NewFromConfig(cfg), log)
+}
 
-// NewWithAPI はテスト用の API 差し替えを受け取って Client を生成する。
-func NewWithAPI(api API) *Client { return &Client{api: api} }
+// NewWithAPI はテスト用の API 差し替えを受け取って Client を生成する。log が nil なら何も出力しない。
+func NewWithAPI(api API, log logger.Interface) *Client {
+	if log == nil {
+		log = logger.NewNop()
+	}
+	return &Client{api: api, log: log}
+}
 
 // Table は name に束縛した Table を返す。
 func (c *Client) Table(name string) *Table { return &Table{client: c, name: name} }
+
+// TransactWriteItems は複数テーブルにまたがる書き込みをまとめて実行し、dynamodb_transact_write span を出す。
+// テーブル名は各 TransactWriteItem に指定する(Table.Name を使う)。
+func (c *Client) TransactWriteItems(ctx context.Context, in *awssdk.TransactWriteItemsInput, optFns ...func(*awssdk.Options)) (*awssdk.TransactWriteItemsOutput, error) {
+	if in == nil {
+		return nil, fmt.Errorf("dynamodb: TransactWriteItemsInput is nil")
+	}
+	ctx, span := logger.StartSpan(ctx, c.log, SpanTransactWrite, logger.Int("item_count", len(in.TransactItems)))
+	out, err := c.api.TransactWriteItems(ctx, in, optFns...)
+	span.End(err)
+	return out, err
+}
 
 // Table は特定の DynamoDB テーブルに束縛した操作を提供する。
 type Table struct {
@@ -51,7 +93,14 @@ func (t *Table) GetItem(ctx context.Context, in *awssdk.GetItemInput, optFns ...
 	}
 	bound := *in
 	bound.TableName = aws.String(t.name)
-	return t.client.api.GetItem(ctx, &bound, optFns...)
+	ctx, span := t.startSpan(ctx, SpanGetItem)
+	out, err := t.client.api.GetItem(ctx, &bound, optFns...)
+	if err != nil {
+		span.End(err)
+		return nil, err
+	}
+	span.End(nil, logger.Bool("found", len(out.Item) > 0))
+	return out, nil
 }
 
 // PutItem は入力をこのテーブルに束縛して実行する。
@@ -64,7 +113,10 @@ func (t *Table) PutItem(ctx context.Context, in *awssdk.PutItemInput, optFns ...
 	}
 	bound := *in
 	bound.TableName = aws.String(t.name)
-	return t.client.api.PutItem(ctx, &bound, optFns...)
+	ctx, span := t.startSpan(ctx, SpanPutItem)
+	out, err := t.client.api.PutItem(ctx, &bound, optFns...)
+	span.End(err)
+	return out, err
 }
 
 // UpdateItem は入力をこのテーブルに束縛して実行する。
@@ -77,7 +129,10 @@ func (t *Table) UpdateItem(ctx context.Context, in *awssdk.UpdateItemInput, optF
 	}
 	bound := *in
 	bound.TableName = aws.String(t.name)
-	return t.client.api.UpdateItem(ctx, &bound, optFns...)
+	ctx, span := t.startSpan(ctx, SpanUpdateItem)
+	out, err := t.client.api.UpdateItem(ctx, &bound, optFns...)
+	span.End(err)
+	return out, err
 }
 
 // Query は入力をこのテーブルに束縛して実行する。IndexName はそのまま渡す。
@@ -90,7 +145,22 @@ func (t *Table) Query(ctx context.Context, in *awssdk.QueryInput, optFns ...func
 	}
 	bound := *in
 	bound.TableName = aws.String(t.name)
-	return t.client.api.Query(ctx, &bound, optFns...)
+	var fields []logger.Field
+	if in.IndexName != nil {
+		fields = append(fields, logger.String("index_name", aws.ToString(in.IndexName)))
+	}
+	ctx, span := t.startSpan(ctx, SpanQuery, fields...)
+	out, err := t.client.api.Query(ctx, &bound, optFns...)
+	if err != nil {
+		span.End(err)
+		return nil, err
+	}
+	span.End(nil, logger.Int("item_count", len(out.Items)))
+	return out, nil
+}
+
+func (t *Table) startSpan(ctx context.Context, name string, fields ...logger.Field) (context.Context, *logger.Span) {
+	return logger.StartSpan(ctx, t.client.log, name, append([]logger.Field{logger.String("table_name", t.name)}, fields...)...)
 }
 
 func (t *Table) validateTable(target string) error {

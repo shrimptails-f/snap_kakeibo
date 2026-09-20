@@ -21,7 +21,7 @@ func TestDynamoDBLoginAttemptLimiterAllow(t *testing.T) {
 	api := &loginAttemptAPI{}
 	now := time.Date(2026, 9, 20, 12, 3, 4, 0, time.UTC)
 	limiter := DynamoDBLoginAttemptLimiter{
-		Table: libdynamodb.NewWithAPI(api).Table("users-test"),
+		Table: libdynamodb.NewWithAPI(api, nil).Table("users-test"),
 		Clock: timewrapper.NewFixed(now),
 	}
 
@@ -47,7 +47,7 @@ func TestDynamoDBLoginAttemptLimiterRejectsConditionalFailure(t *testing.T) {
 	t.Parallel()
 	api := &loginAttemptAPI{err: &ddbtypes.ConditionalCheckFailedException{}}
 	limiter := DynamoDBLoginAttemptLimiter{
-		Table: libdynamodb.NewWithAPI(api).Table("users-test"),
+		Table: libdynamodb.NewWithAPI(api, nil).Table("users-test"),
 		Clock: timewrapper.NewFixed(time.Now()),
 	}
 
@@ -77,4 +77,8 @@ func (a *loginAttemptAPI) UpdateItem(_ context.Context, input *awssdk.UpdateItem
 
 func (a *loginAttemptAPI) Query(context.Context, *awssdk.QueryInput, ...func(*awssdk.Options)) (*awssdk.QueryOutput, error) {
 	return &awssdk.QueryOutput{}, nil
+}
+
+func (a *loginAttemptAPI) TransactWriteItems(context.Context, *awssdk.TransactWriteItemsInput, ...func(*awssdk.Options)) (*awssdk.TransactWriteItemsOutput, error) {
+	return &awssdk.TransactWriteItemsOutput{}, nil
 }
