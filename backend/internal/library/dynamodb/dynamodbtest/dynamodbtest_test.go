@@ -24,7 +24,7 @@ func TestFlociTemporaryTables(t *testing.T) {
 	var names []string
 	t.Run("create, use and clean up", func(t *testing.T) {
 		tables := env.CreateAllTables(t, "scenario")
-		for _, table := range []*libdynamodb.Table{tables.Users, tables.MonthlySummaries, tables.UploadHistories, tables.Billings, tables.BillingDetails} {
+		for _, table := range []*libdynamodb.Table{tables.Users, tables.RefreshTokens, tables.MonthlySummaries, tables.UploadHistories, tables.Billings, tables.BillingDetails} {
 			names = append(names, table.Name())
 			exists, err := env.Manager.TableExists(ctx, table.Name())
 			if err != nil || !exists {
@@ -80,8 +80,8 @@ func TestFlociTemporaryTables(t *testing.T) {
 	})
 
 	// サブテストの t.Cleanup が走った後なので、テーブルは残っていない
-	if len(names) != 5 {
-		t.Fatalf("created %d tables, want 5", len(names))
+	if len(names) != 6 {
+		t.Fatalf("created %d tables, want 6", len(names))
 	}
 	for _, name := range names {
 		exists, err := env.Manager.TableExists(ctx, name)

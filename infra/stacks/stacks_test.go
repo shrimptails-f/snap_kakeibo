@@ -37,7 +37,7 @@ func TestStorageStackResources(t *testing.T) {
 	// 関数ごとに ECR を持つ
 	storage.ResourceCountIs(jsii.String("AWS::ECR::Repository"), jsii.Number(len(cfg.Functions)))
 	storage.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(2))
-	storage.ResourceCountIs(jsii.String("AWS::DynamoDB::Table"), jsii.Number(5))
+	storage.ResourceCountIs(jsii.String("AWS::DynamoDB::Table"), jsii.Number(6))
 	storage.ResourceCountIs(jsii.String("AWS::SQS::Queue"), jsii.Number(2))
 	storage.ResourceCountIs(jsii.String("AWS::SNS::Topic"), jsii.Number(1))
 	storage.ResourceCountIs(jsii.String("AWS::SNS::Subscription"), jsii.Number(1))
@@ -59,6 +59,18 @@ func TestStorageStackResources(t *testing.T) {
 		"TableName": cfg.Tables.UploadHistories,
 		"GlobalSecondaryIndexes": []any{map[string]any{
 			"IndexName": common.UploadMonthIndex,
+		}},
+	})
+	// refresh token は専用テーブル。期限切れは TTL、ユーザー単位の一括失効は GSI で行う
+	storage.HasResourceProperties(jsii.String("AWS::DynamoDB::Table"), map[string]any{
+		"TableName": cfg.Tables.RefreshTokens,
+		"KeySchema": []any{map[string]any{"AttributeName": "PK", "KeyType": "HASH"}},
+		"TimeToLiveSpecification": map[string]any{
+			"AttributeName": "expires_at",
+			"Enabled":       true,
+		},
+		"GlobalSecondaryIndexes": []any{map[string]any{
+			"IndexName": common.RefreshTokenUserIndex,
 		}},
 	})
 	// Analyze Lambda 3分 -> 可視性タイムアウト 18分

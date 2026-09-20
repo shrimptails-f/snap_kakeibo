@@ -58,6 +58,12 @@ type RefreshTokenRevoker interface {
 	Revoke(ctx context.Context, digest string, revokedAt time.Time) error
 }
 
+// RefreshTokenBulkRevoker は利用者の refresh token をまとめて失効させる。
+// 全端末ログアウトやパスワード変更時に使う。
+type RefreshTokenBulkRevoker interface {
+	RevokeAllByUser(ctx context.Context, userID common.UserID, revokedAt time.Time) error
+}
+
 // LoginAttemptLimiter はログイン試行を識別子ごとに制限する。
 // subject には IP アドレスや正規化済みメールアドレスを渡す。
 type LoginAttemptLimiter interface {

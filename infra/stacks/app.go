@@ -65,17 +65,21 @@ func NewAppStack(scope constructs.Construct, id string, props *AppStackProps) *A
 
 	authLogin := s.newFunction("auth-login", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
 	addRoute(s.API, awsapigatewayv2.HttpMethod_POST, APIPathPrefix+"/auth/login", authLogin.Handler)
+	// users は利用者の取得とログイン試行カウンタの更新、refresh-tokens は発行分の書き込み
 	s.storage.UsersTable.GrantReadWriteData(authLogin.Handler)
+	s.storage.RefreshTokensTable.GrantWriteData(authLogin.Handler)
 	s.grantJWTSecretRead(authLogin.Function)
 
 	authRefresh := s.newFunction("auth-refresh", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
 	addRoute(s.API, awsapigatewayv2.HttpMethod_POST, APIPathPrefix+"/auth/refresh", authRefresh.Handler)
-	s.storage.UsersTable.GrantReadWriteData(authRefresh.Handler)
+	// users は利用者の再取得のみ。refresh token の照合・失効・再発行は refresh-tokens で行う
+	s.storage.UsersTable.GrantReadData(authRefresh.Handler)
+	s.storage.RefreshTokensTable.GrantReadWriteData(authRefresh.Handler)
 	s.grantJWTSecretRead(authRefresh.Function)
 
 	authLogout := s.newFunction("auth-logout", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
 	addRoute(s.API, awsapigatewayv2.HttpMethod_POST, APIPathPrefix+"/auth/logout", authLogout.Handler)
-	s.storage.UsersTable.GrantWriteData(authLogout.Handler)
+	s.storage.RefreshTokensTable.GrantWriteData(authLogout.Handler)
 
 	authMe := s.newFunction("auth-me", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
 	addRoute(s.API, awsapigatewayv2.HttpMethod_GET, APIPathPrefix+"/auth/me", authMe.Handler)
@@ -241,6 +245,7 @@ func (s *AppStack) commonEnvironment() map[string]*string {
 	return map[string]*string{
 		common.EnvStage:                 jsii.String(string(s.cfg.Stage)),
 		common.EnvUsersTable:            st.UsersTable.TableName(),
+		common.EnvRefreshTokensTable:    st.RefreshTokensTable.TableName(),
 		common.EnvMonthlySummariesTable: st.MonthlySummariesTable.TableName(),
 		common.EnvUploadHistoriesTable:  st.UploadHistoriesTable.TableName(),
 		common.EnvBillingsTable:         st.BillingsTable.TableName(),

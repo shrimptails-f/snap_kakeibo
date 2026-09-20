@@ -12,9 +12,10 @@ import (
 
 func TestNewAuthRefreshContainerResolvesUsecaseInterface(t *testing.T) {
 	container, err := NewAuthRefreshContainer(settings.Config{
-		UsersTable: "users",
-		JWTSecret:  "test-secret",
-		Stage:      "test",
+		UsersTable:         "users",
+		RefreshTokensTable: "refresh-tokens",
+		JWTSecret:          "test-secret",
+		Stage:              "test",
 	}, aws.Config{Region: "ap-northeast-1"}, oswrapper.New(), logger.NewNop())
 	if err != nil {
 		t.Fatalf("NewAuthRefreshContainer() error = %v", err)

@@ -34,7 +34,7 @@ func provideAuthTokenDependencies(container *dig.Container, scope string, cfg se
 		func() token.RefreshTokenGenerator { return token.RefreshTokenGenerator{} },
 		func(generator token.RefreshTokenGenerator) application.RefreshTokenGenerator { return generator },
 		func(client *libdynamodb.Client, cfg settings.Config) application.RefreshTokenRepository {
-			return infrastructure.DynamoDBRefreshTokenRepository{Table: client.Table(cfg.UsersTable)}
+			return infrastructure.DynamoDBRefreshTokenRepository{Table: client.Table(cfg.RefreshTokensTable)}
 		},
 	)
 }
