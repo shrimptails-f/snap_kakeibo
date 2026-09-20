@@ -1,12 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"strconv"
@@ -20,6 +18,7 @@ import (
 	"snap_kakeibo/backend/internal/library/lambdawrap"
 	"snap_kakeibo/backend/internal/library/logger"
 	"snap_kakeibo/backend/internal/library/oswrapper"
+	libs3 "snap_kakeibo/backend/internal/library/s3"
 	libsqs "snap_kakeibo/backend/internal/library/sqs"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -29,7 +28,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/aws/smithy-go"
 )
@@ -91,6 +89,9 @@ const (
 	eventAnalysisValidationFailed = "analysis_validation_failed"
 )
 
+// maxImageBytes は S3 から読む画像の上限。
+const maxImageBytes = 30 << 20
+
 // analysis span の結果。analysis_status に載せる。upload_histories の status と同じ語彙を使う。
 const (
 	analysisSucceeded = "SUCCEEDED"
@@ -100,10 +101,12 @@ const (
 )
 
 var (
-	cfg          = app.LoadConfig()
-	log          = logger.New(logger.Options{Level: cfg.LogLevel, Service: lambdacontext.FunctionName, Environment: cfg.Stage})
-	ddb          *dynamodb.Client
-	s3c          *s3.Client
+	cfg   = app.LoadConfig()
+	log   = logger.New(logger.Options{Level: cfg.LogLevel, Service: lambdacontext.FunctionName, Environment: cfg.Stage})
+	ddb   *dynamodb.Client
+	store *libs3.Client
+	// results は解析結果の保存先。受信画像のバケットは S3 イベントが運んでくるので呼び出しごとに指定する
+	results      *libs3.Bucket
 	ssmc         *ssm.Client
 	settingsOnce sync.Once
 	settings     analyze.Client
@@ -117,7 +120,8 @@ func init() {
 		panic(err)
 	}
 	ddb = dynamodb.NewFromConfig(awsCfg)
-	s3c = s3.NewFromConfig(awsCfg)
+	store = libs3.New(awsCfg, log)
+	results = store.Bucket(cfg.ReceiptBucket)
 	ssmc = ssm.NewFromConfig(awsCfg)
 }
 
@@ -198,12 +202,7 @@ func analyzeJob(ctx context.Context, span *logger.Span, j job) error {
 		span.AddFields(logger.String("analysis_status", analysisSkipped))
 		return nil
 	}
-	out, err := s3c.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(j.Bucket), Key: aws.String(j.Key)})
-	if err != nil {
-		return err
-	}
-	data, err := io.ReadAll(io.LimitReader(out.Body, 30<<20))
-	_ = out.Body.Close()
+	data, err := store.GetBytes(ctx, j.Bucket, j.Key, maxImageBytes)
 	if err != nil {
 		return err
 	}
@@ -235,7 +234,7 @@ func analyzeJob(ctx context.Context, span *logger.Span, j job) error {
 	}
 	rawKey := fmt.Sprintf("analysis-results/%s/%s/%d/%s.json", j.UserID, j.UploadID, j.Attempt, safeID(responseID))
 	if len(raw) > 0 {
-		if _, err := s3c.PutObject(ctx, &s3.PutObjectInput{Bucket: aws.String(cfg.ReceiptBucket), Key: aws.String(rawKey), Body: bytes.NewReader(raw), ContentType: aws.String("application/json")}); err != nil {
+		if err := results.PutBytes(ctx, rawKey, raw, "application/json"); err != nil {
 			return err
 		}
 	} else {

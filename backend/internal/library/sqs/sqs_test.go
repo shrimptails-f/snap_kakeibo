@@ -123,6 +123,37 @@ func TestSendMessageError(t *testing.T) {
 	}
 }
 
+func TestQueueBindsURL(t *testing.T) {
+	t.Parallel()
+	api := &fakeAPI{}
+	q := NewWithAPI(api, nil).Queue("http://q/bound")
+
+	if q.URL() != "http://q/bound" {
+		t.Fatalf("URL()=%q", q.URL())
+	}
+	if _, err := q.SendJSON(context.Background(), map[string]any{"a": 1}); err != nil {
+		t.Fatal(err)
+	}
+	if aws.ToString(api.in.QueueUrl) != "http://q/bound" {
+		t.Fatalf("queue_url=%q", aws.ToString(api.in.QueueUrl))
+	}
+
+	// QueueUrl が空なら束縛先を入れる
+	if _, err := q.SendMessage(context.Background(), &awssqs.SendMessageInput{MessageBody: aws.String("{}")}); err != nil {
+		t.Fatal(err)
+	}
+	if aws.ToString(api.in.QueueUrl) != "http://q/bound" {
+		t.Fatalf("queue_url=%q", aws.ToString(api.in.QueueUrl))
+	}
+	// 別のキューを指していればエラー
+	if _, err := q.SendMessage(context.Background(), &awssqs.SendMessageInput{QueueUrl: aws.String("http://q/other")}); err == nil {
+		t.Fatal("mismatched QueueUrl must be rejected")
+	}
+	if _, err := q.SendMessage(context.Background(), nil); err == nil {
+		t.Fatal("nil input must be rejected")
+	}
+}
+
 func TestInject(t *testing.T) {
 	t.Parallel()
 
@@ -260,7 +291,9 @@ func TestFlociRoundTrip(t *testing.T) {
 	// 送信: ctx に trace を積んで SendJSON
 	log, buf := newTestLogger()
 	sendCtx, sender := trace.Start(logger.ContextWith(ctx, logger.UploadID("upload-1")))
-	msgID, err := NewWithAPI(api, log).SendJSON(sendCtx, queueURL, map[string]any{"upload_id": "upload-1", "trigger": "RETRY"})
+	// 業務コードに渡す形: ランダムな名前で作ったキューに束縛した Queue
+	queue := NewWithAPI(api, log).Queue(queueURL)
+	msgID, err := queue.SendJSON(sendCtx, map[string]any{"upload_id": "upload-1", "trigger": "RETRY"})
 	if err != nil {
 		t.Fatalf("SendJSON: %v", err)
 	}
