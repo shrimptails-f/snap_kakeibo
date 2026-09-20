@@ -39,6 +39,24 @@ func provideAuthTokenDependencies(container *dig.Container, scope string, cfg se
 	)
 }
 
+// provideAccessTokenVerification は access token の検証を行う Lambda(auth-check と認証が必要な API)が共通で使う
+// JWT 署名鍵の provider・検証器・認証状態確認ユースケースを登録する。
+// 認証 feature の設定型に依存しないよう値で受け取り、他 feature の設定からも組み立てられるようにしている。
+func provideAccessTokenVerification(container *dig.Container, scope, jwtSecret, jwtSecretParameter, stage string) error {
+	return Provide(container, scope,
+		func(client *libssm.Client) token.SecretProvider {
+			if jwtSecret != "" {
+				return token.StaticSecretProvider{Value: jwtSecret}
+			}
+			return &token.SSMSecretProvider{Parameter: client.Parameter(jwtSecretParameter)}
+		},
+		func(secrets token.SecretProvider, clock timewrapper.Interface) application.AccessTokenVerifier {
+			return token.JWTVerifier{Secrets: secrets, Issuer: issuer(stage), Clock: clock}
+		},
+		application.NewCheckUsecase,
+	)
+}
+
 func issuer(stage string) string {
 	if stage == "" {
 		return "snap-kakeibo"

@@ -5,11 +5,8 @@ import (
 
 	"snap_kakeibo/backend/internal/auth/application"
 	"snap_kakeibo/backend/internal/auth/library/settings"
-	"snap_kakeibo/backend/internal/auth/library/token"
 	"snap_kakeibo/backend/internal/library/logger"
 	"snap_kakeibo/backend/internal/library/oswrapper"
-	libssm "snap_kakeibo/backend/internal/library/ssm"
-	"snap_kakeibo/backend/internal/library/timewrapper"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"go.uber.org/dig"
@@ -21,18 +18,7 @@ func NewAuthCheckContainer(cfg settings.Config, awsCfg aws.Config, osw oswrapper
 	if err != nil {
 		return nil, fmt.Errorf("create auth-check container: %w", err)
 	}
-	if err := Provide(container, "auth-check",
-		func(client *libssm.Client) token.SecretProvider {
-			if cfg.JWTSecret != "" {
-				return token.StaticSecretProvider{Value: cfg.JWTSecret}
-			}
-			return &token.SSMSecretProvider{Parameter: client.Parameter(cfg.JWTSecretParameter)}
-		},
-		func(secrets token.SecretProvider, clock timewrapper.Interface) application.AccessTokenVerifier {
-			return token.JWTVerifier{Secrets: secrets, Issuer: issuer(cfg.Stage), Clock: clock}
-		},
-		application.NewCheckUsecase,
-	); err != nil {
+	if err := provideAccessTokenVerification(container, "auth-check", cfg.JWTSecret, cfg.JWTSecretParameter, cfg.Stage); err != nil {
 		return nil, err
 	}
 	return container, nil

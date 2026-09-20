@@ -3,23 +3,22 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"snap_kakeibo/backend/internal/app"
-	"snap_kakeibo/backend/internal/auth"
+	authapp "snap_kakeibo/backend/internal/auth/application"
+	"snap_kakeibo/backend/internal/di"
 	"snap_kakeibo/backend/internal/library/awsconfig"
 	"snap_kakeibo/backend/internal/library/lambdawrap"
 	"snap_kakeibo/backend/internal/library/logger"
 	"snap_kakeibo/backend/internal/library/oswrapper"
-	libs3 "snap_kakeibo/backend/internal/library/s3"
+	"snap_kakeibo/backend/internal/upload/application"
+	"snap_kakeibo/backend/internal/upload/library/settings"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambdacontext"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/aws/aws-sdk-go-v2/service/ssm"
 )
 
 type request struct {
@@ -34,53 +33,53 @@ type response struct {
 	ExpiresAt string `json:"expires_at"`
 }
 
-type uploadHistory struct {
-	PK          string `dynamodbav:"PK"`
-	SK          string `dynamodbav:"SK"`
-	GSI1PK      string `dynamodbav:"GSI1PK"`
-	GSI1SK      string `dynamodbav:"GSI1SK"`
-	Type        string `dynamodbav:"type"`
-	UploadID    string `dynamodbav:"upload_id"`
-	Status      string `dynamodbav:"status"`
-	Attempt     int    `dynamodbav:"attempt"`
-	S3Key       string `dynamodbav:"s3_key"`
-	FileName    string `dynamodbav:"file_name"`
-	ContentType string `dynamodbav:"content_type"`
-	YearMonth   string `dynamodbav:"year_month"`
-	ExpiresAt   string `dynamodbav:"expires_at"`
-	CreatedAt   string `dynamodbav:"created_at"`
-	UpdatedAt   string `dynamodbav:"updated_at"`
-}
-
 var (
-	cfg      = app.LoadConfig()
-	log      = logger.New(logger.Options{Level: cfg.LogLevel, Service: lambdacontext.FunctionName, Environment: cfg.Stage})
-	ddb      *dynamodb.Client
-	authSvc  *auth.Service
-	receipts *libs3.Bucket
+	check  authapp.CheckUsecaseInterface
+	create application.CreateUploadUsecaseInterface
+	log    logger.Interface
 )
 
 func init() {
-	// STAGE=local / ci なら Floci、それ以外は AWS を向く
-	awsCfg, err := awsconfig.Load(context.Background(), oswrapper.New())
+	osw := oswrapper.New()
+	cfg, err := settings.Load(osw)
 	if err != nil {
 		panic(err)
 	}
-	ddb = dynamodb.NewFromConfig(awsCfg)
-	authSvc = &auth.Service{DDB: ddb, SSM: ssm.NewFromConfig(awsCfg), Cfg: cfg}
-	receipts = libs3.New(awsCfg, log).Bucket(cfg.ReceiptBucket)
+	// STAGE=local / ci なら Floci、それ以外は AWS を向く
+	awsCfg, err := awsconfig.Load(context.Background(), osw)
+	if err != nil {
+		panic(err)
+	}
+	configuredLogger := logger.New(logger.Options{Level: cfg.LogLevel, Service: lambdacontext.FunctionName, Environment: cfg.Stage})
+	container, err := di.NewUploadContainer(cfg, awsCfg, osw, configuredLogger)
+	if err != nil {
+		panic(err)
+	}
+	log, err = di.ResolveLogger(container)
+	if err != nil {
+		panic(err)
+	}
+	check, err = di.ResolveAuthCheckUsecase(container)
+	if err != nil {
+		panic(err)
+	}
+	create, err = di.ResolveUploadUsecase(container)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
-	if err := app.Required(cfg.UploadHistoriesTable, "UPLOAD_HISTORIES_TABLE"); err != nil {
-		return app.Error(500, err.Error())
+	authorization := req.Headers["authorization"]
+	if authorization == "" {
+		authorization = req.Headers["Authorization"]
 	}
-	if err := app.Required(cfg.ReceiptBucket, "RECEIPT_BUCKET"); err != nil {
-		return app.Error(500, err.Error())
-	}
-	claims, err := authSvc.VerifyRequest(ctx, req)
+	user, err := check.Check(ctx, authapp.CheckInput{Authorization: authorization})
 	if err != nil {
-		return app.Error(401, "unauthorized")
+		if errors.Is(err, authapp.ErrUnauthorized) {
+			return app.Error(401, "unauthorized")
+		}
+		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
 	}
 
 	var in request
@@ -89,66 +88,19 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 			return app.Error(400, "invalid JSON body")
 		}
 	}
-	if in.ContentType == "" {
-		in.ContentType = "image/jpeg"
-	}
-	if in.FileName == "" {
-		in.FileName = "receipt.jpg"
-	}
-
-	uploadID, err := app.NewID()
+	out, err := create.Create(ctx, application.CreateUploadInput{UserID: user.UserID, FileName: in.FileName, ContentType: in.ContentType})
 	if err != nil {
+		if errors.Is(err, application.ErrInvalidInput) {
+			return app.Error(400, "invalid upload request")
+		}
 		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
 	}
-	now := time.Now().UTC()
-	createdAt := now.Format(time.RFC3339)
-	expiresAt := now.Add(15 * time.Minute).Format(time.RFC3339)
-	month := app.YearMonth(now)
-	s3Key := "receipts/" + claims.UserID + "/" + uploadID + "/original.jpg"
-
-	history := uploadHistory{
-		PK:          app.UserPK(claims.UserID),
-		SK:          app.UploadSK(uploadID),
-		GSI1PK:      app.UploadMonthPK(claims.UserID, month),
-		GSI1SK:      app.UploadMonthSK(createdAt, uploadID),
-		Type:        "UPLOAD_HISTORY",
-		UploadID:    uploadID,
-		Status:      "UPLOADING",
-		Attempt:     1,
-		S3Key:       s3Key,
-		FileName:    in.FileName,
-		ContentType: in.ContentType,
-		YearMonth:   month,
-		ExpiresAt:   expiresAt,
-		CreatedAt:   createdAt,
-		UpdatedAt:   createdAt,
-	}
-	item, err := attributevalue.MarshalMap(history)
-	if err != nil {
-		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
-	}
-	_, err = ddb.PutItem(ctx, &dynamodb.PutItemInput{
-		TableName:           aws.String(cfg.UploadHistoriesTable),
-		Item:                item,
-		ConditionExpression: aws.String("attribute_not_exists(PK) AND attribute_not_exists(SK)"),
-	})
-	if err != nil {
-		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
-	}
-
-	putURL, err := receipts.PresignPutObject(ctx, s3Key, in.ContentType, 15*time.Minute)
-	if err != nil {
-		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
-	}
-
 	return app.JSON(200, response{
-		UploadID:  uploadID,
-		S3Key:     s3Key,
-		PutURL:    putURL,
-		ExpiresAt: expiresAt,
+		UploadID:  out.UploadID,
+		S3Key:     out.S3Key,
+		PutURL:    out.PutURL,
+		ExpiresAt: out.ExpiresAt.UTC().Format(time.RFC3339),
 	})
 }
 
-func main() {
-	lambda.Start(lambdawrap.Handle(log, handler))
-}
+func main() { lambda.Start(lambdawrap.Handle(log, handler)) }
