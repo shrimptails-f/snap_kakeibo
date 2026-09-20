@@ -61,7 +61,9 @@ func TestJST(t *testing.T) {
 	if name, offset := time.Date(2026, 1, 1, 0, 0, 0, 0, JST()).Zone(); name != "JST" || offset != 9*60*60 {
 		t.Fatalf("zone=%s offset=%d", name, offset)
 	}
-	if JST() != JST() {
+	// 呼ぶたびに別の Location を作らず、同じポインタを返す(利用側で == 比較できる)
+	first, second := JST(), JST()
+	if first != second {
 		t.Fatal("JST() must return the shared Location")
 	}
 }
