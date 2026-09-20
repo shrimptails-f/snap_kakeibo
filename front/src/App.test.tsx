@@ -1,16 +1,27 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App.tsx'
 
 // fetch を差し替えて、パスごとの応答を返す
 function mockFetch(routes: Record<string, unknown>) {
+  const defaultRoutes: Record<string, unknown> = {
+    '/api/auth/refresh': {
+      access_token: 'test-token',
+      token_type: 'Bearer',
+      expires_in: 3600,
+    },
+    '/api/auth/me': {
+      user: { user_id: 'test-user', email: 'test@example.com' },
+    },
+  }
+  const mergedRoutes = { ...defaultRoutes, ...routes }
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
-    const path = Object.keys(routes).find((p) => url.endsWith(p))
+    const path = Object.keys(mergedRoutes).find((p) => url.endsWith(p))
     if (path === undefined) {
       return new Response(null, { status: 404, statusText: 'Not Found' })
     }
-    return Response.json(routes[path])
+    return Response.json(mergedRoutes[path])
   })
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
@@ -35,7 +46,7 @@ describe('App', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'snap_kakeibo' })).toBeInTheDocument()
     expect(await screen.findByText('まだ履歴がありません。')).toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledWith(`/api/months/${month}/uploads`, undefined)
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(`/api/months/${month}/uploads`, expect.any(Object)))
   })
 
   it('履歴を一覧に表示し、解析完了していない行は選択できない', async () => {
