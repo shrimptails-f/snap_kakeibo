@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/url"
 	"os"
 	"strconv"
@@ -17,9 +16,12 @@ import (
 
 	"snap_kakeibo/backend/internal/analyze"
 	"snap_kakeibo/backend/internal/app"
+	"snap_kakeibo/backend/internal/library/lambdawrap"
+	"snap_kakeibo/backend/internal/library/logger"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -78,8 +80,26 @@ type detail struct {
 	IsEdited       bool   `dynamodbav:"is_edited"`
 }
 
+// ログの event 値。命名は "<対象>_<過去形の動詞>"。Logs Insights の filter はこの定数の値で書く。
+const (
+	eventQueueMessageInvalid      = "queue_message_invalid"
+	eventImageDecodeFailed        = "image_decode_failed"
+	eventOpenAIRequestFailed      = "openai_request_failed"
+	eventOpenAIResponseRejected   = "openai_response_rejected"
+	eventAnalysisValidationFailed = "analysis_validation_failed"
+)
+
+// analysis span の結果。analysis_status に載せる。upload_histories の status と同じ語彙を使う。
+const (
+	analysisSucceeded = "SUCCEEDED"
+	analysisFailed    = "FAILED"
+	analysisNoData    = "NO_DATA"
+	analysisSkipped   = "SKIPPED"
+)
+
 var (
 	cfg          = app.LoadConfig()
+	log          = logger.New(logger.Options{Level: cfg.LogLevel, Service: lambdacontext.FunctionName, Environment: cfg.Stage})
 	ddb          *dynamodb.Client
 	s3c          *s3.Client
 	ssmc         *ssm.Client
@@ -100,12 +120,22 @@ func init() {
 
 func handler(ctx context.Context, event events.SQSEvent) error {
 	for _, record := range event.Records {
+		// レコードが運んできた trace を引き継ぎ、message_id を積む
+		rctx := lambdawrap.SQSRecordContext(ctx, record)
 		jobs, err := decodeJobs(record.Body)
 		if err != nil {
+			log.Error(rctx, "failed to decode queue message", logger.Event(eventQueueMessageInvalid), logger.Err(err))
 			return err
 		}
 		for _, j := range jobs {
-			if err := process(ctx, j); err != nil {
+			// ここから先の全ログに upload_id などが付く。下層の関数はログに毎回書かなくてよい
+			jctx := logger.ContextWith(rctx,
+				logger.UserID(j.UserID),
+				logger.UploadID(j.UploadID),
+				logger.Int("attempt", j.Attempt),
+				logger.String("trigger", j.Trigger),
+			)
+			if err := process(jctx, j); err != nil {
 				return err
 			}
 		}
@@ -146,10 +176,24 @@ func idsFromKey(key string) (string, string, bool) {
 	return p[1], p[2], true
 }
 
+// process はジョブ 1 件を "analysis" span として処理する。
+// 結果(analysis_status / error_code / 件数 / トークン数)は span_finished の 1 行にまとまるので、
+// 成功率や所要時間はこの行だけで集計できる。
 func process(ctx context.Context, j job) error {
+	ctx, span := logger.StartSpan(ctx, log, "analysis", logger.String("s3_key", j.Key))
+	err := analyzeJob(ctx, span, j)
+	span.End(err)
+	return err
+}
+
+func analyzeJob(ctx context.Context, span *logger.Span, j job) error {
 	started, err := markAnalyzing(ctx, j)
-	if err != nil || !started {
+	if err != nil {
 		return err
+	}
+	if !started {
+		span.AddFields(logger.String("analysis_status", analysisSkipped))
+		return nil
 	}
 	out, err := s3c.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(j.Bucket), Key: aws.String(j.Key)})
 	if err != nil {
@@ -160,23 +204,23 @@ func process(ctx context.Context, j job) error {
 	if err != nil {
 		return err
 	}
+	span.AddFields(logger.Int("image_bytes", len(data)))
 	edge := 2048
 	if v, e := strconv.Atoi(cfg.ImageMaxEdge); e == nil && v > 0 {
 		edge = v
 	}
 	jpegData, err := analyze.ResizeJPEG(data, edge)
 	if err != nil {
-		return markFailed(ctx, j, "INTERNAL", "画像を読み込めませんでした", "")
+		log.Error(ctx, "failed to decode image", logger.Event(eventImageDecodeFailed), logger.Err(err))
+		return markFailed(ctx, span, j, "INTERNAL", "画像を読み込めませんでした", "")
 	}
 	client, err := openAISettings(ctx)
 	if err != nil {
 		return err
 	}
-	apiCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
-	raw, callErr := client.Analyze(apiCtx, jpegData)
-	cancel()
+	raw, callErr := callOpenAI(ctx, client, jpegData)
 	if errors.Is(callErr, analyze.ErrTemporary) {
-		log.Printf("level=ERROR event=openai_request_failed upload_id=%s attempt=%d temporary=true error=%q", j.UploadID, j.Attempt, truncateMessage(callErr.Error()))
+		log.Error(ctx, "OpenAI request failed temporarily", logger.Event(eventOpenAIRequestFailed), logger.Bool("temporary", true), logger.Err(callErr))
 		return callErr
 	}
 	responseID := responseID(raw)
@@ -194,41 +238,65 @@ func process(ctx context.Context, j job) error {
 	} else {
 		rawKey = ""
 	}
+	// 以降のログと span_finished には OpenAI のレスポンス ID と生結果の保存先を必ず付ける
+	ids := []logger.Field{logger.String("response_id", responseID), logger.String("raw_result_s3_key", rawKey)}
+	ctx = logger.ContextWith(ctx, ids...)
+	span.AddFields(ids...)
 	if callErr != nil {
 		var f *analyze.Failure
 		if errors.As(callErr, &f) {
-			logOpenAIFailure(j, responseID, rawKey, f)
-			return markFailed(ctx, j, f.Code, f.Message, rawKey)
+			logOpenAIFailure(ctx, f)
+			return markFailed(ctx, span, j, f.Code, f.Message, rawKey)
 		}
-		log.Printf("level=ERROR event=openai_request_failed upload_id=%s attempt=%d response_id=%s error=%q", j.UploadID, j.Attempt, responseID, truncateMessage(callErr.Error()))
+		log.Error(ctx, "OpenAI request failed", logger.Event(eventOpenAIRequestFailed), logger.Err(callErr))
 		return callErr
 	}
 	receipt, resp, err := analyze.ParseResponse(raw)
-	log.Printf("OpenAI usage response_id=%s input_tokens=%d reasoning_tokens=%d output_tokens=%d", responseID, resp.Usage.InputTokens, resp.Usage.OutputTokensDetails.ReasoningTokens, resp.Usage.OutputTokens)
+	span.AddFields(
+		logger.Int("input_tokens", resp.Usage.InputTokens),
+		logger.Int("reasoning_tokens", resp.Usage.OutputTokensDetails.ReasoningTokens),
+		logger.Int("output_tokens", resp.Usage.OutputTokens),
+	)
 	if err != nil {
 		var f *analyze.Failure
 		if errors.As(err, &f) {
-			log.Printf("level=ERROR event=openai_response_rejected upload_id=%s attempt=%d response_id=%s error_code=%s raw_result_s3_key=%s", j.UploadID, j.Attempt, responseID, f.Code, rawKey)
-			return markFailed(ctx, j, f.Code, f.Message, rawKey)
+			log.Error(ctx, "OpenAI response rejected", logger.Event(eventOpenAIResponseRejected), logger.String("error_code", f.Code))
+			return markFailed(ctx, span, j, f.Code, f.Message, rawKey)
 		}
 		return err
 	}
 	receipt, failure := analyze.Validate(receipt, time.Now())
+	span.AddFields(logger.Int("detail_count", len(receipt.Details)))
 	if failure != nil {
-		log.Printf("level=ERROR event=analysis_validation_failed upload_id=%s attempt=%d response_id=%s error_code=%s detail_count=%d raw_result_s3_key=%s", j.UploadID, j.Attempt, responseID, failure.Code, len(receipt.Details), rawKey)
-		return markFailed(ctx, j, failure.Code, failure.Message, rawKey)
+		log.Error(ctx, "analysis validation failed", logger.Event(eventAnalysisValidationFailed), logger.String("error_code", failure.Code))
+		return markFailed(ctx, span, j, failure.Code, failure.Message, rawKey)
 	}
-	log.Printf("analysis validated response_id=%s detail_count=%d", responseID, len(receipt.Details))
 	if len(receipt.Details) == 0 {
+		span.AddFields(logger.String("analysis_status", analysisNoData))
 		return markNoData(ctx, j, rawKey)
 	}
-	return register(ctx, j, receipt, rawKey)
+	span.AddFields(logger.String("analysis_status", analysisSucceeded))
+	return register(ctx, span, j, receipt, rawKey)
 }
 
-func logOpenAIFailure(j job, responseID, rawKey string, failure *analyze.Failure) {
+// callOpenAI は OpenAI 呼び出しを "openai_request" span として実行する。所要時間と成否は span_finished に載る。
+func callOpenAI(ctx context.Context, client analyze.Client, jpegData []byte) ([]byte, error) {
+	ctx, span := logger.StartSpan(ctx, log, "openai_request")
+	apiCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
+	defer cancel()
+	raw, err := client.Analyze(apiCtx, jpegData)
+	span.End(err)
+	return raw, err
+}
+
+func logOpenAIFailure(ctx context.Context, failure *analyze.Failure) {
 	// 生レスポンス本文は出さず、OpenAI の error object から調査用フィールドだけを記録する。
-	log.Printf("level=ERROR event=openai_api_error upload_id=%s attempt=%d response_id=%s http_status=%d provider_type=%q provider_code=%q provider_message=%q raw_result_s3_key=%s",
-		j.UploadID, j.Attempt, responseID, failure.HTTPStatus, failure.ProviderType, failure.ProviderCode, truncateMessage(failure.ProviderMessage), rawKey)
+	log.Error(ctx, "OpenAI API error", logger.Event("openai_api_error"),
+		logger.HTTPStatusCode(failure.HTTPStatus),
+		logger.String("provider_type", failure.ProviderType),
+		logger.String("provider_code", failure.ProviderCode),
+		logger.String("provider_message", truncateMessage(failure.ProviderMessage)),
+	)
 }
 
 func responseID(raw []byte) string {
@@ -298,7 +366,8 @@ func markAnalyzing(ctx context.Context, j job) (bool, error) {
 	return err == nil, err
 }
 
-func markFailed(ctx context.Context, j job, code, msg, rawKey string) error {
+func markFailed(ctx context.Context, span *logger.Span, j job, code, msg, rawKey string) error {
+	span.AddFields(logger.String("analysis_status", analysisFailed), logger.String("error_code", code))
 	v := terminalValues(j, "FAILED", rawKey)
 	v[":code"] = &ddbtypes.AttributeValueMemberS{Value: code}
 	v[":message"] = &ddbtypes.AttributeValueMemberS{Value: truncateMessage(msg)}
@@ -333,7 +402,7 @@ func truncateMessage(s string) string {
 	return s
 }
 
-func register(ctx context.Context, j job, r analyze.Receipt, rawKey string) error {
+func register(ctx context.Context, span *logger.Span, j job, r analyze.Receipt, rawKey string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	billingID, err := app.NewID()
 	if err != nil {
@@ -393,7 +462,7 @@ func register(ctx context.Context, j job, r analyze.Receipt, rawKey string) erro
 	if errors.As(err, &canceled) {
 		for _, reason := range canceled.CancellationReasons {
 			if aws.ToString(reason.Code) == "ValidationError" {
-				return markFailed(ctx, j, "INTERNAL", "解析結果を登録できませんでした", rawKey)
+				return markFailed(ctx, span, j, "INTERNAL", "解析結果を登録できませんでした", rawKey)
 			}
 		}
 	}
@@ -402,8 +471,8 @@ func register(ctx context.Context, j job, r analyze.Receipt, rawKey string) erro
 
 func main() {
 	if os.Getenv("AWS_LAMBDA_RUNTIME_API") != "" {
-		lambda.Start(handler)
+		lambda.Start(lambdawrap.HandleEvent(log, handler))
 	} else {
-		log.Print("analyze-receipt is a Lambda function")
+		log.Info(context.Background(), "analyze-receipt is a Lambda function")
 	}
 }

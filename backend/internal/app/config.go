@@ -16,6 +16,8 @@ type Config struct {
 	OpenAIModel           string
 	OpenAIReasoningEffort string
 	ImageMaxEdge          string
+	Stage                 string // Stage は dev / prod などの環境名。ログの environment に載せる。
+	LogLevel              string // LogLevel は debug / info / warn / error。空なら info。
 }
 
 func LoadConfig() Config {
@@ -31,5 +33,7 @@ func LoadConfig() Config {
 		OpenAIModel:           os.Getenv("OPENAI_MODEL"),
 		OpenAIReasoningEffort: os.Getenv("OPENAI_REASONING_EFFORT"),
 		ImageMaxEdge:          os.Getenv("IMAGE_MAX_EDGE"),
+		Stage:                 os.Getenv("STAGE"),
+		LogLevel:              os.Getenv("LOG_LEVEL"),
 	}
 }
