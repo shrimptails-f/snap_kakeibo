@@ -1,0 +1,160 @@
+package infrastructure
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	"snap_kakeibo/backend/internal/auth/application"
+	authdomain "snap_kakeibo/backend/internal/auth/domain"
+	common "snap_kakeibo/backend/internal/common/domain"
+	libdynamodb "snap_kakeibo/backend/internal/library/dynamodb"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	awssdk "github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+)
+
+func TestDynamoDBUserRepositoryFindByEmail(t *testing.T) {
+	item, err := attributevalue.MarshalMap(userRecord{
+		UserID:       "user-123",
+		Email:        "member@example.com",
+		PasswordHash: "hashed-password",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := &repositoryAPI{getOutput: &awssdk.GetItemOutput{Item: item}}
+	repository := DynamoDBUserRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
+
+	user, err := repository.FindByEmail(context.Background(), " MEMBER@Example.COM ")
+	if err != nil {
+		t.Fatalf("FindByEmail() error = %v", err)
+	}
+	if user != (common.User{ID: "user-123", Email: "member@example.com", PasswordHash: "hashed-password"}) {
+		t.Errorf("FindByEmail() user = %#v", user)
+	}
+	if got := aws.ToString(api.getInput.TableName); got != "users-test" {
+		t.Errorf("table name = %q, want users-test", got)
+	}
+	if got := api.getInput.Key["PK"]; got == nil {
+		t.Fatal("GetItem key does not contain PK")
+	} else if value := got.(*ddbtypes.AttributeValueMemberS).Value; value != "EMAIL#member@example.com" {
+		t.Errorf("PK = %q, want %q", value, "EMAIL#member@example.com")
+	}
+}
+
+func TestDynamoDBUserRepositoryFindByEmailFailures(t *testing.T) {
+	validItem, err := attributevalue.MarshalMap(userRecord{UserID: "user-1", Email: "member@example.com", PasswordHash: "hash"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	malformedItem := map[string]ddbtypes.AttributeValue{
+		"user_id":       &ddbtypes.AttributeValueMemberSS{Value: []string{"user-1"}},
+		"email":         &ddbtypes.AttributeValueMemberS{Value: "member@example.com"},
+		"password_hash": &ddbtypes.AttributeValueMemberS{Value: "hash"},
+	}
+	sdkErr := errors.New("DynamoDB unavailable")
+
+	for _, tt := range []struct {
+		name    string
+		output  *awssdk.GetItemOutput
+		err     error
+		wantErr error
+	}{
+		{name: "not found", output: &awssdk.GetItemOutput{}, wantErr: application.ErrUserNotFound},
+		{name: "blank user ID", output: &awssdk.GetItemOutput{Item: map[string]ddbtypes.AttributeValue{
+			"user_id": &ddbtypes.AttributeValueMemberS{Value: "  "}, "password_hash": &ddbtypes.AttributeValueMemberS{Value: "hash"},
+		}}, wantErr: application.ErrUserNotFound},
+		{name: "blank password hash", output: &awssdk.GetItemOutput{Item: map[string]ddbtypes.AttributeValue{
+			"user_id": &ddbtypes.AttributeValueMemberS{Value: "user-1"}, "password_hash": &ddbtypes.AttributeValueMemberS{Value: " \t"},
+		}}, wantErr: application.ErrUserNotFound},
+		{name: "malformed item", output: &awssdk.GetItemOutput{Item: malformedItem}},
+		{name: "DynamoDB error", output: &awssdk.GetItemOutput{Item: validItem}, err: sdkErr, wantErr: sdkErr},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			api := &repositoryAPI{getOutput: tt.output, getErr: tt.err}
+			repository := DynamoDBUserRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
+
+			_, err := repository.FindByEmail(context.Background(), "member@example.com")
+			if err == nil {
+				t.Fatal("FindByEmail() error = nil")
+			}
+			if tt.wantErr != nil && !errors.Is(err, tt.wantErr) {
+				t.Errorf("FindByEmail() error = %v, want %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestDynamoDBRefreshTokenRepositorySave(t *testing.T) {
+	api := &repositoryAPI{putOutput: &awssdk.PutItemOutput{}}
+	repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
+	createdAt := time.Date(2026, 9, 20, 12, 0, 0, 0, time.FixedZone("JST", 9*60*60))
+	token := authdomain.RefreshToken{
+		Digest: "digest", UserID: "user-123", Email: "member@example.com",
+		ExpiresAt: createdAt.Add(30 * 24 * time.Hour), CreatedAt: createdAt,
+		LastUsedAt: createdAt.Add(time.Hour), Hint: "abcd",
+	}
+
+	if err := repository.Save(context.Background(), token); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	if got := aws.ToString(api.putInput.TableName); got != "users-test" {
+		t.Errorf("table name = %q, want users-test", got)
+	}
+	if got := aws.ToString(api.putInput.ConditionExpression); got != "attribute_not_exists(PK)" {
+		t.Errorf("condition expression = %q", got)
+	}
+	var record refreshTokenRecord
+	if err := attributevalue.UnmarshalMap(api.putInput.Item, &record); err != nil {
+		t.Fatalf("UnmarshalMap() error = %v", err)
+	}
+	if record.PK != "REFRESH#digest" || record.Type != "REFRESH_TOKEN" || record.UserID != "user-123" || record.Email != token.Email || record.RefreshHint != token.Hint {
+		t.Errorf("saved record = %#v", record)
+	}
+	if !record.ExpiresAt.Equal(token.ExpiresAt.UTC()) || !record.CreatedAt.Equal(token.CreatedAt.UTC()) || !record.LastUsedAt.Equal(token.LastUsedAt.UTC()) {
+		t.Errorf("saved timestamps = %#v", record)
+	}
+}
+
+func TestDynamoDBRefreshTokenRepositorySaveReturnsDynamoDBError(t *testing.T) {
+	sdkErr := errors.New("conditional check failed")
+	api := &repositoryAPI{putOutput: &awssdk.PutItemOutput{}, putErr: sdkErr}
+	repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
+
+	err := repository.Save(context.Background(), authdomain.RefreshToken{Digest: "digest"})
+	if !errors.Is(err, sdkErr) {
+		t.Errorf("Save() error = %v, want %v", err, sdkErr)
+	}
+}
+
+func TestPersistenceKeys(t *testing.T) {
+	if got := UserPKByEmail(" MEMBER@Example.COM "); got != "EMAIL#member@example.com" {
+		t.Errorf("UserPKByEmail() = %q", got)
+	}
+	if got := RefreshPK("digest"); got != "REFRESH#digest" {
+		t.Errorf("RefreshPK() = %q", got)
+	}
+}
+
+type repositoryAPI struct {
+	getInput  *awssdk.GetItemInput
+	getOutput *awssdk.GetItemOutput
+	getErr    error
+	putInput  *awssdk.PutItemInput
+	putOutput *awssdk.PutItemOutput
+	putErr    error
+}
+
+func (a *repositoryAPI) GetItem(_ context.Context, in *awssdk.GetItemInput, _ ...func(*awssdk.Options)) (*awssdk.GetItemOutput, error) {
+	a.getInput = in
+	return a.getOutput, a.getErr
+}
+
+func (a *repositoryAPI) PutItem(_ context.Context, in *awssdk.PutItemInput, _ ...func(*awssdk.Options)) (*awssdk.PutItemOutput, error) {
+	a.putInput = in
+	return a.putOutput, a.putErr
+}
