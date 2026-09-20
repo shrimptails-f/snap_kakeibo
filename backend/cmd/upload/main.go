@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"snap_kakeibo/backend/internal/app"
+	"snap_kakeibo/backend/internal/auth"
 	"snap_kakeibo/backend/internal/library/awsconfig"
 	"snap_kakeibo/backend/internal/library/lambdawrap"
 	"snap_kakeibo/backend/internal/library/logger"
@@ -18,6 +19,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
 )
 
 type request struct {
@@ -54,6 +56,7 @@ var (
 	cfg      = app.LoadConfig()
 	log      = logger.New(logger.Options{Level: cfg.LogLevel, Service: lambdacontext.FunctionName, Environment: cfg.Stage})
 	ddb      *dynamodb.Client
+	authSvc  *auth.Service
 	receipts *libs3.Bucket
 )
 
@@ -64,6 +67,7 @@ func init() {
 		panic(err)
 	}
 	ddb = dynamodb.NewFromConfig(awsCfg)
+	authSvc = &auth.Service{DDB: ddb, SSM: ssm.NewFromConfig(awsCfg), Cfg: cfg}
 	receipts = libs3.New(awsCfg, log).Bucket(cfg.ReceiptBucket)
 }
 
@@ -73,6 +77,10 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	}
 	if err := app.Required(cfg.ReceiptBucket, "RECEIPT_BUCKET"); err != nil {
 		return app.Error(500, err.Error())
+	}
+	claims, err := authSvc.VerifyRequest(ctx, req)
+	if err != nil {
+		return app.Error(401, "unauthorized")
 	}
 
 	var in request
@@ -96,12 +104,12 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	createdAt := now.Format(time.RFC3339)
 	expiresAt := now.Add(15 * time.Minute).Format(time.RFC3339)
 	month := app.YearMonth(now)
-	s3Key := "receipts/" + app.FixedUserID + "/" + uploadID + "/original.jpg"
+	s3Key := "receipts/" + claims.UserID + "/" + uploadID + "/original.jpg"
 
 	history := uploadHistory{
-		PK:          app.UserPK(app.FixedUserID),
+		PK:          app.UserPK(claims.UserID),
 		SK:          app.UploadSK(uploadID),
-		GSI1PK:      app.UploadMonthPK(app.FixedUserID, month),
+		GSI1PK:      app.UploadMonthPK(claims.UserID, month),
 		GSI1SK:      app.UploadMonthSK(createdAt, uploadID),
 		Type:        "UPLOAD_HISTORY",
 		UploadID:    uploadID,

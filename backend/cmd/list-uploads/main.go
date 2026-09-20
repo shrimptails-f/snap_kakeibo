@@ -4,14 +4,17 @@ import (
 	"context"
 
 	"snap_kakeibo/backend/internal/app"
+	"snap_kakeibo/backend/internal/auth"
+	libawsconfig "snap_kakeibo/backend/internal/library/awsconfig"
+	"snap_kakeibo/backend/internal/library/oswrapper"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
 )
 
 type uploadItem struct {
@@ -28,16 +31,18 @@ type uploadItem struct {
 }
 
 var (
-	cfg = app.LoadConfig()
-	ddb *dynamodb.Client
+	cfg     = app.LoadConfig()
+	ddb     *dynamodb.Client
+	authSvc *auth.Service
 )
 
 func init() {
-	awsCfg, err := awsconfig.LoadDefaultConfig(context.Background())
+	awsCfg, err := libawsconfig.Load(context.Background(), oswrapper.New())
 	if err != nil {
 		panic(err)
 	}
 	ddb = dynamodb.NewFromConfig(awsCfg)
+	authSvc = &auth.Service{DDB: ddb, SSM: ssm.NewFromConfig(awsCfg), Cfg: cfg}
 }
 
 func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
@@ -45,12 +50,16 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	if month == "" {
 		return app.Error(400, "month path parameter is required")
 	}
+	claims, err := authSvc.VerifyRequest(ctx, req)
+	if err != nil {
+		return app.Error(401, "unauthorized")
+	}
 	out, err := ddb.Query(ctx, &dynamodb.QueryInput{
 		TableName:              aws.String(cfg.UploadHistoriesTable),
 		IndexName:              aws.String("upload_month_index"),
 		KeyConditionExpression: aws.String("GSI1PK = :pk"),
 		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
-			":pk": &ddbtypes.AttributeValueMemberS{Value: app.UploadMonthPK(app.FixedUserID, month)},
+			":pk": &ddbtypes.AttributeValueMemberS{Value: app.UploadMonthPK(claims.UserID, month)},
 		},
 		ScanIndexForward: aws.Bool(false),
 	})

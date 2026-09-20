@@ -14,6 +14,7 @@ fi
 
 status=0
 for dir in backend/cmd/*/; do
+  [[ -f "${dir}/main.go" ]] || continue
   function_name="$(basename "${dir}")"
   parameter_name="/${stage}/${project}/functions/${function_name}/image-tag"
   value="$(aws ssm get-parameter --name "${parameter_name}" --query Parameter.Value --output text 2>/dev/null || true)"

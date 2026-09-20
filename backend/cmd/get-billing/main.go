@@ -4,14 +4,17 @@ import (
 	"context"
 
 	"snap_kakeibo/backend/internal/app"
+	"snap_kakeibo/backend/internal/auth"
+	libawsconfig "snap_kakeibo/backend/internal/library/awsconfig"
+	"snap_kakeibo/backend/internal/library/oswrapper"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
 )
 
 type billingItem struct {
@@ -35,16 +38,18 @@ type detailItem struct {
 }
 
 var (
-	cfg = app.LoadConfig()
-	ddb *dynamodb.Client
+	cfg     = app.LoadConfig()
+	ddb     *dynamodb.Client
+	authSvc *auth.Service
 )
 
 func init() {
-	awsCfg, err := awsconfig.LoadDefaultConfig(context.Background())
+	awsCfg, err := libawsconfig.Load(context.Background(), oswrapper.New())
 	if err != nil {
 		panic(err)
 	}
 	ddb = dynamodb.NewFromConfig(awsCfg)
+	authSvc = &auth.Service{DDB: ddb, SSM: ssm.NewFromConfig(awsCfg), Cfg: cfg}
 }
 
 func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
@@ -52,10 +57,14 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	if billingID == "" {
 		return app.Error(400, "billingId path parameter is required")
 	}
+	claims, err := authSvc.VerifyRequest(ctx, req)
+	if err != nil {
+		return app.Error(401, "unauthorized")
+	}
 	billingOut, err := ddb.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(cfg.BillingsTable),
 		Key: map[string]ddbtypes.AttributeValue{
-			"PK": &ddbtypes.AttributeValueMemberS{Value: app.UserPK(app.FixedUserID)},
+			"PK": &ddbtypes.AttributeValueMemberS{Value: app.UserPK(claims.UserID)},
 			"SK": &ddbtypes.AttributeValueMemberS{Value: app.BillingSK(billingID)},
 		},
 	})
@@ -74,7 +83,7 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 		TableName:              aws.String(cfg.BillingDetailsTable),
 		KeyConditionExpression: aws.String("PK = :pk"),
 		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
-			":pk": &ddbtypes.AttributeValueMemberS{Value: app.DetailPK(app.FixedUserID, billingID)},
+			":pk": &ddbtypes.AttributeValueMemberS{Value: app.DetailPK(claims.UserID, billingID)},
 		},
 	})
 	if err != nil {

@@ -10,6 +10,7 @@ marker="/${stage}/${project}/cicd/backend/last-successful-commit"
 # backend/cmd 配下の全関数が live Alias + CodeDeploy の対象(analyze-receipt も SQS を Alias に付けている)
 all_functions=()
 for dir in backend/cmd/*/; do
+  [[ -f "${dir}/main.go" ]] || continue
   all_functions+=("$(basename "${dir}")")
 done
 
