@@ -10,10 +10,6 @@ import (
 	"snap_kakeibo/backend/internal/library/timewrapper"
 )
 
-// ErrUnauthorized は refresh token が不正・失効・期限切れの場合に返す。
-// 原因を呼び出し側へ区別して返すと token の存在が推測できるため、まとめて扱う。
-var ErrUnauthorized = errors.New("unauthorized")
-
 // RefreshInput は refresh ユースケースの入力。
 type RefreshInput struct {
 	RefreshToken string

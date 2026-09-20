@@ -40,3 +40,17 @@ func Load(osw oswrapper.Interface) (Config, error) {
 	logLevel, _ := osw.GetEnv("LOG_LEVEL")
 	return Config{UsersTable: usersTable, RefreshTokensTable: refreshTokensTable, JWTSecret: jwtSecret, JWTSecretParameter: jwtSecretParameter, Stage: stage, LogLevel: logLevel}, nil
 }
+
+// LoadLogout は auth-logout に必要な設定だけを起動時に検証して読み込む。
+func LoadLogout(osw oswrapper.Interface) (Config, error) {
+	refreshTokensTable, err := osw.GetEnv("REFRESH_TOKENS_TABLE")
+	if err != nil {
+		return Config{}, err
+	}
+	stage, err := osw.GetEnv("STAGE")
+	if err != nil {
+		return Config{}, err
+	}
+	logLevel, _ := osw.GetEnv("LOG_LEVEL")
+	return Config{RefreshTokensTable: refreshTokensTable, Stage: stage, LogLevel: logLevel}, nil
+}

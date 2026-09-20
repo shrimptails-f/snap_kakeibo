@@ -15,6 +15,16 @@ func TestRefreshCookie(t *testing.T) {
 	}
 }
 
+func TestRefreshCookieDeletion(t *testing.T) {
+	parsed, err := http.ParseSetCookie(Refresh("", -1))
+	if err != nil {
+		t.Fatalf("ParseSetCookie() error = %v", err)
+	}
+	if parsed.Name != RefreshTokenName || parsed.Value != "" || parsed.Path != "/api/auth" || parsed.MaxAge != -1 || !parsed.HttpOnly || !parsed.Secure || parsed.SameSite != http.SameSiteLaxMode {
+		t.Errorf("deletion cookie = %#v", parsed)
+	}
+}
+
 func TestReadRefresh(t *testing.T) {
 	for _, tt := range []struct {
 		name    string
