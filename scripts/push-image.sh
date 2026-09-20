@@ -29,12 +29,13 @@ if [[ ! "${image_tag}" =~ ^[0-9a-f]{7,40}$ ]]; then
 fi
 if [[ ${#functions[@]} -eq 0 ]]; then
   for dir in backend/cmd/*/; do
+    [[ -f "${dir}/main.go" ]] || continue
     functions+=("$(basename "${dir}")")
   done
 fi
 for function_name in "${functions[@]}"; do
-  if [[ ! -d "backend/cmd/${function_name}" ]]; then
-    echo "backend/cmd/${function_name} does not exist" >&2
+  if [[ ! -f "backend/cmd/${function_name}/main.go" ]]; then
+    echo "backend/cmd/${function_name}/main.go does not exist" >&2
     exit 1
   fi
 done
