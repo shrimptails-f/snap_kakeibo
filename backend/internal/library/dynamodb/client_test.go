@@ -32,3 +32,7 @@ func (f *fakeAPI) GetItem(_ context.Context, in *awssdk.GetItemInput, _ ...func(
 func (f *fakeAPI) PutItem(context.Context, *awssdk.PutItemInput, ...func(*awssdk.Options)) (*awssdk.PutItemOutput, error) {
 	return &awssdk.PutItemOutput{}, nil
 }
+
+func (f *fakeAPI) UpdateItem(context.Context, *awssdk.UpdateItemInput, ...func(*awssdk.Options)) (*awssdk.UpdateItemOutput, error) {
+	return &awssdk.UpdateItemOutput{}, nil
+}

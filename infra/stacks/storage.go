@@ -65,11 +65,13 @@ func NewStorageStack(scope constructs.Construct, id string, props *StorageStackP
 	s.Bucket = newReceiptBucket(stack, cfg)
 	s.FrontendBucket = newFrontendBucket(stack, cfg)
 
-	s.UsersTable = newTable(stack, "UsersTable", cfg, cfg.Tables.Users, false)
-	s.MonthlySummariesTable = newTable(stack, "MonthlySummariesTable", cfg, cfg.Tables.MonthlySummaries, true)
-	s.UploadHistoriesTable = newTable(stack, "UploadHistoriesTable", cfg, cfg.Tables.UploadHistories, true)
-	s.BillingsTable = newTable(stack, "BillingsTable", cfg, cfg.Tables.Billings, true)
-	s.BillingDetailsTable = newTable(stack, "BillingDetailsTable", cfg, cfg.Tables.BillingDetails, true)
+	s.UsersTable = newTable(stack, "UsersTable", cfg, cfg.Tables.Users, false, jsii.String("expires_at"))
+	// ログイン試行カウンタの expires_at は Unix 秒。ユーザーや refresh token の expires_at は
+	// 文字列なので TTL の対象にならず、数値属性を持つカウンタだけが自動削除される。
+	s.MonthlySummariesTable = newTable(stack, "MonthlySummariesTable", cfg, cfg.Tables.MonthlySummaries, true, nil)
+	s.UploadHistoriesTable = newTable(stack, "UploadHistoriesTable", cfg, cfg.Tables.UploadHistories, true, nil)
+	s.BillingsTable = newTable(stack, "BillingsTable", cfg, cfg.Tables.Billings, true, nil)
+	s.BillingDetailsTable = newTable(stack, "BillingDetailsTable", cfg, cfg.Tables.BillingDetails, true, nil)
 	addGSI1(s.UploadHistoriesTable, common.UploadMonthIndex)
 	addGSI1(s.BillingDetailsTable, common.DetailMonthAmountIndex)
 
@@ -206,7 +208,7 @@ func newFrontendBucket(scope constructs.Construct, cfg config.Config) awss3.Buck
 }
 
 // newTable は PK(+SK) の文字列キーを持つオンデマンドテーブルを作る。
-func newTable(scope constructs.Construct, id string, cfg config.Config, name string, withSortKey bool) awsdynamodb.Table {
+func newTable(scope constructs.Construct, id string, cfg config.Config, name string, withSortKey bool, timeToLiveAttribute *string) awsdynamodb.Table {
 	props := &awsdynamodb.TableProps{
 		TableName:          jsii.String(name),
 		PartitionKey:       &awsdynamodb.Attribute{Name: jsii.String("PK"), Type: awsdynamodb.AttributeType_STRING},
@@ -216,6 +218,7 @@ func newTable(scope constructs.Construct, id string, cfg config.Config, name str
 		PointInTimeRecoverySpecification: &awsdynamodb.PointInTimeRecoverySpecification{
 			PointInTimeRecoveryEnabled: jsii.Bool(true),
 		},
+		TimeToLiveAttribute: timeToLiveAttribute,
 	}
 	if withSortKey {
 		props.SortKey = &awsdynamodb.Attribute{Name: jsii.String("SK"), Type: awsdynamodb.AttributeType_STRING}

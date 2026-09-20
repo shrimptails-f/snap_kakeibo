@@ -45,11 +45,23 @@ func NewAuthLoginContainer(cfg settings.LoginConfig, awsCfg aws.Config, osw oswr
 		func(client *libdynamodb.Client, cfg settings.LoginConfig) application.RefreshTokenRepository {
 			return infrastructure.DynamoDBRefreshTokenRepository{Table: client.Table(cfg.UsersTable)}
 		},
+		func(client *libdynamodb.Client, cfg settings.LoginConfig, clock timewrapper.Interface) application.LoginAttemptLimiter {
+			return infrastructure.DynamoDBLoginAttemptLimiter{Table: client.Table(cfg.UsersTable), Clock: clock}
+		},
 		application.NewLoginUsecase,
 	); err != nil {
 		return nil, err
 	}
 	return container, nil
+}
+
+// ResolveLoginAttemptLimiter はログイン試行制限器をコンテナから取り出す。
+func ResolveLoginAttemptLimiter(container *dig.Container) (application.LoginAttemptLimiter, error) {
+	var limiter application.LoginAttemptLimiter
+	if err := container.Invoke(func(resolved application.LoginAttemptLimiter) { limiter = resolved }); err != nil {
+		return nil, fmt.Errorf("resolve login attempt limiter: %w", err)
+	}
+	return limiter, nil
 }
 
 // ResolveAuthLoginUsecase はコンテナから HTTP 層が依存するユースケース契約を取り出す。

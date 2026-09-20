@@ -14,6 +14,7 @@ import (
 type API interface {
 	GetItem(ctx context.Context, params *awssdk.GetItemInput, optFns ...func(*awssdk.Options)) (*awssdk.GetItemOutput, error)
 	PutItem(ctx context.Context, params *awssdk.PutItemInput, optFns ...func(*awssdk.Options)) (*awssdk.PutItemOutput, error)
+	UpdateItem(ctx context.Context, params *awssdk.UpdateItemInput, optFns ...func(*awssdk.Options)) (*awssdk.UpdateItemOutput, error)
 }
 
 var _ API = (*awssdk.Client)(nil)
@@ -63,6 +64,19 @@ func (t *Table) PutItem(ctx context.Context, in *awssdk.PutItemInput, optFns ...
 	bound := *in
 	bound.TableName = aws.String(t.name)
 	return t.client.api.PutItem(ctx, &bound, optFns...)
+}
+
+// UpdateItem は入力をこのテーブルに束縛して実行する。
+func (t *Table) UpdateItem(ctx context.Context, in *awssdk.UpdateItemInput, optFns ...func(*awssdk.Options)) (*awssdk.UpdateItemOutput, error) {
+	if in == nil {
+		return nil, fmt.Errorf("dynamodb: UpdateItemInput is nil")
+	}
+	if err := t.validateTable(aws.ToString(in.TableName)); err != nil {
+		return nil, err
+	}
+	bound := *in
+	bound.TableName = aws.String(t.name)
+	return t.client.api.UpdateItem(ctx, &bound, optFns...)
 }
 
 func (t *Table) validateTable(target string) error {

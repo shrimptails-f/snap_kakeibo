@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"snap_kakeibo/backend/internal/app"
 	"snap_kakeibo/backend/internal/auth/application"
@@ -26,8 +27,9 @@ type request struct {
 }
 
 var (
-	login application.LoginUsecaseInterface
-	log   logger.Interface
+	login   application.LoginUsecaseInterface
+	limiter application.LoginAttemptLimiter
+	log     logger.Interface
 )
 
 func init() {
@@ -53,12 +55,31 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+	limiter, err = di.ResolveLoginAttemptLimiter(container)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	var in request
 	if err := json.Unmarshal([]byte(req.Body), &in); err != nil {
 		return app.Error(400, "invalid JSON body")
+	}
+	for _, subject := range []string{
+		"ip:" + req.RequestContext.HTTP.SourceIP,
+		"email:" + strings.ToLower(strings.TrimSpace(in.Email)),
+	} {
+		allowed, err := limiter.Allow(ctx, subject)
+		if err != nil {
+			if errors.Is(err, application.ErrTooManyLoginAttempts) {
+				return app.Error(429, "too many login attempts")
+			}
+			return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
+		}
+		if !allowed {
+			return app.Error(429, "too many login attempts")
+		}
 	}
 	out, err := login.Login(ctx, application.LoginInput{Email: in.Email, Password: in.Password})
 	if err != nil {
@@ -76,6 +97,8 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 			"email":   out.User.Email,
 		},
 	})
+	res.Headers["cache-control"] = "no-store"
+	res.Headers["pragma"] = "no-cache"
 	res.Cookies = []string{cookie.Refresh(out.Tokens.RefreshToken, int(out.Tokens.RefreshTokenExpiresIn))}
 	return res, err
 }

@@ -39,6 +39,8 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 		"token_type":   "Bearer",
 		"expires_in":   tokens.ExpiresIn,
 	})
+	res.Headers["cache-control"] = "no-store"
+	res.Headers["pragma"] = "no-cache"
 	res.Cookies = []string{auth.Cookie(tokens.RefreshToken, int(tokens.RefreshTokenExpiresIn))}
 	return res, err
 }

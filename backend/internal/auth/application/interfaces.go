@@ -2,11 +2,15 @@ package application
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	authdomain "snap_kakeibo/backend/internal/auth/domain"
 	common "snap_kakeibo/backend/internal/common/domain"
 )
+
+// ErrTooManyLoginAttempts はログイン試行が短時間の上限に達した場合に返す。
+var ErrTooManyLoginAttempts = errors.New("too many login attempts")
 
 // UserRepository はメールアドレスで利用者を取得する。
 type UserRepository interface {
@@ -31,4 +35,10 @@ type RefreshTokenGenerator interface {
 // RefreshTokenRepository は refresh token を永続化する。
 type RefreshTokenRepository interface {
 	Save(ctx context.Context, token authdomain.RefreshToken) error
+}
+
+// LoginAttemptLimiter はログイン試行を識別子ごとに制限する。
+// subject には IP アドレスや正規化済みメールアドレスを渡す。
+type LoginAttemptLimiter interface {
+	Allow(ctx context.Context, subject string) (bool, error)
 }

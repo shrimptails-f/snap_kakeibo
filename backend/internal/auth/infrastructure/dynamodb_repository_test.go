@@ -158,3 +158,7 @@ func (a *repositoryAPI) PutItem(_ context.Context, in *awssdk.PutItemInput, _ ..
 	a.putInput = in
 	return a.putOutput, a.putErr
 }
+
+func (a *repositoryAPI) UpdateItem(_ context.Context, _ *awssdk.UpdateItemInput, _ ...func(*awssdk.Options)) (*awssdk.UpdateItemOutput, error) {
+	return &awssdk.UpdateItemOutput{}, nil
+}
