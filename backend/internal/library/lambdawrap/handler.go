@@ -5,6 +5,8 @@
 //   - 開始・終了ログ(duration_ms / cold_start)を出す
 //   - panic を回収して stack_trace 付きでログを出し、error として返す
 //
+// SQS レコードごとの ctx 構築(送信側の trace の引き継ぎ)は library/sqs の RecordContext が担う。
+//
 // 使い方:
 //
 //	func main() {
@@ -23,7 +25,6 @@ import (
 	"snap_kakeibo/backend/internal/library/logger"
 	"snap_kakeibo/backend/internal/library/trace"
 
-	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambdacontext"
 )
 
@@ -113,28 +114,5 @@ func InvocationContext(ctx context.Context) context.Context {
 		ctx = logger.ContextWith(ctx, logger.RequestID(lc.AwsRequestID))
 	}
 
-	return ctx
-}
-
-// SQSRecordContext は SQS レコード 1 件の処理用に、レコードが運んできた trace の子 span を積んだ ctx を返す。
-// 送信側が付けた traceparent 属性 → X-Ray の AWSTraceHeader → 呼び出し自体の trace の順で親を決める。
-// message_id も積むので、同じレコードの再配信(リトライ)をログで追える。
-func SQSRecordContext(ctx context.Context, record events.SQSMessage) context.Context {
-	parent, _ := trace.FromContext(ctx)
-
-	if attr, ok := record.MessageAttributes[trace.TraceparentHeader]; ok && attr.StringValue != nil {
-		if tc, ok := trace.ParseTraceparent(*attr.StringValue); ok {
-			parent = tc
-		}
-	} else if header, ok := record.Attributes["AWSTraceHeader"]; ok {
-		if tc, ok := trace.ParseXRayTraceHeader(header); ok {
-			parent = tc
-		}
-	}
-
-	ctx, _ = trace.StartFrom(ctx, parent)
-	if record.MessageId != "" {
-		ctx = logger.ContextWith(ctx, logger.String("message_id", record.MessageId))
-	}
 	return ctx
 }

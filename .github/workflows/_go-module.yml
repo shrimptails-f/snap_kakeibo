@@ -9,6 +9,11 @@ on:
         description: "リポジトリ直下からの Go モジュールのディレクトリ(backend / infra)"
         required: true
         type: string
+      stage:
+        description: "テストに渡す STAGE。ci を渡すと Floci に対する結合テストが動く(backend のみ)"
+        required: false
+        type: string
+        default: ""
 
 env:
   GOLANGCI_LINT_VERSION: v2.11.3
@@ -19,6 +24,16 @@ jobs:
     defaults:
       run:
         working-directory: ${{ inputs.module }}
+    # AWS のローカル代替。services は条件付きにできないので常に起動し、STAGE=ci のテストだけが使う
+    services:
+      floci:
+        image: floci/floci:latest
+        ports:
+          - 4566:4566
+    env:
+      STAGE: ${{ inputs.stage }}
+      AWS_ENDPOINT_URL: http://localhost:4566
+      AWS_REGION: ap-northeast-2
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -42,6 +57,11 @@ jobs:
 
       - name: Vet
         run: go vet ./...
+
+      - name: Wait for Floci
+        if: inputs.stage == 'ci'
+        working-directory: .
+        run: curl --silent --show-error --fail --retry 30 --retry-delay 1 --retry-all-errors http://localhost:4566/_localstack/health > /dev/null
 
       - name: Test
         run: go test -race ./...

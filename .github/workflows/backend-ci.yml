@@ -13,3 +13,4 @@ jobs:
     uses: ./.github/workflows/_go-module.yml
     with:
       module: backend
+      stage: ci

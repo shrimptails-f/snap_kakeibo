@@ -16,14 +16,16 @@ import (
 
 	"snap_kakeibo/backend/internal/analyze"
 	"snap_kakeibo/backend/internal/app"
+	"snap_kakeibo/backend/internal/library/awsconfig"
 	"snap_kakeibo/backend/internal/library/lambdawrap"
 	"snap_kakeibo/backend/internal/library/logger"
+	"snap_kakeibo/backend/internal/library/oswrapper"
+	libsqs "snap_kakeibo/backend/internal/library/sqs"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -109,7 +111,8 @@ var (
 )
 
 func init() {
-	awsCfg, err := awsconfig.LoadDefaultConfig(context.Background())
+	// STAGE=local / ci なら Floci、それ以外は AWS を向く
+	awsCfg, err := awsconfig.Load(context.Background(), oswrapper.New())
 	if err != nil {
 		panic(err)
 	}
@@ -121,7 +124,7 @@ func init() {
 func handler(ctx context.Context, event events.SQSEvent) error {
 	for _, record := range event.Records {
 		// レコードが運んできた trace を引き継ぎ、message_id を積む
-		rctx := lambdawrap.SQSRecordContext(ctx, record)
+		rctx := libsqs.RecordContext(ctx, record)
 		jobs, err := decodeJobs(record.Body)
 		if err != nil {
 			log.Error(rctx, "failed to decode queue message", logger.Event(eventQueueMessageInvalid), logger.Err(err))
