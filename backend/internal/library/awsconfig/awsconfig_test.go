@@ -2,86 +2,98 @@ package awsconfig
 
 import (
 	"context"
-	"path/filepath"
+	"errors"
 	"strings"
 	"testing"
 
-	"snap_kakeibo/backend/internal/library/oswrapper"
+	"snap_kakeibo/backend/internal/library/oswrapper/oswrappertest"
 	"snap_kakeibo/backend/internal/library/stage"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 )
 
-// isolateSharedConfig は ~/.aws やプロファイルを読まないようにする。
-func isolateSharedConfig(t *testing.T) {
-	t.Helper()
-	missing := filepath.Join(t.TempDir(), "missing")
-	t.Setenv("AWS_PROFILE", "")
-	t.Setenv("AWS_CONFIG_FILE", missing)
-	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", missing)
-	t.Setenv("AWS_EC2_METADATA_DISABLED", "true")
-}
-
 func TestLoadLocalPointsAtEndpointWithDummyCredentials(t *testing.T) {
-	isolateSharedConfig(t)
+	t.Parallel()
 	for _, st := range []stage.Stage{stage.Local, stage.CI} {
-		t.Setenv(stage.EnvKey, st.String())
-		t.Setenv(EnvEndpointURL, "http://floci:4566")
-		t.Setenv(EnvRegion, "ap-northeast-2")
-
-		cfg, err := Load(context.Background(), oswrapper.New())
-		if err != nil {
-			t.Fatalf("%s: %v", st, err)
-		}
-		if aws.ToString(cfg.BaseEndpoint) != "http://floci:4566" || cfg.Region != "ap-northeast-2" {
-			t.Fatalf("%s: endpoint=%q region=%q", st, aws.ToString(cfg.BaseEndpoint), cfg.Region)
-		}
-		creds, err := cfg.Credentials.Retrieve(context.Background())
-		if err != nil || creds.AccessKeyID != localCredential || creds.SecretAccessKey != localCredential {
-			t.Fatalf("%s: creds=%+v err=%v", st, creds, err)
-		}
+		st := st
+		t.Run(st.String(), func(t *testing.T) {
+			t.Parallel()
+			osw := oswrappertest.New(map[string]string{
+				stage.EnvKey:   st.String(),
+				EnvEndpointURL: "http://floci:4566",
+				EnvRegion:      "ap-northeast-2",
+			})
+			cfg, err := Load(context.Background(), osw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if aws.ToString(cfg.BaseEndpoint) != "http://floci:4566" || cfg.Region != "ap-northeast-2" {
+				t.Fatalf("endpoint=%q region=%q", aws.ToString(cfg.BaseEndpoint), cfg.Region)
+			}
+			creds, err := cfg.Credentials.Retrieve(context.Background())
+			if err != nil || creds.AccessKeyID != localCredential || creds.SecretAccessKey != localCredential {
+				t.Fatalf("creds=%+v err=%v", creds, err)
+			}
+		})
 	}
 }
 
 func TestLoadLocalRequiresEndpointAndRegion(t *testing.T) {
-	isolateSharedConfig(t)
-	t.Setenv(stage.EnvKey, "local")
-	t.Setenv(EnvRegion, "ap-northeast-2")
-
-	t.Setenv(EnvEndpointURL, "")
-	if _, err := Load(context.Background(), oswrapper.New()); err == nil || !strings.Contains(err.Error(), EnvEndpointURL) {
-		t.Fatalf("missing endpoint: err=%v", err)
+	t.Parallel()
+	tests := []struct {
+		name string
+		env  map[string]string
+		want string
+	}{
+		{name: "endpoint", env: map[string]string{stage.EnvKey: "local", EnvRegion: "ap-northeast-2"}, want: EnvEndpointURL},
+		{name: "region", env: map[string]string{stage.EnvKey: "local", EnvEndpointURL: "http://floci:4566"}, want: EnvRegion},
 	}
-
-	t.Setenv(EnvEndpointURL, "http://floci:4566")
-	t.Setenv(EnvRegion, "")
-	if _, err := Load(context.Background(), oswrapper.New()); err == nil || !strings.Contains(err.Error(), EnvRegion) {
-		t.Fatalf("missing region: err=%v", err)
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := Load(context.Background(), oswrappertest.New(tt.env)); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Load() error = %v, want %s", err, tt.want)
+			}
+		})
 	}
 }
 
 func TestLoadRejectsUnknownStage(t *testing.T) {
-	isolateSharedConfig(t)
-	t.Setenv(stage.EnvKey, "production")
-
-	if _, err := Load(context.Background(), oswrapper.New()); err == nil {
+	t.Parallel()
+	osw := oswrappertest.New(map[string]string{stage.EnvKey: "production"})
+	if _, err := Load(context.Background(), osw); err == nil {
 		t.Fatal("unknown stage must be an error")
 	}
 }
 
 func TestLoadUsesDefaultResolutionForAWSStagesAndUnset(t *testing.T) {
-	isolateSharedConfig(t)
-	t.Setenv(EnvEndpointURL, "")
-	t.Setenv(EnvRegion, "us-west-2")
-
+	t.Parallel()
+	want := aws.Config{Region: "us-west-2"}
 	for _, st := range []string{"dev", "stg", "prd", ""} {
-		t.Setenv(stage.EnvKey, st)
-		cfg, err := Load(context.Background(), oswrapper.New())
-		if err != nil {
-			t.Fatalf("STAGE=%q: %v", st, err)
-		}
-		if cfg.BaseEndpoint != nil || cfg.Region != "us-west-2" {
-			t.Fatalf("STAGE=%q: endpoint=%v region=%q", st, cfg.BaseEndpoint, cfg.Region)
-		}
+		st := st
+		t.Run(st, func(t *testing.T) {
+			t.Parallel()
+			calls := 0
+			loader := func(context.Context) (aws.Config, error) {
+				calls++
+				return want, nil
+			}
+			cfg, err := load(context.Background(), oswrappertest.New(map[string]string{stage.EnvKey: st}), loader)
+			if err != nil || cfg.Region != want.Region || calls != 1 {
+				t.Fatalf("STAGE=%q: config=%+v calls=%d err=%v", st, cfg, calls, err)
+			}
+		})
+	}
+}
+
+func TestLoadReturnsDefaultResolutionError(t *testing.T) {
+	t.Parallel()
+	want := errors.New("default config unavailable")
+	_, err := load(context.Background(), oswrappertest.New(nil), func(context.Context) (aws.Config, error) {
+		return aws.Config{}, want
+	})
+	if !errors.Is(err, want) {
+		t.Fatalf("load() error = %v, want %v", err, want)
 	}
 }

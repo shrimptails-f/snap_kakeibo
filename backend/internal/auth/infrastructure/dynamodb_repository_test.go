@@ -20,6 +20,7 @@ import (
 )
 
 func TestDynamoDBUserRepositoryFindByEmail(t *testing.T) {
+	t.Parallel()
 	item, err := attributevalue.MarshalMap(userRecord{
 		UserID:       "user-123",
 		Email:        "member@example.com",
@@ -49,6 +50,7 @@ func TestDynamoDBUserRepositoryFindByEmail(t *testing.T) {
 }
 
 func TestDynamoDBUserRepositoryFindByEmailFailures(t *testing.T) {
+	t.Parallel()
 	validItem, err := attributevalue.MarshalMap(userRecord{UserID: "user-1", Email: "member@example.com", PasswordHash: "hash"})
 	if err != nil {
 		t.Fatal(err)
@@ -77,6 +79,8 @@ func TestDynamoDBUserRepositoryFindByEmailFailures(t *testing.T) {
 		{name: "DynamoDB error", output: &awssdk.GetItemOutput{Item: validItem}, err: sdkErr, wantErr: sdkErr},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			api := &repositoryAPI{getOutput: tt.output, getErr: tt.err}
 			repository := DynamoDBUserRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
 
@@ -92,6 +96,7 @@ func TestDynamoDBUserRepositoryFindByEmailFailures(t *testing.T) {
 }
 
 func TestDynamoDBRefreshTokenRepositorySave(t *testing.T) {
+	t.Parallel()
 	api := &repositoryAPI{putOutput: &awssdk.PutItemOutput{}}
 	repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
 	createdAt := time.Date(2026, 9, 20, 12, 0, 0, 0, time.FixedZone("JST", 9*60*60))
@@ -133,6 +138,7 @@ func TestDynamoDBRefreshTokenRepositorySave(t *testing.T) {
 }
 
 func TestDynamoDBRefreshTokenRepositorySaveReturnsDynamoDBError(t *testing.T) {
+	t.Parallel()
 	sdkErr := errors.New("conditional check failed")
 	api := &repositoryAPI{putOutput: &awssdk.PutItemOutput{}, putErr: sdkErr}
 	repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
@@ -144,6 +150,7 @@ func TestDynamoDBRefreshTokenRepositorySaveReturnsDynamoDBError(t *testing.T) {
 }
 
 func TestDynamoDBRefreshTokenRepositoryFindByDigest(t *testing.T) {
+	t.Parallel()
 	createdAt := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
 	item, err := attributevalue.MarshalMap(refreshTokenRecord{
 		PK: "REFRESH#digest", Type: "REFRESH_TOKEN", UserID: "user-123", Email: "member@example.com",
@@ -180,6 +187,7 @@ func TestDynamoDBRefreshTokenRepositoryFindByDigest(t *testing.T) {
 }
 
 func TestDynamoDBRefreshTokenRepositoryFindByDigestReadsRevokedAt(t *testing.T) {
+	t.Parallel()
 	revokedAt := time.Date(2026, 9, 20, 13, 0, 0, 0, time.UTC)
 	item, err := attributevalue.MarshalMap(refreshTokenRecord{PK: "REFRESH#digest", UserID: "user-123", RevokedAt: &revokedAt})
 	if err != nil {
@@ -198,6 +206,7 @@ func TestDynamoDBRefreshTokenRepositoryFindByDigestReadsRevokedAt(t *testing.T) 
 }
 
 func TestDynamoDBRefreshTokenRepositoryFindByDigestFailures(t *testing.T) {
+	t.Parallel()
 	sdkErr := errors.New("DynamoDB unavailable")
 	for _, tt := range []struct {
 		name    string
@@ -215,6 +224,8 @@ func TestDynamoDBRefreshTokenRepositoryFindByDigestFailures(t *testing.T) {
 		{name: "DynamoDB error", output: &awssdk.GetItemOutput{}, err: sdkErr, wantErr: sdkErr},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			api := &repositoryAPI{getOutput: tt.output, getErr: tt.err}
 			repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
 
@@ -230,6 +241,7 @@ func TestDynamoDBRefreshTokenRepositoryFindByDigestFailures(t *testing.T) {
 }
 
 func TestDynamoDBRefreshTokenRepositoryRevoke(t *testing.T) {
+	t.Parallel()
 	api := &repositoryAPI{updateOutput: &awssdk.UpdateItemOutput{}}
 	repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
 	revokedAt := time.Date(2026, 9, 20, 21, 0, 0, 0, time.FixedZone("JST", 9*60*60))
@@ -256,6 +268,7 @@ func TestDynamoDBRefreshTokenRepositoryRevoke(t *testing.T) {
 }
 
 func TestDynamoDBRefreshTokenRepositoryRevokeFailures(t *testing.T) {
+	t.Parallel()
 	sdkErr := errors.New("DynamoDB unavailable")
 	for _, tt := range []struct {
 		name    string
@@ -266,6 +279,8 @@ func TestDynamoDBRefreshTokenRepositoryRevokeFailures(t *testing.T) {
 		{name: "DynamoDB error", err: sdkErr, wantErr: sdkErr},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			api := &repositoryAPI{updateErr: tt.err}
 			repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(api).Table("users-test")}
 
@@ -278,6 +293,7 @@ func TestDynamoDBRefreshTokenRepositoryRevokeFailures(t *testing.T) {
 }
 
 func TestDynamoDBRefreshTokenRepositoryRevokeAllByUser(t *testing.T) {
+	t.Parallel()
 	pk := func(v string) map[string]ddbtypes.AttributeValue {
 		return map[string]ddbtypes.AttributeValue{"PK": &ddbtypes.AttributeValueMemberS{Value: v}}
 	}
@@ -327,6 +343,7 @@ func TestDynamoDBRefreshTokenRepositoryRevokeAllByUser(t *testing.T) {
 }
 
 func TestDynamoDBRefreshTokenRepositoryRevokeAllByUserSkipsExpiredItems(t *testing.T) {
+	t.Parallel()
 	api := &repositoryAPI{
 		queryOutputs: []*awssdk.QueryOutput{{Items: []map[string]ddbtypes.AttributeValue{
 			{"PK": &ddbtypes.AttributeValueMemberS{Value: "REFRESH#gone"}},
@@ -342,6 +359,7 @@ func TestDynamoDBRefreshTokenRepositoryRevokeAllByUserSkipsExpiredItems(t *testi
 }
 
 func TestDynamoDBRefreshTokenRepositoryRevokeAllByUserFailures(t *testing.T) {
+	t.Parallel()
 	sdkErr := errors.New("DynamoDB unavailable")
 	for _, tt := range []struct {
 		name string
@@ -356,6 +374,8 @@ func TestDynamoDBRefreshTokenRepositoryRevokeAllByUserFailures(t *testing.T) {
 		}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			repository := DynamoDBRefreshTokenRepository{Table: libdynamodb.NewWithAPI(tt.api).Table("refresh-tokens-test")}
 			if err := repository.RevokeAllByUser(context.Background(), "user-123", time.Now()); !errors.Is(err, sdkErr) {
 				t.Errorf("RevokeAllByUser() error = %v, want %v", err, sdkErr)
@@ -365,6 +385,7 @@ func TestDynamoDBRefreshTokenRepositoryRevokeAllByUserFailures(t *testing.T) {
 }
 
 func TestPersistenceKeys(t *testing.T) {
+	t.Parallel()
 	if got := UserPKByEmail(" MEMBER@Example.COM "); got != "EMAIL#member@example.com" {
 		t.Errorf("UserPKByEmail() = %q", got)
 	}

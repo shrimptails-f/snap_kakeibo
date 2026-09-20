@@ -1,0 +1,4 @@
+interface:
+  display_name: "Snap Kakeibo Backend"
+  short_description: "snap_kakeibo の Go バックエンド実装規約"
+  default_prompt: "$snap-kakeibo-backend を使ってバックエンド機能を実装してください。"

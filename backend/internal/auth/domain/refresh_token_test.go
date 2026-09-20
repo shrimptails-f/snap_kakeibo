@@ -6,6 +6,7 @@ import (
 )
 
 func TestRefreshTokenUsable(t *testing.T) {
+	t.Parallel()
 	expiresAt := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
 	for _, tt := range []struct {
 		name  string
@@ -19,6 +20,8 @@ func TestRefreshTokenUsable(t *testing.T) {
 		{name: "revoked", token: RefreshToken{ExpiresAt: expiresAt, RevokedAt: expiresAt.Add(-time.Hour)}, now: expiresAt.Add(-time.Second), want: false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			if got := tt.token.Usable(tt.now); got != tt.want {
 				t.Errorf("Usable() = %v, want %v", got, tt.want)
 			}

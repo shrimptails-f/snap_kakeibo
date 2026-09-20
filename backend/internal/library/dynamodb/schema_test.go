@@ -9,6 +9,7 @@ import (
 )
 
 func TestSchemaCreateTableInput(t *testing.T) {
+	t.Parallel()
 	in, err := UploadHistoriesSchema.CreateTableInput("scenario-upload-histories-1")
 	if err != nil {
 		t.Fatal(err)
@@ -45,6 +46,7 @@ func TestSchemaCreateTableInput(t *testing.T) {
 }
 
 func TestSchemaWithoutSortKey(t *testing.T) {
+	t.Parallel()
 	in, err := UsersSchema.CreateTableInput("test-users-1")
 	if err != nil {
 		t.Fatal(err)
@@ -58,6 +60,7 @@ func TestSchemaWithoutSortKey(t *testing.T) {
 }
 
 func TestSchemaValidate(t *testing.T) {
+	t.Parallel()
 	for name, schema := range map[string]Schema{
 		"no name":          {PartitionKey: "PK"},
 		"no partition key": {Name: "users"},
@@ -75,6 +78,7 @@ func TestSchemaValidate(t *testing.T) {
 }
 
 func TestRandomTableName(t *testing.T) {
+	t.Parallel()
 	pattern := regexp.MustCompile(`^scenario-users-[0-9a-f]{16}$`)
 	seen := map[string]bool{}
 	for range 100 {
@@ -96,6 +100,7 @@ func TestRandomTableName(t *testing.T) {
 }
 
 func TestValidateTableName(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"ab", "has space", "日本語", "bad/slash"} {
 		if err := ValidateTableName(name); err == nil {
 			t.Errorf("%q: want error", name)

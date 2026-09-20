@@ -3,7 +3,7 @@ package stage
 import (
 	"testing"
 
-	"snap_kakeibo/backend/internal/library/oswrapper"
+	"snap_kakeibo/backend/internal/library/oswrapper/oswrappertest"
 )
 
 func TestParse(t *testing.T) {
@@ -31,20 +31,17 @@ func TestIsLocal(t *testing.T) {
 }
 
 func TestFromEnv(t *testing.T) {
-	osw := oswrapper.New()
+	t.Parallel()
 
-	t.Setenv(EnvKey, "ci")
-	if got, err := FromEnv(osw); err != nil || got != CI {
+	if got, err := FromEnv(oswrappertest.New(map[string]string{EnvKey: "ci"})); err != nil || got != CI {
 		t.Fatalf("got %q err=%v", got, err)
 	}
 
-	t.Setenv(EnvKey, "")
-	if got, err := FromEnv(osw); err == nil {
+	if got, err := FromEnv(oswrappertest.New(nil)); err == nil {
 		t.Fatalf("unset must be an error, got %q", got)
 	}
 
-	t.Setenv(EnvKey, "moon")
-	if got, err := FromEnv(osw); err == nil {
+	if got, err := FromEnv(oswrappertest.New(map[string]string{EnvKey: "moon"})); err == nil {
 		t.Fatalf("unknown must be an error, got %q", got)
 	}
 }

@@ -17,6 +17,7 @@ import (
 )
 
 func TestDynamoDBLoginAttemptLimiterAllow(t *testing.T) {
+	t.Parallel()
 	api := &loginAttemptAPI{}
 	now := time.Date(2026, 9, 20, 12, 3, 4, 0, time.UTC)
 	limiter := DynamoDBLoginAttemptLimiter{
@@ -43,6 +44,7 @@ func TestDynamoDBLoginAttemptLimiterAllow(t *testing.T) {
 }
 
 func TestDynamoDBLoginAttemptLimiterRejectsConditionalFailure(t *testing.T) {
+	t.Parallel()
 	api := &loginAttemptAPI{err: &ddbtypes.ConditionalCheckFailedException{}}
 	limiter := DynamoDBLoginAttemptLimiter{
 		Table: libdynamodb.NewWithAPI(api).Table("users-test"),

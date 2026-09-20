@@ -20,6 +20,7 @@ import (
 // TestRefreshTokenRepositoryAgainstDynamoDB は本番と同じキー構成の refresh-tokens テーブルに対して
 // 保存 → digest 検索 → 失効 → ユーザー単位の一括失効 を通す。STAGE が local / ci のときだけ動く。
 func TestRefreshTokenRepositoryAgainstDynamoDB(t *testing.T) {
+	t.Parallel()
 	env := dynamodbtest.Connect(t)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()

@@ -56,6 +56,7 @@ func (f *fakeManagerAPI) DescribeTable(_ context.Context, in *awssdk.DescribeTab
 }
 
 func TestManagerCreateTableWaitsForActive(t *testing.T) {
+	t.Parallel()
 	api := &fakeManagerAPI{}
 	manager := NewManagerWithAPI(api).WithWaitTimeout(10 * time.Second)
 	cleanup, err := manager.CreateTable(context.Background(), "test-users-1", UsersSchema)
@@ -88,6 +89,7 @@ func TestManagerCreateTableWaitsForActive(t *testing.T) {
 }
 
 func TestManagerCreateTableRejectsBadInput(t *testing.T) {
+	t.Parallel()
 	api := &fakeManagerAPI{}
 	manager := NewManagerWithAPI(api)
 	if _, err := manager.CreateTable(context.Background(), "x", UsersSchema); err == nil {
@@ -102,6 +104,7 @@ func TestManagerCreateTableRejectsBadInput(t *testing.T) {
 }
 
 func TestManagerDeleteTableWaitsForRemoval(t *testing.T) {
+	t.Parallel()
 	api := &fakeManagerAPI{exists: true, status: types.TableStatusActive}
 	manager := NewManagerWithAPI(api).WithWaitTimeout(10 * time.Second)
 	if err := manager.DeleteTable(context.Background(), "test-users-1"); err != nil {
@@ -120,6 +123,7 @@ func TestManagerDeleteTableWaitsForRemoval(t *testing.T) {
 }
 
 func TestManagerDeleteTableIgnoresMissing(t *testing.T) {
+	t.Parallel()
 	api := &fakeManagerAPI{}
 	if err := NewManagerWithAPI(api).DeleteTable(context.Background(), "test-users-missing"); err != nil {
 		t.Fatalf("DeleteTable on a missing table: %v", err)
@@ -130,6 +134,7 @@ func TestManagerDeleteTableIgnoresMissing(t *testing.T) {
 }
 
 func TestIsTableNotFound(t *testing.T) {
+	t.Parallel()
 	if !IsTableNotFound(&types.ResourceNotFoundException{}) {
 		t.Error("ResourceNotFoundException not detected")
 	}

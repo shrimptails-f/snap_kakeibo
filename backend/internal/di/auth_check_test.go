@@ -11,6 +11,7 @@ import (
 )
 
 func TestNewAuthCheckContainerResolvesUsecaseInterface(t *testing.T) {
+	t.Parallel()
 	container, err := NewAuthCheckContainer(settings.Config{JWTSecret: "test-secret", Stage: "test"}, aws.Config{Region: "ap-northeast-1"}, oswrapper.New(), logger.NewNop())
 	if err != nil {
 		t.Fatalf("NewAuthCheckContainer() error = %v", err)

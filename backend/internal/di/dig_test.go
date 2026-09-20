@@ -16,6 +16,7 @@ import (
 )
 
 func TestNewContainerProvidesCommonLambdaDependencies(t *testing.T) {
+	t.Parallel()
 	osw := oswrapper.New()
 	log := logger.NewNop()
 	container, err := NewContainer(aws.Config{Region: "ap-northeast-1"}, osw, log)

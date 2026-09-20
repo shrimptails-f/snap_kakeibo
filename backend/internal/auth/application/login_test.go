@@ -13,6 +13,7 @@ import (
 )
 
 func TestLoginIssuesAndPersistsTokens(t *testing.T) {
+	t.Parallel()
 	now := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)
 	user := common.User{ID: common.UserID("user-1"), Email: "member@example.com", PasswordHash: "hash"}
 	repository := &users{user: user}
@@ -46,6 +47,7 @@ func TestLoginIssuesAndPersistsTokens(t *testing.T) {
 }
 
 func TestLoginDoesNotRevealUnknownUser(t *testing.T) {
+	t.Parallel()
 	usecase := application.LoginUsecase{
 		Users:           &users{err: application.ErrUserNotFound},
 		Passwords:       passwords{},

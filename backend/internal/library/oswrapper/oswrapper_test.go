@@ -51,13 +51,18 @@ func TestReadFile(t *testing.T) {
 }
 
 func TestReadFileResolvesRelativePath(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "rel.txt"), []byte("rel"), 0o600); err != nil {
+	t.Parallel()
+	dir, err := os.MkdirTemp(".", "oswrapper-test-*")
+	if err != nil {
 		t.Fatal(err)
 	}
-	t.Chdir(dir)
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	path := filepath.Join(dir, "rel.txt")
+	if err := os.WriteFile(path, []byte("rel"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
-	if got, err := New().ReadFile("rel.txt"); err != nil || got != "rel" {
+	if got, err := New().ReadFile(path); err != nil || got != "rel" {
 		t.Fatalf("got %q err=%v", got, err)
 	}
 }

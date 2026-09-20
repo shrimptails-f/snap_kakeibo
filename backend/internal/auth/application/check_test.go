@@ -21,6 +21,7 @@ func (s *accessTokenVerifierStub) Verify(_ context.Context, raw string) (common.
 }
 
 func TestCheckReturnsAuthenticatedUser(t *testing.T) {
+	t.Parallel()
 	verifier := &accessTokenVerifierStub{user: common.User{ID: common.UserID("user-1"), Email: "member@example.com", PasswordHash: "must-not-leak"}}
 	usecase := application.NewCheckUsecase(verifier)
 
@@ -37,8 +38,11 @@ func TestCheckReturnsAuthenticatedUser(t *testing.T) {
 }
 
 func TestCheckRejectsInvalidAuthorization(t *testing.T) {
+	t.Parallel()
 	for _, authorization := range []string{"", "Basic token", "Bearer", "Bearer   "} {
 		t.Run(authorization, func(t *testing.T) {
+			t.Parallel()
+
 			usecase := application.NewCheckUsecase(&accessTokenVerifierStub{})
 			_, err := usecase.Check(context.Background(), application.CheckInput{Authorization: authorization})
 			if !errors.Is(err, application.ErrUnauthorized) {
@@ -49,6 +53,7 @@ func TestCheckRejectsInvalidAuthorization(t *testing.T) {
 }
 
 func TestCheckMapsInvalidTokenToUnauthorized(t *testing.T) {
+	t.Parallel()
 	usecase := application.NewCheckUsecase(&accessTokenVerifierStub{err: application.ErrUnauthorized})
 	_, err := usecase.Check(context.Background(), application.CheckInput{Authorization: "Bearer invalid"})
 	if !errors.Is(err, application.ErrUnauthorized) {
@@ -57,6 +62,7 @@ func TestCheckMapsInvalidTokenToUnauthorized(t *testing.T) {
 }
 
 func TestCheckReturnsVerifierFailure(t *testing.T) {
+	t.Parallel()
 	want := errors.New("secret unavailable")
 	usecase := application.NewCheckUsecase(&accessTokenVerifierStub{err: want})
 	_, err := usecase.Check(context.Background(), application.CheckInput{Authorization: "Bearer token"})

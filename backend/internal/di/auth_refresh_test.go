@@ -11,6 +11,7 @@ import (
 )
 
 func TestNewAuthRefreshContainerResolvesUsecaseInterface(t *testing.T) {
+	t.Parallel()
 	container, err := NewAuthRefreshContainer(settings.Config{
 		UsersTable:         "users",
 		RefreshTokensTable: "refresh-tokens",

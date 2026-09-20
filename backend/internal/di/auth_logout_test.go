@@ -11,6 +11,7 @@ import (
 )
 
 func TestNewAuthLogoutContainerResolvesUsecaseInterface(t *testing.T) {
+	t.Parallel()
 	container, err := NewAuthLogoutContainer(settings.Config{RefreshTokensTable: "refresh-tokens", Stage: "test"}, aws.Config{Region: "ap-northeast-1"}, oswrapper.New(), logger.NewNop())
 	if err != nil {
 		t.Fatalf("NewAuthLogoutContainer() error = %v", err)
