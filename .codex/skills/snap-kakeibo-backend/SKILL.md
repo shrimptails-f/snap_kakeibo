@@ -12,6 +12,7 @@ description: snap_kakeibo リポジトリの Go バックエンドを実装・�
 3. 次の文書を省略せず全文読む。
    - `backend/docs/coding_rules.md`
    - `backend/docs/directory-structure.md`
+   - `docs/ddd/domain-model-diagram.md`
 4. 変更対象に近い既存実装、テスト、DI 定義を確認し、リポジトリ内の実例に揃える。
 
 上記文書が存在しない場合や、対象が snap_kakeibo ではない場合は、このスキル固有の構成を当てはめず、通常のリポジトリ調査へ切り替える。
