@@ -108,6 +108,7 @@ Response:
       "upload_expires_at": "2026-09-15T12:20:00Z",
       "error_code": "NO_TOTAL_AMOUNT",
       "error_message": "合計金額を取得できませんでした",
+      "failed_at": "2026-09-15T12:06:00Z",
       "created_at": "2026-09-15T12:05:00Z",
       "updated_at": "2026-09-15T12:06:00Z"
     }
@@ -119,6 +120,7 @@ Response:
 | --- | --- |
 | `expense_id` | `SUCCEEDED` のときだけ。支出詳細・編集画面への遷移に使う |
 | `error_code` / `error_message` | `FAILED` のときだけ |
+| `failed_at` | `FAILED` のときだけ。失敗日時の表示に使う |
 | `upload_expires_at` | 「期限切れ」表示(`UPLOADING` かつ `now > upload_expires_at`)に使う |
 | `attempt` | 現在の解析試行番号。再解析のたびに増える |
 | `items` | 該当が無ければ `[]` |
@@ -131,7 +133,6 @@ Response:
 
 | 項目 | 用途 | 未対応の理由 |
 | --- | --- | --- |
-| `failed_at` | 失敗日時の表示 | `analysis_requests` にはあるが返していない |
 | `store_name` / `recorded_amount` | 一覧の「店舗名」「計上額」列 | `expenses` にしか無く、一覧で支出を結合していない |
 
 ### POST /analysis-requests/{analysis_request_id}/retry

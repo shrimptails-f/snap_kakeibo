@@ -93,12 +93,18 @@ func TestFindByIDAgainstDynamoDB(t *testing.T) {
 	if got.ReadAmount().Yen() != 1200 || got.AdjustmentAmount().Yen() != -200 || got.RecordedAmount().Yen() != 1000 || !got.Edited() {
 		t.Errorf("amounts = read %d adjustment %d recorded %d edited %t", got.ReadAmount().Yen(), got.AdjustmentAmount().Yen(), got.RecordedAmount().Yen(), got.Edited())
 	}
+	if got.Source() != domain.RecordSourceAI || got.UpdatedAt().Format(time.RFC3339) != "2026-09-18T12:00:00Z" {
+		t.Errorf("metadata = source %q updated_at %v", got.Source(), got.UpdatedAt())
+	}
 	details := got.Details()
 	if len(details) != 2 {
 		t.Fatalf("Details() returned %d, want 2: %+v", len(details), details)
 	}
 	if details[0].ID() != "detail-1" || details[0].Name() != "牛乳" || details[0].Category() != common.CategoryFood || details[0].CategorySource() != domain.CategorySourceAI || details[0].Amount().Yen() != 200 || details[0].Quantity().Int64() != 1 {
 		t.Errorf("Details()[0] = %+v", details[0])
+	}
+	if details[0].Source() != domain.RecordSourceAI || details[0].Edited() {
+		t.Errorf("Details()[0] metadata = source %q edited %t", details[0].Source(), details[0].Edited())
 	}
 	if details[1].ID() != "detail-2" || details[1].Category() != common.CategorySocial || details[1].CategorySource() != domain.CategorySourceUser || details[1].Amount().Yen() != 1000 || details[1].Quantity().Int64() != 2 {
 		t.Errorf("Details()[1] = %+v", details[1])

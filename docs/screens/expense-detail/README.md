@@ -80,7 +80,9 @@ Response:
     "read_amount": 3280,
     "adjustment_amount": -500,
     "recorded_amount": 2780,
-    "is_edited": false
+    "source": "AI",
+    "is_edited": false,
+    "updated_at": "2026-09-15T12:10:00Z"
   },
   "details": [
     {
@@ -89,7 +91,9 @@ Response:
       "category": "food",
       "category_source": "AI",
       "amount": 281,
-      "quantity": 1
+      "quantity": 1,
+      "source": "AI",
+      "is_edited": false
     }
   ]
 }
@@ -104,8 +108,6 @@ Response:
 | 項目 | 用途 | 未対応の理由 |
 | --- | --- | --- |
 | `expense.image_url` | 画像プレビュー(AI の読み取り結果と見比べて修正する) | 元画像の署名付き GET URL の発行を実装していない |
-| `expense.source` / `expense.updated_at` | データの作成元・更新日時の表示 | `expenses` にはあるが返していない(支出編集 API と合わせて対応) |
-| `details[].source` / `details[].is_edited` | 明細ごとの手動編集済み表示 | 同上 |
 
 ### PATCH /expenses/{expense_id}
 

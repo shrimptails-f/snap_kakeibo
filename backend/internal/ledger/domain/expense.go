@@ -4,6 +4,7 @@ package domain
 import (
 	"errors"
 	"strings"
+	"time"
 
 	common "snap_kakeibo/backend/internal/common/domain"
 )
@@ -46,6 +47,8 @@ type ExpenseDetail struct {
 	quantity       Quantity
 	category       Category
 	categorySource CategorySource
+	source         RecordSource
+	edited         bool
 }
 
 // NewExpenseDetail は不変条件を満たす支出明細を生成する。
@@ -60,7 +63,20 @@ func NewExpenseDetail(id ExpenseDetailID, name string, amount DetailAmount, quan
 	if _, err := NewCategorySource(source.String()); err != nil {
 		return ExpenseDetail{}, err
 	}
-	return ExpenseDetail{id: id, name: name, amount: amount, quantity: quantity, category: category, categorySource: source}, nil
+	return ExpenseDetail{id: id, name: name, amount: amount, quantity: quantity, category: category, categorySource: source, source: RecordSourceAI}, nil
+}
+
+// RestoreExpenseDetail は永続化された作成元と編集状態を含めて支出明細を復元する。
+func RestoreExpenseDetail(id ExpenseDetailID, name string, amount DetailAmount, quantity Quantity, category Category, categorySource CategorySource, source RecordSource, edited bool) (ExpenseDetail, error) {
+	detail, err := NewExpenseDetail(id, name, amount, quantity, category, categorySource)
+	if err != nil {
+		return ExpenseDetail{}, err
+	}
+	if _, err := NewRecordSource(source.String()); err != nil {
+		return ExpenseDetail{}, err
+	}
+	detail.source, detail.edited = source, edited
+	return detail, nil
 }
 
 // ID は支出明細IDを返す。
@@ -81,6 +97,12 @@ func (d ExpenseDetail) Category() Category { return d.category }
 // CategorySource はカテゴリ決定元を返す。
 func (d ExpenseDetail) CategorySource() CategorySource { return d.categorySource }
 
+// Source は明細の作成元を返す。
+func (d ExpenseDetail) Source() RecordSource { return d.source }
+
+// Edited は明細が利用者によって編集済みかを返す。
+func (d ExpenseDetail) Edited() bool { return d.edited }
+
 // Expense は家計へ金額上の影響を与える1件の支出を管理する集約ルート。
 type Expense struct {
 	id              ExpenseID
@@ -93,6 +115,8 @@ type Expense struct {
 	recordedAmount  RecordedAmount
 	details         []ExpenseDetail
 	edited          bool
+	source          RecordSource
+	updatedAt       time.Time
 }
 
 // ExpenseState は永続化された支出を復元するためのドメイン状態。
@@ -107,11 +131,13 @@ type ExpenseState struct {
 	Adjustment      AdjustmentAmount
 	Details         []ExpenseDetail
 	Edited          bool
+	Source          RecordSource
+	UpdatedAt       time.Time
 }
 
 // NewExpense は検証済み解析結果などから支出を生成する。
 func NewExpense(id ExpenseID, userID common.UserID, sourceRequestID AnalysisRequestID, storeName string, purchaseDate PurchaseDate, readAmount ReadAmount, details []ExpenseDetail) (Expense, error) {
-	return restoreExpense(ExpenseState{ID: id, UserID: userID, SourceRequestID: sourceRequestID, StoreName: storeName, PurchaseDate: purchaseDate, ReadAmount: readAmount, Adjustment: NewAdjustmentAmount(0), Details: details})
+	return restoreExpense(ExpenseState{ID: id, UserID: userID, SourceRequestID: sourceRequestID, StoreName: storeName, PurchaseDate: purchaseDate, ReadAmount: readAmount, Adjustment: NewAdjustmentAmount(0), Details: details, Source: RecordSourceAI})
 }
 
 // RestoreExpense は永続化された状態を検証して支出を復元する。
@@ -123,6 +149,9 @@ func restoreExpense(state ExpenseState) (Expense, error) {
 	}
 	if hasDuplicateDetailID(state.Details) {
 		return Expense{}, ErrDuplicateExpenseDetail
+	}
+	if _, err := NewRecordSource(state.Source.String()); err != nil {
+		return Expense{}, err
 	}
 	for _, detail := range state.Details {
 		if detail.id == "" || strings.TrimSpace(detail.name) == "" || !detail.amount.Valid() || !detail.quantity.Valid() {
@@ -143,7 +172,7 @@ func restoreExpense(state ExpenseState) (Expense, error) {
 		id: state.ID, userID: state.UserID, sourceRequestID: state.SourceRequestID,
 		storeName: strings.TrimSpace(state.StoreName), purchaseDate: state.PurchaseDate,
 		readAmount: state.ReadAmount, adjustment: state.Adjustment, recordedAmount: recorded,
-		details: append([]ExpenseDetail(nil), state.Details...), edited: state.Edited,
+		details: append([]ExpenseDetail(nil), state.Details...), edited: state.Edited, source: state.Source, updatedAt: state.UpdatedAt,
 	}, nil
 }
 
@@ -163,7 +192,7 @@ func hasDuplicateDetailID(details []ExpenseDetail) bool {
 
 // ChangeStoreName は店名を変更し、支出を編集済みにする。
 func (e *Expense) ChangeStoreName(name string) {
-	e.storeName, e.edited = strings.TrimSpace(name), true
+	e.storeName, e.source, e.edited = strings.TrimSpace(name), RecordSourceUser, true
 }
 
 // ChangePurchaseDate は購入日を変更し、支出を編集済みにする。
@@ -171,7 +200,7 @@ func (e *Expense) ChangePurchaseDate(date PurchaseDate) error {
 	if !date.Valid() {
 		return common.ErrInvalidPurchaseDate
 	}
-	e.purchaseDate, e.edited = date, true
+	e.purchaseDate, e.source, e.edited = date, RecordSourceUser, true
 	return nil
 }
 
@@ -181,7 +210,7 @@ func (e *Expense) AdjustAmount(adjustment AdjustmentAmount) error {
 	if err != nil {
 		return err
 	}
-	e.adjustment, e.recordedAmount, e.edited = adjustment, recorded, true
+	e.adjustment, e.recordedAmount, e.source, e.edited = adjustment, recorded, RecordSourceUser, true
 	return nil
 }
 
@@ -195,7 +224,7 @@ func (e *Expense) RenameDetail(id ExpenseDetailID, name string) error {
 	if err != nil {
 		return err
 	}
-	detail.name, e.edited = name, true
+	detail.name, detail.source, detail.edited, e.source, e.edited = name, RecordSourceUser, true, RecordSourceUser, true
 	return nil
 }
 
@@ -208,7 +237,7 @@ func (e *Expense) ChangeDetailAmount(id ExpenseDetailID, amount DetailAmount, qu
 	if err != nil {
 		return err
 	}
-	detail.amount, detail.quantity, e.edited = amount, quantity, true
+	detail.amount, detail.quantity, detail.source, detail.edited, e.source, e.edited = amount, quantity, RecordSourceUser, true, RecordSourceUser, true
 	return nil
 }
 
@@ -221,7 +250,7 @@ func (e *Expense) ChangeDetailCategory(id ExpenseDetailID, category Category) er
 	if err != nil {
 		return err
 	}
-	detail.category, detail.categorySource, e.edited = category, CategorySourceUser, true
+	detail.category, detail.categorySource, detail.source, detail.edited, e.source, e.edited = category, CategorySourceUser, RecordSourceUser, true, RecordSourceUser, true
 	return nil
 }
 
@@ -263,3 +292,9 @@ func (e Expense) Details() []ExpenseDetail { return append([]ExpenseDetail(nil),
 
 // Edited は利用者によって編集済みかを返す。
 func (e Expense) Edited() bool { return e.edited }
+
+// Source は支出の作成元を返す。
+func (e Expense) Source() RecordSource { return e.source }
+
+// UpdatedAt は支出の最終更新日時を返す。
+func (e Expense) UpdatedAt() time.Time { return e.updatedAt }

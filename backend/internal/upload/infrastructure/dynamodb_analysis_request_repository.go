@@ -43,6 +43,7 @@ type analysisRequestItem struct {
 	ExpenseID         string `dynamodbav:"expense_id,omitempty"`
 	ErrorCode         string `dynamodbav:"error_code,omitempty"`
 	ErrorMsg          string `dynamodbav:"error_message,omitempty"`
+	FailedAt          string `dynamodbav:"failed_at,omitempty"`
 }
 
 // DynamoDBAnalysisRequestRepository は analysis_requests への解析依頼の新規登録(upload)、再解析の状態遷移(retry-analysis)、
@@ -194,6 +195,10 @@ func (i analysisRequestItem) toDomain(userID string) (domain.AnalysisRequest, er
 	}
 	expenseID, _ := common.NewExpenseID(i.ExpenseID)
 	var failureReason *analysisdomain.FailureReason
+	failedAt, err := parseTime("failed_at", i.FailedAt)
+	if err != nil {
+		return domain.AnalysisRequest{}, err
+	}
 	if i.ErrorCode != "" {
 		reason, err := analysisdomain.NewFailureReason(i.ErrorCode, i.ErrorMsg)
 		if err != nil {
@@ -204,7 +209,7 @@ func (i analysisRequestItem) toDomain(userID string) (domain.AnalysisRequest, er
 	return analysisdomain.RestoreAnalysisRequest(domain.AnalysisRequestState{
 		ID: requestID, UserID: user, Image: image, Status: domain.AnalysisStatus(i.Status),
 		CurrentAttempt: attempt, UploadExpiresAt: uploadExpiresAt,
-		ExpenseID: expenseID, FailureReason: failureReason,
+		ExpenseID: expenseID, FailureReason: failureReason, FailedAt: failedAt,
 		CreatedAt: createdAt, UpdatedAt: updatedAt,
 	})
 }

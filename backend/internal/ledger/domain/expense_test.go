@@ -46,6 +46,9 @@ func TestExpenseAdjustAmountCanMakeRecordedAmountNegative(t *testing.T) {
 	if !expense.Edited() {
 		t.Error("Edited() = false, want true")
 	}
+	if expense.Source() != RecordSourceUser {
+		t.Errorf("Source() = %q, want USER", expense.Source())
+	}
 }
 
 func TestExpenseChangeDetailCategoryMarksUserSource(t *testing.T) {
@@ -59,6 +62,9 @@ func TestExpenseChangeDetailCategoryMarksUserSource(t *testing.T) {
 	detail := expense.Details()[0]
 	if detail.Category() != common.CategorySocial || detail.CategorySource() != CategorySourceUser {
 		t.Errorf("detail category = %q, source = %q", detail.Category(), detail.CategorySource())
+	}
+	if detail.Source() != RecordSourceUser || !detail.Edited() || expense.Source() != RecordSourceUser {
+		t.Errorf("edit metadata = detail source %q edited %t, expense source %q", detail.Source(), detail.Edited(), expense.Source())
 	}
 }
 
@@ -102,7 +108,7 @@ func TestRestoreExpense(t *testing.T) {
 	restored, err := RestoreExpense(ExpenseState{
 		ID: expense.ID(), UserID: expense.UserID(), SourceRequestID: expense.SourceRequestID(),
 		StoreName: expense.StoreName(), PurchaseDate: expense.PurchaseDate(), ReadAmount: expense.ReadAmount(),
-		Adjustment: NewAdjustmentAmount(-250), Details: expense.Details(), Edited: true,
+		Adjustment: NewAdjustmentAmount(-250), Details: expense.Details(), Edited: true, Source: RecordSourceAI,
 	})
 	if err != nil {
 		t.Fatalf("RestoreExpense() error = %v", err)

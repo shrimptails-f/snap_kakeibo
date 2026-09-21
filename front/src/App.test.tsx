@@ -64,18 +64,32 @@ describe('App', () => {
             analysis_request_id: 'req1',
             expense_id: 'e1',
             status: 'SUCCEEDED',
+            attempt: 1,
             file_name: 'receipt-1.jpg',
             year_month: month,
+            upload_expires_at: '2026-09-18T00:15:00Z',
             created_at: '2026-09-18T00:00:00Z',
             updated_at: '2026-09-18T00:00:00Z',
           },
           {
             analysis_request_id: 'req2',
             status: 'ANALYZING',
+            attempt: 2,
             file_name: 'receipt-2.jpg',
             year_month: month,
+            upload_expires_at: '2026-09-18T00:15:00Z',
             created_at: '2026-09-18T00:00:00Z',
             updated_at: '2026-09-18T00:00:00Z',
+          },
+          {
+            analysis_request_id: 'req3',
+            status: 'UPLOADING',
+            attempt: 1,
+            file_name: 'receipt-3.jpg',
+            year_month: month,
+            upload_expires_at: '2020-01-01T00:00:00Z',
+            created_at: '2020-01-01T00:00:00Z',
+            updated_at: '2020-01-01T00:00:00Z',
           },
         ],
       },
@@ -87,6 +101,8 @@ describe('App', () => {
     const analyzing = screen.getByRole('button', { name: /receipt-2\.jpg/ })
     expect(done).toBeEnabled()
     expect(analyzing).toBeDisabled()
+    expect(screen.getByText('期限切れ')).toBeInTheDocument()
+    expect(screen.getByText('試行 2 回目')).toBeInTheDocument()
   })
 
   it('登録完了した解析依頼を選ぶと支出と明細をカテゴリの表示名付きで表示する', async () => {
@@ -98,8 +114,10 @@ describe('App', () => {
             analysis_request_id: 'req1',
             expense_id: 'e1',
             status: 'SUCCEEDED',
+            attempt: 1,
             file_name: 'receipt-1.jpg',
             year_month: month,
+            upload_expires_at: '2026-09-18T00:15:00Z',
             created_at: '2026-09-18T00:00:00Z',
             updated_at: '2026-09-18T00:00:00Z',
           },
@@ -113,8 +131,11 @@ describe('App', () => {
           read_amount: 5000,
           adjustment_amount: -2500,
           recorded_amount: 2500,
+          source: 'AI',
+          is_edited: true,
+          updated_at: '2026-09-18T01:00:00Z',
         },
-        details: [{ detail_id: 'd1', name: '飲み会', category: 'social', amount: 5000, quantity: 1 }],
+        details: [{ detail_id: 'd1', name: '飲み会', category: 'social', amount: 5000, quantity: 1, source: 'AI', is_edited: true }],
       },
     })
 
@@ -127,6 +148,8 @@ describe('App', () => {
     expect(screen.getByText(yen(2500))).toBeInTheDocument()
     expect(screen.getByText(`読取金額 ${yen(5000)} / 調整額 ${yen(-2500)}`)).toBeInTheDocument()
     expect(screen.getByText('交際・会食')).toBeInTheDocument()
+    expect(screen.getByText(/AI由来・手動編集済み/)).toBeInTheDocument()
+    expect(screen.getByText('（手動編集済み）')).toBeInTheDocument()
   })
 
   it('取得に失敗したらエラーを表示する', async () => {

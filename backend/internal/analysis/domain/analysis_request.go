@@ -126,6 +126,7 @@ type AnalysisRequest struct {
 	uploadExpiresAt time.Time
 	expenseID       ExpenseID
 	failureReason   *FailureReason
+	failedAt        time.Time
 	createdAt       time.Time
 	updatedAt       time.Time
 }
@@ -141,6 +142,7 @@ type AnalysisRequestState struct {
 	UploadExpiresAt time.Time
 	ExpenseID       ExpenseID
 	FailureReason   *FailureReason
+	FailedAt        time.Time
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 }
@@ -162,10 +164,11 @@ func RestoreAnalysisRequest(state AnalysisRequestState) (AnalysisRequest, error)
 	if state.Status == AnalysisStatusSucceeded && state.ExpenseID == "" {
 		return AnalysisRequest{}, ErrInvalidAnalysisRequest
 	}
-	if state.Status == AnalysisStatusFailed && (state.FailureReason == nil || state.FailureReason.code == "") {
+	if state.Status == AnalysisStatusFailed && (state.FailureReason == nil || state.FailureReason.code == "" || state.FailedAt.IsZero()) {
 		return AnalysisRequest{}, ErrInvalidAnalysisRequest
 	}
-	if state.Status != AnalysisStatusSucceeded && state.ExpenseID != "" || state.Status != AnalysisStatusFailed && state.FailureReason != nil {
+	if state.Status != AnalysisStatusSucceeded && state.ExpenseID != "" ||
+		state.Status != AnalysisStatusFailed && (state.FailureReason != nil || !state.FailedAt.IsZero()) {
 		return AnalysisRequest{}, ErrInvalidAnalysisRequest
 	}
 	var reason *FailureReason
@@ -176,7 +179,7 @@ func RestoreAnalysisRequest(state AnalysisRequestState) (AnalysisRequest, error)
 	return AnalysisRequest{
 		id: state.ID, userID: state.UserID, image: state.Image, status: state.Status,
 		currentAttempt: state.CurrentAttempt, uploadExpiresAt: state.UploadExpiresAt,
-		expenseID: state.ExpenseID, failureReason: reason,
+		expenseID: state.ExpenseID, failureReason: reason, failedAt: state.FailedAt,
 		createdAt: state.CreatedAt, updatedAt: state.UpdatedAt,
 	}, nil
 }
@@ -210,7 +213,7 @@ func (r *AnalysisRequest) Complete(attempt Attempt, expenseID ExpenseID, now tim
 	if err := r.ensureAnalyzing(attempt); err != nil {
 		return err
 	}
-	r.status, r.expenseID, r.failureReason, r.updatedAt = AnalysisStatusSucceeded, expenseID, nil, now
+	r.status, r.expenseID, r.failureReason, r.failedAt, r.updatedAt = AnalysisStatusSucceeded, expenseID, nil, time.Time{}, now
 	return nil
 }
 
@@ -219,7 +222,7 @@ func (r *AnalysisRequest) MarkNoData(attempt Attempt, now time.Time) error {
 	if err := r.ensureAnalyzing(attempt); err != nil {
 		return err
 	}
-	r.status, r.expenseID, r.failureReason, r.updatedAt = AnalysisStatusNoData, "", nil, now
+	r.status, r.expenseID, r.failureReason, r.failedAt, r.updatedAt = AnalysisStatusNoData, "", nil, time.Time{}, now
 	return nil
 }
 
@@ -231,7 +234,7 @@ func (r *AnalysisRequest) Fail(attempt Attempt, reason FailureReason, now time.T
 	if err := r.ensureAnalyzing(attempt); err != nil {
 		return err
 	}
-	r.status, r.expenseID, r.failureReason, r.updatedAt = AnalysisStatusFailed, "", &reason, now
+	r.status, r.expenseID, r.failureReason, r.failedAt, r.updatedAt = AnalysisStatusFailed, "", &reason, now, now
 	return nil
 }
 
@@ -245,7 +248,7 @@ func (r *AnalysisRequest) Retry(now time.Time) error {
 		return ErrInvalidAnalysisTransition
 	}
 	r.currentAttempt = r.currentAttempt.Next()
-	r.status, r.expenseID, r.failureReason, r.updatedAt = AnalysisStatusAnalyzing, "", nil, now
+	r.status, r.expenseID, r.failureReason, r.failedAt, r.updatedAt = AnalysisStatusAnalyzing, "", nil, time.Time{}, now
 	return nil
 }
 
@@ -287,6 +290,9 @@ func (r AnalysisRequest) FailureReason() (FailureReason, bool) {
 	}
 	return *r.failureReason, true
 }
+
+// FailedAt は解析が失敗した日時と、その有無を返す。
+func (r AnalysisRequest) FailedAt() (time.Time, bool) { return r.failedAt, !r.failedAt.IsZero() }
 
 // CreatedAt は作成日時を返す。
 func (r AnalysisRequest) CreatedAt() time.Time { return r.createdAt }

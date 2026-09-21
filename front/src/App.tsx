@@ -7,10 +7,13 @@ type AnalysisRequestItem = {
   analysis_request_id: string
   expense_id?: string
   status: 'UPLOADING' | 'ANALYZING' | 'SUCCEEDED' | 'NO_DATA' | 'FAILED'
+  attempt: number
   file_name: string
   year_month: string
+  upload_expires_at: string
   error_code?: string
   error_message?: string
+  failed_at?: string
   created_at: string
   updated_at: string
 }
@@ -22,6 +25,9 @@ type Expense = {
   read_amount: number
   adjustment_amount: number
   recorded_amount: number
+  source: 'AI' | 'USER'
+  is_edited: boolean
+  updated_at: string
 }
 
 type Detail = {
@@ -30,6 +36,8 @@ type Detail = {
   category: string
   amount: number
   quantity: number
+  source: 'AI' | 'USER'
+  is_edited: boolean
 }
 
 // カテゴリの表示名。保存値は docs/ddd/ubiquitous-language.md の語彙と同じ
@@ -69,6 +77,22 @@ function currentMonth() {
 
 function yen(value: number) {
   return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(value)
+}
+
+function requestStatus(item: AnalysisRequestItem) {
+  if (item.status === 'UPLOADING') {
+    return Date.now() > new Date(item.upload_expires_at).getTime() ? '期限切れ' : 'アップロード待ち'
+  }
+  return {
+    ANALYZING: '解析中',
+    SUCCEEDED: '登録完了',
+    NO_DATA: '登録対象なし',
+    FAILED: '解析失敗',
+  }[item.status]
+}
+
+function sourceLabel(source: 'AI' | 'USER') {
+  return source === 'AI' ? 'AI由来' : 'ユーザー入力'
 }
 
 async function readJSON<T>(path: string, init?: RequestInit, accessToken?: string): Promise<T> {
@@ -278,9 +302,11 @@ export default function App() {
                 <span>
                   <strong>{item.file_name || item.analysis_request_id}</strong>
                   <small>{new Date(item.created_at).toLocaleString('ja-JP')}</small>
+                  <small>試行 {item.attempt} 回目</small>
                   {item.error_message && <small>{item.error_message}</small>}
+                  {item.failed_at && <small>失敗日時: {new Date(item.failed_at).toLocaleString('ja-JP')}</small>}
                 </span>
-                <span className={`status ${item.status.toLowerCase()}`}>{item.status}</span>
+                <span className={`status ${item.status.toLowerCase()}`}>{requestStatus(item)}</span>
               </button>
             ))}
           </div>
@@ -295,6 +321,9 @@ export default function App() {
                 <span>{expense.store_name}</span>
                 <strong>{yen(expense.recorded_amount)}</strong>
                 <small>{expense.purchase_date}</small>
+                <small>
+                  {sourceLabel(expense.source)}{expense.is_edited && '・手動編集済み'} / 最終更新: {new Date(expense.updated_at).toLocaleString('ja-JP')}
+                </small>
                 {expense.adjustment_amount !== 0 && (
                   <small>
                     読取金額 {yen(expense.read_amount)} / 調整額 {yen(expense.adjustment_amount)}
@@ -312,7 +341,7 @@ export default function App() {
                 <tbody>
                   {details.map((detail) => (
                     <tr key={detail.detail_id}>
-                      <td>{detail.name}</td>
+                      <td>{detail.name}{detail.is_edited && <small>（手動編集済み）</small>}</td>
                       <td>{categoryLabel(detail.category)}</td>
                       <td>{yen(detail.amount)}</td>
                     </tr>
