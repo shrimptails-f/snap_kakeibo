@@ -47,3 +47,40 @@ func TestNewUploadHistoryRejectsMissingIDs(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateYearMonth(t *testing.T) {
+	t.Parallel()
+	tests := map[string]struct {
+		in    string
+		valid bool
+	}{
+		"valid":              {"2026-09", true},
+		"december":           {"2026-12", true},
+		"month out of range": {"2026-13", false},
+		"month zero":         {"2026-00", false},
+		"single digit month": {"2026-9", false},
+		"with day":           {"2026-09-01", false},
+		"slash":              {"2026/09", false},
+		"empty":              {"", false},
+		"whitespace":         {" 2026-09", false},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateYearMonth(tt.in)
+			if tt.valid && err != nil {
+				t.Fatalf("ValidateYearMonth(%q) error = %v, want nil", tt.in, err)
+			}
+			if !tt.valid && !errors.Is(err, ErrInvalidYearMonth) {
+				t.Fatalf("ValidateYearMonth(%q) error = %v, want ErrInvalidYearMonth", tt.in, err)
+			}
+		})
+	}
+}
+
+func TestYearMonthRoundTripsThroughValidate(t *testing.T) {
+	t.Parallel()
+	if err := ValidateYearMonth(YearMonth(now)); err != nil {
+		t.Fatalf("ValidateYearMonth(YearMonth(now)) error = %v", err)
+	}
+}

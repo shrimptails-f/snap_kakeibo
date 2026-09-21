@@ -50,7 +50,9 @@ const FirstAttempt = 1
 // ErrInvalidUploadHistory は識別子が欠けた履歴を作ろうとしたときに返す。
 var ErrInvalidUploadHistory = errors.New("upload history requires user_id and upload_id")
 
-// UploadHistory は upload_histories に登録するアップロード 1 件。
+// UploadHistory は upload_histories のアップロード 1 件。
+// upload が登録するのは UPLOADING の初期状態で、BillingID / ErrorCode / ErrorMessage は analyze-receipt が
+// SUCCEEDED / FAILED に遷移させるときに書く(list-uploads はそれを読んで返す)。
 // ExpiresAt は署名付き URL の期限で、クライアントはそれまでに PUT を終える必要がある。
 type UploadHistory struct {
 	UserID      string
@@ -65,6 +67,11 @@ type UploadHistory struct {
 	ExpiresAt time.Time
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	// BillingID は SUCCEEDED のときだけ入る。
+	BillingID string
+	// ErrorCode / ErrorMessage は FAILED のときだけ入る。retry-upload が ANALYZING に戻すときに消える。
+	ErrorCode    string
+	ErrorMessage string
 }
 
 // NewUploadHistory は UPLOADING の初期状態の履歴を作る。
@@ -100,5 +107,20 @@ func ObjectKey(userID, uploadID string) string {
 	return "receipts/" + userID + "/" + uploadID + "/original.jpg"
 }
 
+// yearMonthLayout は YearMonth の形式(YYYY-MM)。
+const yearMonthLayout = "2006-01"
+
+// ErrInvalidYearMonth は YYYY-MM でない月を指定したときに返す。
+var ErrInvalidYearMonth = errors.New("year month must be YYYY-MM")
+
 // YearMonth は t を UTC の YYYY-MM にする。
-func YearMonth(t time.Time) string { return t.UTC().Format("2006-01") }
+func YearMonth(t time.Time) string { return t.UTC().Format(yearMonthLayout) }
+
+// ValidateYearMonth は s が YearMonth と同じ YYYY-MM(月は 2 桁、01〜12)であることを確認する。
+// 一覧は s をそのまま GSI のキーに使うので、形式が違えば空の結果になる前に入力の誤りとして弾く。
+func ValidateYearMonth(s string) error {
+	if _, err := time.Parse(yearMonthLayout, s); err != nil {
+		return ErrInvalidYearMonth
+	}
+	return nil
+}
