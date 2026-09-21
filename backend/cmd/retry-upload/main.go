@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"snap_kakeibo/backend/internal/app"
 	authapp "snap_kakeibo/backend/internal/auth/application"
 	"snap_kakeibo/backend/internal/di"
+	"snap_kakeibo/backend/internal/library/apigateway"
 	"snap_kakeibo/backend/internal/library/awsconfig"
 	"snap_kakeibo/backend/internal/library/lambdawrap"
 	"snap_kakeibo/backend/internal/library/logger"
@@ -69,26 +69,26 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	user, err := check.Check(ctx, authapp.CheckInput{Authorization: authorization})
 	if err != nil {
 		if errors.Is(err, authapp.ErrUnauthorized) {
-			return app.Error(401, "unauthorized")
+			return apigateway.Error(401, "unauthorized")
 		}
 		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
 	}
 
 	uploadID := req.PathParameters["uploadId"]
 	if uploadID == "" {
-		return app.Error(400, "uploadId path parameter is required")
+		return apigateway.Error(400, "uploadId path parameter is required")
 	}
 	out, err := retry.Retry(ctx, application.RetryUploadInput{UserID: user.UserID, UploadID: uploadID})
 	if err != nil {
 		switch {
 		case errors.Is(err, application.ErrInvalidInput):
-			return app.Error(400, "invalid retry request")
+			return apigateway.Error(400, "invalid retry request")
 		case errors.Is(err, application.ErrUploadNotRetryable):
-			return app.Error(409, "upload cannot be retried")
+			return apigateway.Error(409, "upload cannot be retried")
 		}
 		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
 	}
-	return app.JSON(200, response{UploadID: out.UploadID, Status: string(out.Status), Attempt: out.Attempt})
+	return apigateway.JSON(200, response{UploadID: out.UploadID, Status: string(out.Status), Attempt: out.Attempt})
 }
 
 func main() { lambda.Start(lambdawrap.Handle(log, handler)) }

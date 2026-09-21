@@ -3,11 +3,11 @@ package main
 import (
 	"context"
 
-	"snap_kakeibo/backend/internal/app"
 	"snap_kakeibo/backend/internal/auth/application"
 	"snap_kakeibo/backend/internal/auth/library/cookie"
 	"snap_kakeibo/backend/internal/auth/library/settings"
 	"snap_kakeibo/backend/internal/di"
+	"snap_kakeibo/backend/internal/library/apigateway"
 	"snap_kakeibo/backend/internal/library/awsconfig"
 	"snap_kakeibo/backend/internal/library/lambdawrap"
 	"snap_kakeibo/backend/internal/library/logger"
@@ -52,7 +52,7 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	if err := logout.Logout(ctx, application.LogoutInput{RefreshToken: cookie.ReadRefresh(req.Cookies)}); err != nil {
 		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
 	}
-	res, err := app.JSON(204, map[string]string{})
+	res, err := apigateway.JSON(204, map[string]string{})
 	res.Cookies = []string{cookie.Refresh("", -1)}
 	return res, err
 }

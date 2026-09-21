@@ -6,11 +6,11 @@ import (
 	"errors"
 	"strings"
 
-	"snap_kakeibo/backend/internal/app"
 	"snap_kakeibo/backend/internal/auth/application"
 	"snap_kakeibo/backend/internal/auth/library/cookie"
 	"snap_kakeibo/backend/internal/auth/library/settings"
 	"snap_kakeibo/backend/internal/di"
+	"snap_kakeibo/backend/internal/library/apigateway"
 	"snap_kakeibo/backend/internal/library/awsconfig"
 	"snap_kakeibo/backend/internal/library/lambdawrap"
 	"snap_kakeibo/backend/internal/library/logger"
@@ -64,7 +64,7 @@ func init() {
 func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	var in request
 	if err := json.Unmarshal([]byte(req.Body), &in); err != nil {
-		return app.Error(400, "invalid JSON body")
+		return apigateway.Error(400, "invalid JSON body")
 	}
 	for _, subject := range []string{
 		"ip:" + req.RequestContext.HTTP.SourceIP,
@@ -73,22 +73,22 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 		allowed, err := limiter.Allow(ctx, subject)
 		if err != nil {
 			if errors.Is(err, application.ErrTooManyLoginAttempts) {
-				return app.Error(429, "too many login attempts")
+				return apigateway.Error(429, "too many login attempts")
 			}
 			return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
 		}
 		if !allowed {
-			return app.Error(429, "too many login attempts")
+			return apigateway.Error(429, "too many login attempts")
 		}
 	}
 	out, err := login.Login(ctx, application.LoginInput{Email: in.Email, Password: in.Password})
 	if err != nil {
 		if errors.Is(err, application.ErrInvalidCredentials) {
-			return app.Error(401, "invalid email or password")
+			return apigateway.Error(401, "invalid email or password")
 		}
 		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
 	}
-	res, err := app.JSON(200, map[string]any{
+	res, err := apigateway.JSON(200, map[string]any{
 		"access_token": out.Tokens.AccessToken,
 		"token_type":   "Bearer",
 		"expires_in":   out.Tokens.ExpiresIn,

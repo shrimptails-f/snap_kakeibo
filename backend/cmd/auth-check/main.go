@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
-	"snap_kakeibo/backend/internal/app"
 	"snap_kakeibo/backend/internal/auth/application"
 	"snap_kakeibo/backend/internal/auth/library/settings"
 	"snap_kakeibo/backend/internal/di"
+	"snap_kakeibo/backend/internal/library/apigateway"
 	"snap_kakeibo/backend/internal/library/awsconfig"
 	"snap_kakeibo/backend/internal/library/lambdawrap"
 	"snap_kakeibo/backend/internal/library/logger"
@@ -56,11 +56,11 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	result, err := check.Check(ctx, application.CheckInput{Authorization: authorization})
 	if err != nil {
 		if errors.Is(err, application.ErrUnauthorized) {
-			return app.Error(401, "unauthorized")
+			return apigateway.Error(401, "unauthorized")
 		}
 		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
 	}
-	return app.JSON(200, map[string]any{"user": map[string]string{"user_id": result.UserID, "email": result.Email}})
+	return apigateway.JSON(200, map[string]any{"user": map[string]string{"user_id": result.UserID, "email": result.Email}})
 }
 
 func main() { lambda.Start(lambdawrap.Handle(log, handler)) }
