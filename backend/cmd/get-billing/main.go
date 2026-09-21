@@ -2,103 +2,125 @@ package main
 
 import (
 	"context"
+	"errors"
 
 	"snap_kakeibo/backend/internal/app"
-	"snap_kakeibo/backend/internal/auth"
-	libawsconfig "snap_kakeibo/backend/internal/library/awsconfig"
+	authapp "snap_kakeibo/backend/internal/auth/application"
+	"snap_kakeibo/backend/internal/billing/application"
+	"snap_kakeibo/backend/internal/billing/library/settings"
+	"snap_kakeibo/backend/internal/di"
+	"snap_kakeibo/backend/internal/library/awsconfig"
+	"snap_kakeibo/backend/internal/library/lambdawrap"
+	"snap_kakeibo/backend/internal/library/logger"
 	"snap_kakeibo/backend/internal/library/oswrapper"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go-v2/service/ssm"
+	"github.com/aws/aws-lambda-go/lambdacontext"
 )
 
-type billingItem struct {
-	BillingID      string `dynamodbav:"billing_id" json:"billing_id"`
-	UploadID       string `dynamodbav:"upload_id" json:"upload_id"`
-	StoreName      string `dynamodbav:"store_name" json:"store_name"`
-	PurchasedAt    string `dynamodbav:"purchased_at" json:"purchased_at"`
-	YearMonth      string `dynamodbav:"year_month" json:"year_month"`
-	OriginalAmount int64  `dynamodbav:"original_amount" json:"original_amount"`
-	DiscountAmount int64  `dynamodbav:"discount_amount" json:"discount_amount"`
-	FinalAmount    int64  `dynamodbav:"final_amount" json:"final_amount"`
+// JSON キーは画面(front/src/App.tsx の Billing / Detail)が読む名前で、旧実装から変えない。
+type billingResponse struct {
+	BillingID      string `json:"billing_id"`
+	UploadID       string `json:"upload_id"`
+	StoreName      string `json:"store_name"`
+	PurchasedAt    string `json:"purchased_at"`
+	YearMonth      string `json:"year_month"`
+	OriginalAmount int64  `json:"original_amount"`
+	DiscountAmount int64  `json:"discount_amount"`
+	FinalAmount    int64  `json:"final_amount"`
 }
 
-type detailItem struct {
-	DetailID       string `dynamodbav:"detail_id" json:"detail_id"`
-	Name           string `dynamodbav:"name" json:"name"`
-	Category       string `dynamodbav:"category" json:"category"`
-	CategorySource string `dynamodbav:"category_source" json:"category_source"`
-	Amount         int64  `dynamodbav:"amount" json:"amount"`
-	Quantity       int64  `dynamodbav:"quantity" json:"quantity"`
+type detailResponse struct {
+	DetailID       string `json:"detail_id"`
+	Name           string `json:"name"`
+	Category       string `json:"category"`
+	CategorySource string `json:"category_source"`
+	Amount         int64  `json:"amount"`
+	Quantity       int64  `json:"quantity"`
+}
+
+type response struct {
+	Billing billingResponse  `json:"billing"`
+	Details []detailResponse `json:"details"`
 }
 
 var (
-	cfg     = app.LoadConfig()
-	ddb     *dynamodb.Client
-	authSvc *auth.Service
+	check authapp.CheckUsecaseInterface
+	get   application.GetBillingUsecaseInterface
+	log   logger.Interface
 )
 
 func init() {
-	awsCfg, err := libawsconfig.Load(context.Background(), oswrapper.New())
+	osw := oswrapper.New()
+	cfg, err := settings.Load(osw)
 	if err != nil {
 		panic(err)
 	}
-	ddb = dynamodb.NewFromConfig(awsCfg)
-	authSvc = &auth.Service{DDB: ddb, SSM: ssm.NewFromConfig(awsCfg), Cfg: cfg}
+	// STAGE=local / ci なら Floci、それ以外は AWS を向く
+	awsCfg, err := awsconfig.Load(context.Background(), osw)
+	if err != nil {
+		panic(err)
+	}
+	configuredLogger := logger.New(logger.Options{Level: cfg.LogLevel, Service: lambdacontext.FunctionName, Environment: cfg.Stage})
+	container, err := di.NewGetBillingContainer(cfg, awsCfg, osw, configuredLogger)
+	if err != nil {
+		panic(err)
+	}
+	log, err = di.ResolveLogger(container)
+	if err != nil {
+		panic(err)
+	}
+	check, err = di.ResolveAuthCheckUsecase(container)
+	if err != nil {
+		panic(err)
+	}
+	get, err = di.ResolveGetBillingUsecase(container)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+	authorization := req.Headers["authorization"]
+	if authorization == "" {
+		authorization = req.Headers["Authorization"]
+	}
+	user, err := check.Check(ctx, authapp.CheckInput{Authorization: authorization})
+	if err != nil {
+		if errors.Is(err, authapp.ErrUnauthorized) {
+			return app.Error(401, "unauthorized")
+		}
+		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
+	}
+
 	billingID := req.PathParameters["billingId"]
 	if billingID == "" {
 		return app.Error(400, "billingId path parameter is required")
 	}
-	claims, err := authSvc.VerifyRequest(ctx, req)
+	out, err := get.Get(ctx, application.GetBillingInput{UserID: user.UserID, BillingID: billingID})
 	if err != nil {
-		return app.Error(401, "unauthorized")
+		switch {
+		case errors.Is(err, application.ErrInvalidInput):
+			return app.Error(400, "invalid billing request")
+		case errors.Is(err, application.ErrBillingNotFound):
+			return app.Error(404, "billing not found")
+		}
+		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
 	}
-	billingOut, err := ddb.GetItem(ctx, &dynamodb.GetItemInput{
-		TableName: aws.String(cfg.BillingsTable),
-		Key: map[string]ddbtypes.AttributeValue{
-			"PK": &ddbtypes.AttributeValueMemberS{Value: app.UserPK(claims.UserID)},
-			"SK": &ddbtypes.AttributeValueMemberS{Value: app.BillingSK(billingID)},
+	// 0 件でも null ではなく [] を返す(画面は details をそのまま map する)
+	details := make([]detailResponse, 0, len(out.Details))
+	for _, d := range out.Details {
+		details = append(details, detailResponse{DetailID: d.ID, Name: d.Name, Category: d.Category, CategorySource: d.CategorySource, Amount: d.Amount, Quantity: d.Quantity})
+	}
+	b := out.Billing
+	return app.JSON(200, response{
+		Billing: billingResponse{
+			BillingID: b.ID, UploadID: b.UploadID, StoreName: b.StoreName, PurchasedAt: b.PurchasedAt, YearMonth: b.YearMonth,
+			OriginalAmount: b.OriginalAmount, DiscountAmount: b.DiscountAmount, FinalAmount: b.FinalAmount,
 		},
-	})
-	if err != nil {
-		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
-	}
-	if len(billingOut.Item) == 0 {
-		return app.Error(404, "billing not found")
-	}
-	var billing billingItem
-	if err := attributevalue.UnmarshalMap(billingOut.Item, &billing); err != nil {
-		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
-	}
-
-	detailsOut, err := ddb.Query(ctx, &dynamodb.QueryInput{
-		TableName:              aws.String(cfg.BillingDetailsTable),
-		KeyConditionExpression: aws.String("PK = :pk"),
-		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
-			":pk": &ddbtypes.AttributeValueMemberS{Value: app.DetailPK(claims.UserID, billingID)},
-		},
-	})
-	if err != nil {
-		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
-	}
-	var details []detailItem
-	if err := attributevalue.UnmarshalListOfMaps(detailsOut.Items, &details); err != nil {
-		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
-	}
-	return app.JSON(200, map[string]any{
-		"billing": billing,
-		"details": details,
+		Details: details,
 	})
 }
 
-func main() {
-	lambda.Start(handler)
-}
+func main() { lambda.Start(lambdawrap.Handle(log, handler)) }
