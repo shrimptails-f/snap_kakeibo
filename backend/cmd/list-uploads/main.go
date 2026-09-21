@@ -5,9 +5,9 @@ import (
 	"errors"
 	"time"
 
-	"snap_kakeibo/backend/internal/app"
 	authapp "snap_kakeibo/backend/internal/auth/application"
 	"snap_kakeibo/backend/internal/di"
+	"snap_kakeibo/backend/internal/library/apigateway"
 	"snap_kakeibo/backend/internal/library/awsconfig"
 	"snap_kakeibo/backend/internal/library/lambdawrap"
 	"snap_kakeibo/backend/internal/library/logger"
@@ -82,19 +82,19 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	user, err := check.Check(ctx, authapp.CheckInput{Authorization: authorization})
 	if err != nil {
 		if errors.Is(err, authapp.ErrUnauthorized) {
-			return app.Error(401, "unauthorized")
+			return apigateway.Error(401, "unauthorized")
 		}
 		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
 	}
 
 	month := req.PathParameters["month"]
 	if month == "" {
-		return app.Error(400, "month path parameter is required")
+		return apigateway.Error(400, "month path parameter is required")
 	}
 	out, err := list.List(ctx, application.ListUploadsInput{UserID: user.UserID, YearMonth: month})
 	if err != nil {
 		if errors.Is(err, application.ErrInvalidInput) {
-			return app.Error(400, "month must be YYYY-MM")
+			return apigateway.Error(400, "month must be YYYY-MM")
 		}
 		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
 	}
@@ -114,7 +114,7 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 			UpdatedAt:    h.UpdatedAt.UTC().Format(time.RFC3339),
 		})
 	}
-	return app.JSON(200, response{Items: items})
+	return apigateway.JSON(200, response{Items: items})
 }
 
 func main() { lambda.Start(lambdawrap.Handle(log, handler)) }

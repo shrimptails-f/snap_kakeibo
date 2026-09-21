@@ -28,7 +28,6 @@ description: backend/cmd/<lambda>/main.go を internal/<feature> の application
 | `backend/internal/analysis/` 一式 + `backend/internal/di/analyze_receipt.go` | **イベント駆動の型**(SQS → usecase、条件付き UpdateItem、トランザクション、OpenAI) |
 | `backend/internal/di/auth.go` | `provideAccessTokenVerification` / `provideAuthTokenDependencies` |
 | `backend/internal/library/dynamodb/client.go` の先頭コメント | `Table.GetItem / PutItem / UpdateItem / Query`、`Client.TransactWriteItems`、span 名 |
-| `backend/internal/app/` | 旧共通 Config / キー構築。**新コードからは参照しない**(キー形式の一致テストで比較するだけ) |
 
 `internal/upload` と `internal/analysis` を先に読めば、命名・ファイル分割・テストの粒度はほぼそのまま写せる。
 判断に迷ったら upload に揃える(後発で、#23 のフィードバックが反映されている)。
@@ -82,13 +81,12 @@ feature 名は既存に合わせる: アップロード系(`upload` / `retry-upl
 - **DynamoDB**: `client.Table(cfg.XxxTable)` を repository に持たせる。条件式・キー構築・attribute 変換は infrastructure に閉じる。
   `libdynamodb.IsConditionalCheckFailed(err)` で条件不一致を判定し、application の sentinel error に変換する。
   `ReturnValues` で更新後の値が要るなら UpdateItem の出力を repository で読む(retry-upload の attempt)。
-- **キー形式**: `keys.go` に `UserPK` / `UploadSK` などを置き、`keys_test.go` で `app` と `analysis/infrastructure` の関数と一致することを確認する
-  (`internal/app` が消えるまでの安全網)。
+- **キー形式**: `keys.go` に `UserPK` / `UploadSK` などを置き、`keys_test.go` で書く側(`analysis/infrastructure`)の関数と一致することを確認する。
 - **SQS**: `libsqs.Client.Queue(cfg.AnalyzeQueueURL)` を `application` の送信 interface の実装に包む。
   `SendJSON` は ctx の trace を traceparent に載せるので、usecase で `logger.ContextWith(ctx, logger.UploadID(...))` を先に積む。
 - **ログ**: usecase の先頭で `logger.ContextWith(ctx, logger.UserID(...), logger.UploadID(...))`。以降の `dynamodb_*` span に自動で付く。
   `http_status_code` は `lambdawrap.Handle` が `invocation_finished` に付けるので個別対応不要。
-- **HTTP 変換**: `app.JSON` / `app.Error` は引き続き cmd で使ってよい(`internal/app/http.go` は残す)。
+- **HTTP 変換**: `apigateway.JSON` / `apigateway.Error`(`internal/library/apigateway`)を cmd で使う。
   application の sentinel error → ステータスの対応は handler の `errors.Is` で行う。
 
 ### テスト(4 種類、全部書く)
@@ -150,6 +148,5 @@ git checkout refactor/<lambda>-feature-package
 
 - ユーザーの指示で PR をマージしたら(`ghp pr merge <N> --merge --delete-branch`。CI の `go / build-test` と `go / lint` が通っていることを先に見る)、#23 の状態表を更新する
   (対象行を `✅ 完了(#NN / PR #MM)` にし、残りの行の「現状」を最新にする)。
-- `retry-upload` / `list-uploads` / `get-billing` の 3 本がすべて終わったら、`internal/auth/auth.go`、`internal/app/config.go`、
-  `internal/app/model.go` と各 `keys_test.go` の `app` 比較を削除する PR を別に立てる。
+- 旧 `internal/auth/auth.go` と `internal/app` は 3 本の移行完了後に削除済み(#23 参照)。新しい Lambda が旧共通基盤に依存することはない。
 - Lambda を新規追加した場合は `infra/common.FunctionNames` と `infra/stacks/app.go` の権限(GrantXxx / grantJWTSecretRead)も揃える。

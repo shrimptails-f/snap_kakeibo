@@ -92,10 +92,6 @@ internal/<feature>/
 
 ## 共通 package
 
-### `internal/app`
-
-Lambda の HTTP 境界で共有する response helper、既存 DTO、移行中の共通設定を置く。新しい業務ロジックや feature 固有モデルの置き場所にはしない。
-
 ### `internal/common/domain`
 
 複数 feature が同じ意味と不変条件で利用するドメイン型を置く。単なるコード量削減を目的に feature 固有型を移さない。
