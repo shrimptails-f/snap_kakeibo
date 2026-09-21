@@ -7,17 +7,18 @@ import { AuthGuard, LOGIN_PATH } from './guards/AuthGuard'
 import { GuestGuard } from './guards/GuestGuard'
 
 // ルート定義。/login 以外はすべて AuthGuard の配下に置く。
+// レイアウトをガードの外側にし、セッション確認中もヘッダー・フッターは表示したまま本文だけを差し替える。
 // /months/:yearMonth、/analysis-requests、/expenses/:expenseId は画面の実装時に追加する
 export const routes: RouteObject[] = [
   {
-    element: <GuestGuard />,
-    children: [{ element: <GuestLayout />, children: [{ path: LOGIN_PATH, element: <LoginPage /> }] }],
+    element: <GuestLayout />,
+    children: [{ element: <GuestGuard />, children: [{ path: LOGIN_PATH, element: <LoginPage /> }] }],
   },
   {
-    element: <AuthGuard />,
+    element: <AppLayout />,
     children: [
       {
-        element: <AppLayout />,
+        element: <AuthGuard />,
         children: [{ index: true, element: <ReceiptIntakePage /> }],
       },
     ],

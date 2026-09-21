@@ -6,7 +6,7 @@ import { APP_NAME } from '@/shared/config/app'
 // ログイン後の全画面に共通するヘッダー。アプリ名を押すとログイン後のトップページへ戻る。
 // 画面が増えたらナビゲーションをここに追加する
 export function AppHeader() {
-  const { logout } = useAuthSession()
+  const { isAuthorized, logout } = useAuthSession()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   async function handleLogout() {
@@ -24,11 +24,14 @@ export function AppHeader() {
         <Link to="/" className="appHeader__brand">
           {APP_NAME}
         </Link>
-        <div className="sessionBar">
-          <button type="button" onClick={() => void handleLogout()} disabled={isLoggingOut}>
-            {isLoggingOut ? 'ログアウト中...' : 'ログアウト'}
-          </button>
-        </div>
+        {/* セッション確認中はログイン状態が未確定なので、ログアウトを出さない */}
+        {isAuthorized && (
+          <div className="sessionBar">
+            <button type="button" onClick={() => void handleLogout()} disabled={isLoggingOut}>
+              {isLoggingOut ? 'ログアウト中...' : 'ログアウト'}
+            </button>
+          </div>
+        )}
       </div>
     </header>
   )

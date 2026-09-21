@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router'
 import { useAuthSession } from '@/features/auth'
+import { SessionCheckingNotice } from './SessionCheckingNotice'
 
 const HOME_PATH = '/'
 
@@ -16,7 +17,7 @@ export function GuestGuard() {
   const { isChecking, isAuthorized } = useAuthSession()
 
   if (isChecking) {
-    return <p role="status">ログイン状態を確認しています...</p>
+    return <SessionCheckingNotice />
   }
   if (isAuthorized) {
     return <Navigate to={readReturnPath(location.state)} replace />
