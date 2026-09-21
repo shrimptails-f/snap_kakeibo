@@ -1,6 +1,6 @@
-export { getExpense, type GetExpenseResponse } from './api/expenses.api'
+export { getExpense } from './api/expenses.api'
 export { ExpenseDetailPanel } from './components/ExpenseDetailPanel'
 export { expenseQueryKey, useExpense } from './hooks/useExpense'
 export { categoryLabel } from './lib/categoryLabel'
 export { sourceLabel } from './lib/sourceLabel'
-export type { Expense, ExpenseDetail, ExpenseSource } from './types/expense.types'
+export type { Expense, ExpenseDetail, ExpenseSource, GetExpenseResponse } from './types/expense.types'

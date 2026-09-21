@@ -32,7 +32,7 @@
 - object の形には原則 `type` を使い、宣言マージが必要な場合だけ `interface` を使う
 - component の Props は component の直前に `type Props` として定義する
 - export する関数と API 関数は、返り値の型を明示する
-- 型アサーションで API レスポンスの安全性を保証したことにしない。境界で検証する
+- 型アサーションで API レスポンスの安全性を保証したことにしない。境界で zod schema(`*.schema.ts`)により検証し、型は `z.infer` で schema から導く
 - optional と `null` を無目的に混在させず、API 契約に合わせる
 - 金額は円の整数、日付は用途に応じた文字列として扱い、暗黙に `Date` へ変えない
 
@@ -79,7 +79,8 @@ screen はルートと feature の接続に留める。通信、状態判定、�
 - component から直接 `fetch` しない
 - API パス、メソッド、Request/Response DTO は `features/*/api` に置く
 - 認証ヘッダー、Cookie、JSON の読み書き、共通エラー変換は `shared/api` に置く
-- `Response.ok` だけでなく、想定するレスポンス形式を境界で確認する
+- `Response.ok` だけでなく、想定するレスポンス形式を境界で確認する。API 関数は `shared/api/parseResponse` にレスポンスの schema を渡し、手書きの型ガードを増やさない
+- フォームは React Hook Form と zod resolver を使い、入力の schema は `features/*/types/*.schema.ts` に置く。サーバー由来の失敗は `setError('root.server')` でフォーム全体のエラーにする
 - `catch` した値は `unknown` として扱う
 - 利用者向け文言とログ・調査用情報を分ける
 - エラーを握りつぶす場合は、無視して安全な理由をコメントまたは関数名で明確にする

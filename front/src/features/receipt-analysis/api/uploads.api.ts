@@ -1,27 +1,11 @@
 import { http } from '@/shared/api/http'
-
-export type CreateUploadRequest = {
-  file_name: string
-  content_type: string
-}
-
-export type CreateUploadResponse = {
-  put_url: string
-  analysis_request_id: string
-}
-
-function isCreateUploadResponse(value: unknown): value is CreateUploadResponse {
-  if (typeof value !== 'object' || value === null) return false
-  const candidate = value as Record<string, unknown>
-  return typeof candidate.put_url === 'string' && typeof candidate.analysis_request_id === 'string'
-}
+import { parseResponse } from '@/shared/api/parseResponse'
+import { createUploadResponseSchema } from '../types/analysis-request.schema'
+import type { CreateUploadRequest, CreateUploadResponse } from '../types/analysis-request.types'
 
 export async function createUpload(body: CreateUploadRequest): Promise<CreateUploadResponse> {
-  const response = await http.post<unknown, CreateUploadRequest>('/api/uploads', { body })
-  if (!isCreateUploadResponse(response)) {
-    throw new Error('unexpected response shape: POST /api/uploads')
-  }
-  return response
+  const raw = await http.post<unknown, CreateUploadRequest>('/api/uploads', { body })
+  return parseResponse(createUploadResponseSchema, raw, 'POST /api/uploads')
 }
 
 // Presigned URL への PUT は送信先が S3 で認証も URL に含まれるため、apiClient を通さず素の fetch で送る

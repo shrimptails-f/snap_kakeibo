@@ -31,6 +31,15 @@
   font-size: 14px;
 }
 
+.loginForm__fieldError {
+  color: var(--color-danger);
+  font-size: 14px;
+}
+
+.loginForm input[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
 .loginForm input {
   min-height: 44px;
   padding: 0 var(--space-3);

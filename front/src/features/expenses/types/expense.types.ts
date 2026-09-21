@@ -1,25 +1,12 @@
-// GET /api/expenses/{expense_id} の通信 DTO。フィールド名は API の snake_case に合わせる
+import type { z } from 'zod'
+import type { expenseDetailSchema, expenseSchema, expenseSourceSchema, getExpenseResponseSchema } from './expense.schema'
 
-export type ExpenseSource = 'AI' | 'USER'
+// GET /api/expenses/{expense_id} の通信 DTO。形の定義は expense.schema.ts
 
-export type Expense = {
-  expense_id: string
-  store_name: string
-  purchase_date: string
-  read_amount: number
-  adjustment_amount: number
-  recorded_amount: number
-  source: ExpenseSource
-  is_edited: boolean
-  updated_at: string
-}
+export type ExpenseSource = z.infer<typeof expenseSourceSchema>
 
-export type ExpenseDetail = {
-  detail_id: string
-  name: string
-  category: string
-  amount: number
-  quantity: number
-  source: ExpenseSource
-  is_edited: boolean
-}
+export type Expense = z.infer<typeof expenseSchema>
+
+export type ExpenseDetail = z.infer<typeof expenseDetailSchema>
+
+export type GetExpenseResponse = z.infer<typeof getExpenseResponseSchema>

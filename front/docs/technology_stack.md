@@ -27,20 +27,15 @@
 | HTTP | Fetch API | バックエンドおよび Presigned URL への通信 |
 | routing | React Router | 画面と URL の分離、認証ガード(`src/app/router`) |
 | server state | TanStack Query | API 由来のデータの取得、cache、再取得、mutation。初回 loading は Suspense で扱う |
+| form | React Hook Form | 入力状態、送信中、validation lifecycle(`features/*/components` のフォーム) |
+| validation | Zod | フォーム入力と API レスポンスの境界検証(`*.schema.ts`、`shared/api/parseResponse`) |
 | styling | CSS | global style と responsive design |
 
 Node.js と pnpm の実行環境はリポジトリの Dev Container に合わせる。
 
 ## 3. 採用方針
 
-### React Hook Form + Zod
-
-ログイン以外の編集フォームが増える段階で導入する。
-
-- React Hook Form: 入力状態と validation lifecycle
-- Zod: 入力値と外部レスポンスの runtime validation
-
-小さなフォーム一つだけの段階で抽象化を増やすのではなく、支出編集など複数項目のフォーム実装開始を導入目安とする。
+現時点で「採用方針」のままの技術はない。新しい技術は、まずここに用途と導入条件を書いてから実装する。
 
 ## 4. 保留
 

@@ -1,60 +1,77 @@
-import { useState } from 'react'
-import type { FormEvent } from 'react'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from 'react-hook-form'
 import { loginErrorMessage } from '../lib/loginErrorMessage'
-import type { LoginRequest } from '../types/auth.types'
+import { loginFormSchema } from '../types/login.schema'
+import type { LoginFormValues } from '../types/login.schema'
 
 type Props = {
-  onSubmit: (request: LoginRequest) => Promise<void>
+  onSubmit: (values: LoginFormValues) => Promise<void>
 }
 
+// 入力の検証は login.schema.ts(zod)、送信中・エラーの状態は react-hook-form が持つ。
+// ブラウザ標準の検証(noValidate)は使わず、文言を利用者向けに揃える
 export function LoginForm({ onSubmit }: Props) {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const {
+    register,
+    handleSubmit,
+    setError,
+    resetField,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormValues>({
+    resolver: zodResolver(loginFormSchema),
+    defaultValues: { email: '', password: '' },
+  })
 
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setIsSubmitting(true)
-    setError(null)
+  async function submit(values: LoginFormValues) {
     try {
-      await onSubmit({ email, password })
-      setPassword('')
+      await onSubmit(values)
+      resetField('password')
     } catch (e: unknown) {
-      setError(loginErrorMessage(e))
-    } finally {
-      setIsSubmitting(false)
+      // サーバー由来の失敗はフィールドではなくフォーム全体のエラーにする。次の送信で消える
+      setError('root.server', { message: loginErrorMessage(e) })
     }
   }
 
   return (
-    <form className="loginForm" onSubmit={handleSubmit}>
+    <form className="loginForm" noValidate onSubmit={handleSubmit(submit)}>
       <div className="loginForm__field">
         <label htmlFor="login-email">メールアドレス</label>
         <input
           id="login-email"
           autoComplete="email"
           inputMode="email"
-          onChange={(e) => setEmail(e.target.value)}
           required
           type="email"
-          value={email}
+          aria-invalid={errors.email ? true : undefined}
+          aria-describedby={errors.email ? 'login-email-error' : undefined}
+          {...register('email')}
         />
+        {errors.email && (
+          <p id="login-email-error" className="loginForm__fieldError">
+            {errors.email.message}
+          </p>
+        )}
       </div>
       <div className="loginForm__field">
         <label htmlFor="login-password">パスワード</label>
         <input
           id="login-password"
           autoComplete="current-password"
-          onChange={(e) => setPassword(e.target.value)}
           required
           type="password"
-          value={password}
+          aria-invalid={errors.password ? true : undefined}
+          aria-describedby={errors.password ? 'login-password-error' : undefined}
+          {...register('password')}
         />
+        {errors.password && (
+          <p id="login-password-error" className="loginForm__fieldError">
+            {errors.password.message}
+          </p>
+        )}
       </div>
-      {error && (
+      {errors.root?.server && (
         <p className="error" role="alert">
-          {error}
+          {errors.root.server.message}
         </p>
       )}
       <button disabled={isSubmitting} type="submit">

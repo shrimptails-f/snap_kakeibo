@@ -1,31 +1,17 @@
 import { http } from '@/shared/api/http'
+import { parseResponse } from '@/shared/api/parseResponse'
 import { refreshAuthSession } from '@/shared/auth/auth.api'
-import { clearAuthToken, hasAuthToken, isAuthSessionResponse, setAuthSession } from '@/shared/auth/token'
-import type { AuthUser, CheckAuthResponse, LoginRequest, LoginResponse } from '../types/auth.types'
-
-function isAuthUser(value: unknown): value is AuthUser {
-  if (typeof value !== 'object' || value === null) return false
-  const candidate = value as Record<string, unknown>
-  return typeof candidate.user_id === 'string' && typeof candidate.email === 'string'
-}
-
-function isLoginResponse(value: unknown): value is LoginResponse {
-  return isAuthSessionResponse(value) && isAuthUser((value as Record<string, unknown>).user)
-}
-
-function isCheckAuthResponse(value: unknown): value is CheckAuthResponse {
-  return typeof value === 'object' && value !== null && isAuthUser((value as Record<string, unknown>).user)
-}
+import { clearAuthToken, hasAuthToken, setAuthSession } from '@/shared/auth/token'
+import { checkAuthResponseSchema, loginResponseSchema } from '../types/auth.schema'
+import type { CheckAuthResponse, LoginRequest, LoginResponse } from '../types/auth.types'
 
 // ログインし、access token をメモリへ保存する。refresh token は Set-Cookie でブラウザが保持する
 export async function login(body: LoginRequest): Promise<LoginResponse> {
-  const response = await http.post<unknown, LoginRequest>('/api/auth/login', {
+  const raw = await http.post<unknown, LoginRequest>('/api/auth/login', {
     body,
     attachAuthToken: false,
   })
-  if (!isLoginResponse(response)) {
-    throw new Error('unexpected response shape: POST /api/auth/login')
-  }
+  const response = parseResponse(loginResponseSchema, raw, 'POST /api/auth/login')
   setAuthSession(response)
   return response
 }
@@ -33,11 +19,8 @@ export async function login(body: LoginRequest): Promise<LoginResponse> {
 // access token の有効性を確認し、ログイン中の利用者を返す。
 // token が失効している場合は apiClient が Cookie で refresh してから再送する
 export async function checkAuth(signal?: AbortSignal): Promise<CheckAuthResponse> {
-  const response = await http.get<unknown>('/api/auth/check', { signal })
-  if (!isCheckAuthResponse(response)) {
-    throw new Error('unexpected response shape: GET /api/auth/check')
-  }
-  return response
+  const raw = await http.get<unknown>('/api/auth/check', { signal })
+  return parseResponse(checkAuthResponseSchema, raw, 'GET /api/auth/check')
 }
 
 // 起動時のセッション復元。メモリに token が無ければ先に Cookie で refresh してから check する。
