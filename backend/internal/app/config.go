@@ -14,7 +14,6 @@ type Config struct {
 	ReceiptBucket         string
 	AnalyzeQueueURL       string
 	JWTSecretParameter    string
-	JWTSecret             string
 	OpenAIAPIKeyParameter string
 	OpenAIModel           string
 	OpenAIReasoningEffort string
@@ -34,7 +33,6 @@ func LoadConfig() Config {
 		ReceiptBucket:         os.Getenv("RECEIPT_BUCKET"),
 		AnalyzeQueueURL:       os.Getenv("ANALYZE_QUEUE_URL"),
 		JWTSecretParameter:    os.Getenv("SSM_JWT_SECRET"),
-		JWTSecret:             os.Getenv("JWT_SECRET"),
 		OpenAIAPIKeyParameter: os.Getenv("SSM_OPENAI_API_KEY"),
 		OpenAIModel:           os.Getenv("OPENAI_MODEL"),
 		OpenAIReasoningEffort: os.Getenv("OPENAI_REASONING_EFFORT"),

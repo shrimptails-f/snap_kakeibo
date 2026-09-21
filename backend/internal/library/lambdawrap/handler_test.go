@@ -62,6 +62,40 @@ func TestHandleSuccess(t *testing.T) {
 	assertField(t, allEntries(t, buf)[0], "cold_start", false)
 }
 
+func TestHandleLogsHTTPStatusCodeOfAPIGatewayResponse(t *testing.T) {
+	log, buf := newTestLogger()
+	ctx := lambdacontext.NewContext(context.Background(), &lambdacontext.LambdaContext{AwsRequestID: "req-1"})
+	h := Handle(log, func(context.Context, events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+		return events.APIGatewayV2HTTPResponse{StatusCode: 401}, nil
+	})
+
+	if _, err := h(ctx, events.APIGatewayV2HTTPRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	entries := allEntries(t, buf)
+	finished := entries[len(entries)-1]
+	assertField(t, finished, "event", "invocation_finished")
+	assertField(t, finished, "level", "INFO")
+	assertField(t, finished, "http_status_code", float64(401))
+	if _, ok := entries[0]["http_status_code"]; ok {
+		t.Fatalf("invocation_started must not carry http_status_code: %v", entries[0])
+	}
+}
+
+func TestHandleOmitsHTTPStatusCodeForNonHTTPResponse(t *testing.T) {
+	log, buf := newTestLogger()
+	ctx := lambdacontext.NewContext(context.Background(), &lambdacontext.LambdaContext{AwsRequestID: "req-1"})
+	h := Handle(log, func(context.Context, string) (string, error) { return "ok", nil })
+
+	if _, err := h(ctx, "in"); err != nil {
+		t.Fatal(err)
+	}
+	entries := allEntries(t, buf)
+	if _, ok := entries[len(entries)-1]["http_status_code"]; ok {
+		t.Fatalf("non-HTTP response must not carry http_status_code: %v", entries[len(entries)-1])
+	}
+}
+
 func TestHandleError(t *testing.T) {
 	log, buf := newTestLogger()
 	want := errors.New("boom")

@@ -2,7 +2,7 @@
 //
 // Handle が行うこと:
 //   - request_id(AwsRequestID)と trace(_X_AMZN_TRACE_ID か新規 root)を ctx に積む
-//   - 開始・終了ログ(duration_ms / cold_start)を出す
+//   - 開始・終了ログ(duration_ms / cold_start)を出す。API Gateway のレスポンスを返すハンドラでは http_status_code も載せる
 //   - panic を回収して stack_trace 付きでログを出し、error として返す
 //
 // SQS レコードごとの ctx 構築(送信側の trace の引き継ぎ)は library/sqs の RecordContext が担う。
@@ -25,6 +25,7 @@ import (
 	"snap_kakeibo/backend/internal/library/logger"
 	"snap_kakeibo/backend/internal/library/trace"
 
+	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambdacontext"
 )
 
@@ -74,11 +75,34 @@ func Handle[In, Out any](log logger.Interface, fn Handler[In, Out]) Handler[In, 
 				log.Error(ctx, "invocation failed", append(fields, logger.Err(err))...)
 				return
 			}
+			// 401 / 400 などは error ではなく正常なレスポンスとして返るので、status code が無いと処理の結末が分からない
+			if code, ok := httpStatusCode(out); ok {
+				fields = append(fields, logger.HTTPStatusCode(code))
+			}
 			log.Info(ctx, "invocation finished", fields...)
 		}()
 
 		return fn(ctx, in)
 	}
+}
+
+// httpStatusCode は out が API Gateway のレスポンスなら status code を返す。
+func httpStatusCode(out any) (int, bool) {
+	switch resp := out.(type) {
+	case events.APIGatewayV2HTTPResponse:
+		return resp.StatusCode, true
+	case *events.APIGatewayV2HTTPResponse:
+		if resp != nil {
+			return resp.StatusCode, true
+		}
+	case events.APIGatewayProxyResponse:
+		return resp.StatusCode, true
+	case *events.APIGatewayProxyResponse:
+		if resp != nil {
+			return resp.StatusCode, true
+		}
+	}
+	return 0, false
 }
 
 // EventHandler は戻り値を持たない (ctx, in) -> err 形式のハンドラ。SQS や S3 のイベント用。

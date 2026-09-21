@@ -16,6 +16,7 @@ import (
 	"snap_kakeibo/backend/internal/library/dynamodb/dynamodbtest"
 	"snap_kakeibo/backend/internal/library/logger"
 	"snap_kakeibo/backend/internal/library/oswrapper"
+	"snap_kakeibo/backend/internal/library/ssm/ssmtest"
 
 	awssdk "github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -37,11 +38,13 @@ func TestAuthenticationFlow(t *testing.T) {
 	users := env.CreateTableWithPrefix(t, "auth-flow", libdynamodb.UsersSchema)
 	refreshTokens := env.CreateTableWithPrefix(t, "auth-flow", libdynamodb.RefreshTokensSchema)
 	seedUser(t, users)
+	// 本番と同じく署名鍵は SSM から取る。Floci の SSM に一時パラメータを置く
+	jwtSecretParameter := ssmtest.PutSecureString(t, env.Config, "auth-flow-jwt-secret", "auth-integration-test-secret-at-least-32-bytes")
 
 	cfg := settings.Config{
 		UsersTable:         users.Name(),
 		RefreshTokensTable: refreshTokens.Name(),
-		JWTSecret:          "auth-integration-test-secret-at-least-32-bytes",
+		JWTSecretParameter: jwtSecretParameter,
 		Stage:              "local",
 	}
 	log := logger.NewNop()

@@ -1,18 +1,13 @@
 // Package settings は認証 Lambda の起動時設定を検証して読み込む。
 package settings
 
-import (
-	"errors"
-	"fmt"
-
-	"snap_kakeibo/backend/internal/library/oswrapper"
-)
+import "snap_kakeibo/backend/internal/library/oswrapper"
 
 // Config はトークンを発行する認証 Lambda（auth-login / auth-refresh）に必要な設定値。
 type Config struct {
 	UsersTable         string
 	RefreshTokensTable string
-	JWTSecret          string
+	// JWTSecretParameter は JWT 署名鍵を持つ SSM SecureString パラメータ名。署名鍵自体は環境変数で受け取らない。
 	JWTSecretParameter string
 	Stage              string
 	LogLevel           string
@@ -28,17 +23,16 @@ func Load(osw oswrapper.Interface) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	jwtSecret, jwtSecretErr := osw.GetEnv("JWT_SECRET")
-	jwtSecretParameter, parameterErr := osw.GetEnv("SSM_JWT_SECRET")
-	if jwtSecretErr != nil && parameterErr != nil {
-		return Config{}, fmt.Errorf("JWT_SECRET or SSM_JWT_SECRET is required: %w", errors.Join(jwtSecretErr, parameterErr))
+	jwtSecretParameter, err := osw.GetEnv("SSM_JWT_SECRET")
+	if err != nil {
+		return Config{}, err
 	}
 	stage, err := osw.GetEnv("STAGE")
 	if err != nil {
 		return Config{}, err
 	}
 	logLevel, _ := osw.GetEnv("LOG_LEVEL")
-	return Config{UsersTable: usersTable, RefreshTokensTable: refreshTokensTable, JWTSecret: jwtSecret, JWTSecretParameter: jwtSecretParameter, Stage: stage, LogLevel: logLevel}, nil
+	return Config{UsersTable: usersTable, RefreshTokensTable: refreshTokensTable, JWTSecretParameter: jwtSecretParameter, Stage: stage, LogLevel: logLevel}, nil
 }
 
 // LoadLogout は auth-logout に必要な設定だけを起動時に検証して読み込む。
@@ -57,15 +51,14 @@ func LoadLogout(osw oswrapper.Interface) (Config, error) {
 
 // LoadCheck は auth-check に必要な設定だけを起動時に検証して読み込む。
 func LoadCheck(osw oswrapper.Interface) (Config, error) {
-	jwtSecret, jwtSecretErr := osw.GetEnv("JWT_SECRET")
-	jwtSecretParameter, parameterErr := osw.GetEnv("SSM_JWT_SECRET")
-	if jwtSecretErr != nil && parameterErr != nil {
-		return Config{}, fmt.Errorf("JWT_SECRET or SSM_JWT_SECRET is required: %w", errors.Join(jwtSecretErr, parameterErr))
+	jwtSecretParameter, err := osw.GetEnv("SSM_JWT_SECRET")
+	if err != nil {
+		return Config{}, err
 	}
 	stage, err := osw.GetEnv("STAGE")
 	if err != nil {
 		return Config{}, err
 	}
 	logLevel, _ := osw.GetEnv("LOG_LEVEL")
-	return Config{JWTSecret: jwtSecret, JWTSecretParameter: jwtSecretParameter, Stage: stage, LogLevel: logLevel}, nil
+	return Config{JWTSecretParameter: jwtSecretParameter, Stage: stage, LogLevel: logLevel}, nil
 }

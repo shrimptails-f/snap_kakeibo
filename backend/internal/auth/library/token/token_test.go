@@ -14,6 +14,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// StaticSecretProvider は固定の署名鍵を返すテスト用の SecretProvider。本番は SSMSecretProvider だけを使う。
+type StaticSecretProvider struct{ Value string }
+
+func (p StaticSecretProvider) Secret(context.Context) (string, error) { return p.Value, nil }
+
 func TestJWTIssuerSetsExpiryFromClock(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 9, 20, 12, 0, 0, 0, time.UTC)

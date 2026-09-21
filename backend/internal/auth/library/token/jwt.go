@@ -3,8 +3,6 @@ package token
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"time"
 
 	"snap_kakeibo/backend/internal/auth/application"
@@ -52,17 +50,6 @@ func (v JWTVerifier) Verify(ctx context.Context, raw string) (common.User, error
 		return common.User{}, application.ErrUnauthorized
 	}
 	return common.User{ID: userID, Email: claims.Email}, nil
-}
-
-// StaticSecretProvider は環境変数から取得済みの署名鍵を返す。
-type StaticSecretProvider struct{ Value string }
-
-// Secret は設定済みの署名鍵を返す。
-func (p StaticSecretProvider) Secret(context.Context) (string, error) {
-	if strings.TrimSpace(p.Value) == "" {
-		return "", fmt.Errorf("JWT secret is empty")
-	}
-	return p.Value, nil
 }
 
 // JWTIssuer は HS256 の access token を発行する。

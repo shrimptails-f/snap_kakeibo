@@ -68,10 +68,6 @@ func (s *Service) VerifyAccessToken(ctx context.Context, raw string) (Claims, er
 
 func (s *Service) jwtSecret(ctx context.Context) (string, error) {
 	s.secretOnce.Do(func() {
-		if s.Cfg.JWTSecret != "" {
-			s.secret = s.Cfg.JWTSecret
-			return
-		}
 		if s.Cfg.JWTSecretParameter == "" {
 			s.secretErr = fmt.Errorf("SSM_JWT_SECRET is required")
 			return
