@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { checkAuth, login as requestLogin, logout as requestLogout } from '../api/auth.api'
+import { onUnauthorized } from '@/shared/api/http'
+import { login as requestLogin, logout as requestLogout, restoreAuthSession } from '../api/auth.api'
 import { AuthSessionContext } from '../hooks/useAuthSession'
 import type { AuthSession, AuthSessionStatus } from '../hooks/useAuthSession'
 import type { AuthUser, LoginRequest } from '../types/auth.types'
@@ -20,14 +21,22 @@ export function AuthSessionProvider({ children }: Props) {
 
   useEffect(() => {
     const controller = new AbortController()
-    checkAuth(controller.signal)
-      .then((response) => setState({ status: 'authorized', user: response.user }))
+    restoreAuthSession(controller.signal)
+      .then((response) => {
+        if (controller.signal.aborted) return
+        setState(response ? { status: 'authorized', user: response.user } : { status: 'unauthorized', user: null })
+      })
       .catch(() => {
-        // 401(未ログイン・refresh 失効)も通信失敗も未ログインとして扱い、ログイン画面へ誘導する
+        // 通信失敗も未ログインとして扱い、ログイン画面へ誘導する
         if (controller.signal.aborted) return
         setState({ status: 'unauthorized', user: null })
       })
     return () => controller.abort()
+  }, [])
+
+  // 利用中にセッションが切れた(refresh を経ても 401)ときは、画面ごとに処理せずここで未ログインへ落とす
+  useEffect(() => {
+    return onUnauthorized(() => setState({ status: 'unauthorized', user: null }))
   }, [])
 
   async function login(request: LoginRequest): Promise<void> {

@@ -52,6 +52,8 @@ export type ClientAuthConfig = {
   hasAuthToken: () => boolean
   // refresh token(Cookie)で access token を取り直し、成功したら true を返す
   refreshAuthSession: () => Promise<boolean>
+  // 認証付きリクエストが refresh を経ても 401 に終わったときに呼ぶ(セッション切れの通知)
+  onUnauthorized?: () => void
 }
 
 export type ClientConfig = {
@@ -197,6 +199,11 @@ export class Client {
       if (isRefreshed && this.config.auth?.hasAuthToken()) {
         return this.executeRequest<TResponse, TBody>(method, endpoint, { ...options, isRetryAfterUnauthorized: true })
       }
+    }
+
+    // refresh に失敗した、または再送も 401 だった = セッションが切れている
+    if (response.status === 401 && retryOnUnauthorized) {
+      this.config.auth?.onUnauthorized?.()
     }
 
     throw new ApiError({ status: response.status, apiMessage: readApiMessage(responseBody), body: responseBody })

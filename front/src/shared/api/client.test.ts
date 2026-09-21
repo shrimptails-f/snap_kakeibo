@@ -29,13 +29,15 @@ function mockAuth(initialToken: string | undefined, refreshResult: boolean | (()
     token = isRefreshed ? 'refreshed-token' : undefined
     return isRefreshed
   })
+  const onUnauthorized = vi.fn()
   const auth: ClientAuthConfig = {
     refreshEndpoint: '/api/auth/refresh',
     getAuthorizationHeaderValue: () => (token ? `Bearer ${token}` : undefined),
     hasAuthToken: () => token !== undefined,
     refreshAuthSession,
+    onUnauthorized,
   }
-  return { auth, refreshAuthSession }
+  return { auth, refreshAuthSession, onUnauthorized }
 }
 
 describe('Client', () => {
@@ -125,22 +127,36 @@ describe('Client', () => {
     expect(calls[1].init.headers).toEqual({ Authorization: 'Bearer refreshed-token' })
   })
 
-  it('再送も 401 なら refresh を繰り返さず ApiError を投げる', async () => {
+  it('再送も 401 なら refresh を繰り返さず、セッション切れを通知して ApiError を投げる', async () => {
     mockFetch([jsonResponse({ error: 'unauthorized' }, 401), jsonResponse({ error: 'unauthorized' }, 401)])
-    const { auth, refreshAuthSession } = mockAuth('expired-token')
+    const { auth, refreshAuthSession, onUnauthorized } = mockAuth('expired-token')
     const client = new Client({ baseUrl: '', auth })
 
     await expect(client.request('GET', '/api/auth/check')).rejects.toMatchObject({ status: 401 })
     expect(refreshAuthSession).toHaveBeenCalledTimes(1)
+    expect(onUnauthorized).toHaveBeenCalledTimes(1)
   })
 
-  it('refresh に失敗したら再送せず 401 の ApiError を投げる', async () => {
+  it('refresh に失敗したら再送せず、セッション切れを通知して 401 の ApiError を投げる', async () => {
     const { calls } = mockFetch([jsonResponse({ error: 'unauthorized' }, 401)])
-    const { auth } = mockAuth('expired-token', false)
+    const { auth, onUnauthorized } = mockAuth('expired-token', false)
     const client = new Client({ baseUrl: '', auth })
 
     await expect(client.request('GET', '/api/auth/check')).rejects.toMatchObject({ status: 401 })
     expect(calls).toHaveLength(1)
+    expect(onUnauthorized).toHaveBeenCalledTimes(1)
+  })
+
+  it('認証を付けないリクエスト(login など)の 401 ではセッション切れを通知しない', async () => {
+    mockFetch([jsonResponse({ error: 'invalid email or password' }, 401)])
+    const { auth, refreshAuthSession, onUnauthorized } = mockAuth(undefined)
+    const client = new Client({ baseUrl: '', auth })
+
+    await expect(client.request('POST', '/api/auth/login', { attachAuthToken: false })).rejects.toMatchObject({
+      status: 401,
+    })
+    expect(refreshAuthSession).not.toHaveBeenCalled()
+    expect(onUnauthorized).not.toHaveBeenCalled()
   })
 
   it('refresh endpoint 自身の 401 と retryOnUnauthorized: false では refresh しない', async () => {

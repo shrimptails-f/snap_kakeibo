@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -11,21 +11,30 @@ const month = new Date().toISOString().slice(0, 7)
 const testUser = { user_id: 'u1', email: 'user@example.com' }
 const session = { access_token: 'access-token', token_type: 'Bearer', expires_in: 900 }
 
-// Cookie の refresh token の有無をシナリオごとに切り替える。access token は Authorization ヘッダーで判定する
+// Cookie の refresh token の有無をシナリオごとに切り替える。access token は Authorization ヘッダーで判定する。
+// backend.revokeSession() で「refresh token も access token も失効した」状態にできる
 function mockBackend({ hasRefreshCookie }: { hasRefreshCookie: boolean }) {
+  const state = { hasRefreshCookie, accessToken: 'access-token' }
   const unauthorized = () => jsonResponse({ error: 'unauthorized' }, 401)
-  return mockFetch({
-    '/api/auth/refresh': () => (hasRefreshCookie ? jsonResponse(session) : unauthorized()),
-    '/api/auth/check': ({ init }) =>
-      readAuthorization(init) === 'Bearer access-token' ? jsonResponse({ user: testUser }) : unauthorized(),
+  const isAuthorized = (init: RequestInit) => readAuthorization(init) === `Bearer ${state.accessToken}`
+  const mocked = mockFetch({
+    '/api/auth/refresh': () => (state.hasRefreshCookie ? jsonResponse(session) : unauthorized()),
+    '/api/auth/check': ({ init }) => (isAuthorized(init) ? jsonResponse({ user: testUser }) : unauthorized()),
     '/api/auth/login': ({ init }) => {
       const body = JSON.parse(String(init.body)) as { email: string; password: string }
       return body.password === 'secret' ? jsonResponse({ ...session, user: testUser }) : unauthorized()
     },
     '/api/auth/logout': () => new Response(null, { status: 204 }),
     [`/api/months/${month}/analysis-requests`]: ({ init }) =>
-      readAuthorization(init) === 'Bearer access-token' ? jsonResponse({ items: [] }) : unauthorized(),
+      isAuthorized(init) ? jsonResponse({ items: [] }) : unauthorized(),
   })
+  return {
+    ...mocked,
+    revokeSession() {
+      state.hasRefreshCookie = false
+      state.accessToken = 'revoked'
+    },
+  }
 }
 
 function renderAt(path: string) {
@@ -68,8 +77,23 @@ describe('routes', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'snap_kakeibo' })).toBeInTheDocument()
     expect(screen.getByText('user@example.com')).toBeInTheDocument()
     expect(await screen.findByText('まだ解析依頼がありません。')).toBeInTheDocument()
-    // check(401)→ refresh → check の順で復元する
-    expect(calls.slice(0, 3).map((call) => call.url)).toEqual(['/api/auth/check', '/api/auth/refresh', '/api/auth/check'])
+    // メモリに token が無いので refresh → check の 2 リクエストで復元する
+    expect(calls.slice(0, 2).map((call) => call.url)).toEqual(['/api/auth/refresh', '/api/auth/check'])
+  })
+
+  it('利用中にセッションが切れたら、画面の API の 401 を受けてログイン画面へ送る', async () => {
+    const backend = mockBackend({ hasRefreshCookie: true })
+    const router = renderAt('/')
+    await screen.findByText('まだ解析依頼がありません。')
+
+    backend.revokeSession()
+    // 5 秒ごとの一覧再取得が 401 → refresh も 401 になる
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000)
+    })
+
+    expect(await screen.findByRole('heading', { name: 'ログイン' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/login')
   })
 
   it('ログイン済みで /login を開いたら / へ戻す', async () => {

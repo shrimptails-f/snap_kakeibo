@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { clearAuthToken, getAuthorizationHeaderValue, setAuthSession } from '@/shared/auth/token'
-import { http } from './http'
+import { http, onUnauthorized } from './http'
 
 // パスごとに応答を返し、呼び出し内容を残す
 function mockFetch(routes: Record<string, () => Response>) {
@@ -44,16 +44,24 @@ describe('http', () => {
     expect(getAuthorizationHeaderValue()).toBe('Bearer new-token')
   })
 
-  it('refresh も 401 なら token を消して ApiError を投げる', async () => {
+  it('refresh も 401 なら token を消し、購読者へセッション切れを通知して ApiError を投げる', async () => {
     const calls = mockFetch({
       '/api/auth/check': () => Response.json({ error: 'unauthorized' }, { status: 401 }),
       '/api/auth/refresh': () => Response.json({ error: 'unauthorized' }, { status: 401 }),
     })
     setAuthSession({ access_token: 'expired-token', token_type: 'Bearer', expires_in: 900 })
+    const listener = vi.fn()
+    const unsubscribe = onUnauthorized(listener)
 
     await expect(http.get('/api/auth/check')).rejects.toMatchObject({ status: 401 })
 
     expect(calls.map((call) => call.url)).toEqual(['/api/auth/check', '/api/auth/refresh'])
     expect(getAuthorizationHeaderValue()).toBeUndefined()
+    expect(listener).toHaveBeenCalledTimes(1)
+
+    unsubscribe()
+    setAuthSession({ access_token: 'expired-token', token_type: 'Bearer', expires_in: 900 })
+    await expect(http.get('/api/auth/check')).rejects.toMatchObject({ status: 401 })
+    expect(listener).toHaveBeenCalledTimes(1)
   })
 })

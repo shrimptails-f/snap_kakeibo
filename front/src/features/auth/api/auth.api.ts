@@ -1,5 +1,6 @@
 import { http } from '@/shared/api/http'
-import { clearAuthToken, isAuthSessionResponse, setAuthSession } from '@/shared/auth/token'
+import { refreshAuthSession } from '@/shared/auth/auth.api'
+import { clearAuthToken, hasAuthToken, isAuthSessionResponse, setAuthSession } from '@/shared/auth/token'
 import type { AuthUser, CheckAuthResponse, LoginRequest, LoginResponse } from '../types/auth.types'
 
 function isAuthUser(value: unknown): value is AuthUser {
@@ -30,13 +31,20 @@ export async function login(body: LoginRequest): Promise<LoginResponse> {
 }
 
 // access token の有効性を確認し、ログイン中の利用者を返す。
-// token が無い・失効している場合は apiClient が Cookie で refresh してから再送する(セッション復元)
+// token が失効している場合は apiClient が Cookie で refresh してから再送する
 export async function checkAuth(signal?: AbortSignal): Promise<CheckAuthResponse> {
   const response = await http.get<unknown>('/api/auth/check', { signal })
   if (!isCheckAuthResponse(response)) {
     throw new Error('unexpected response shape: GET /api/auth/check')
   }
   return response
+}
+
+// 起動時のセッション復元。メモリに token が無ければ先に Cookie で refresh してから check する。
+// refresh token が無い・失効している場合は null(未ログイン)
+export async function restoreAuthSession(signal?: AbortSignal): Promise<CheckAuthResponse | null> {
+  if (!hasAuthToken() && !(await refreshAuthSession())) return null
+  return checkAuth(signal)
 }
 
 // refresh token を失効させ、メモリの access token を消す
