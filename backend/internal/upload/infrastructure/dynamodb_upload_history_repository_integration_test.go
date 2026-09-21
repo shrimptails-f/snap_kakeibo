@@ -74,3 +74,109 @@ func TestSaveAgainstDynamoDB(t *testing.T) {
 		t.Fatalf("Save(other) error = %v", err)
 	}
 }
+
+// TestMarkRetryingAgainstDynamoDB は再実行の状態遷移が docs/backend.md「再実行」の通りに書かれ、
+// 再実行できない status と存在しない履歴が条件式で拒否されることを Floci で確認する。
+func TestMarkRetryingAgainstDynamoDB(t *testing.T) {
+	t.Parallel()
+	env := dynamodbtest.Connect(t)
+	table := env.CreateTable(t, libdynamodb.UploadHistoriesSchema)
+	repo := infrastructure.DynamoDBUploadHistoryRepository{Table: table}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	retryAt := integrationNow.Add(time.Hour)
+
+	// analyze-receipt が FAILED にした状態を作る
+	history, _ := domain.NewUploadHistory("user-1", "upload-1", "", "", integrationNow, 15*time.Minute)
+	if err := repo.Save(ctx, history); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	setStatus(ctx, t, table, "user-1", "upload-1", "FAILED", true)
+
+	attempt, err := repo.MarkRetrying(ctx, "user-1", "upload-1", retryAt)
+	if err != nil || attempt != 2 {
+		t.Fatalf("MarkRetrying() = %d, %v, want 2, nil", attempt, err)
+	}
+	item := getItem(ctx, t, table, "user-1", "upload-1")
+	for key, value := range map[string]any{"status": "ANALYZING", "attempt": float64(2), "updated_at": "2026-09-20T13:00:00Z"} {
+		if item[key] != value {
+			t.Errorf("item[%q] = %v, want %v", key, item[key], value)
+		}
+	}
+	for _, key := range []string{"error_code", "error_message", "failed_at"} {
+		if _, ok := item[key]; ok {
+			t.Errorf("item[%q] should be removed, got %v", key, item[key])
+		}
+	}
+	// 登録時の属性は残る
+	for _, key := range []string{"PK", "SK", "GSI1PK", "GSI1SK", "type", "upload_id", "s3_key", "file_name", "content_type", "year_month", "expires_at", "created_at"} {
+		if _, ok := item[key]; !ok {
+			t.Errorf("item[%q] should be kept: %+v", key, item)
+		}
+	}
+
+	// 停滞した ANALYZING はもう一度やり直せ、attempt がさらに進む
+	if attempt, err := repo.MarkRetrying(ctx, "user-1", "upload-1", retryAt); err != nil || attempt != 3 {
+		t.Errorf("MarkRetrying(analyzing) = %d, %v, want 3, nil", attempt, err)
+	}
+	// NO_DATA もやり直せる
+	setStatus(ctx, t, table, "user-1", "upload-1", "NO_DATA", false)
+	if attempt, err := repo.MarkRetrying(ctx, "user-1", "upload-1", retryAt); err != nil || attempt != 4 {
+		t.Errorf("MarkRetrying(no_data) = %d, %v, want 4, nil", attempt, err)
+	}
+
+	// 再実行できない status は拒否され、attempt も進まない
+	for _, status := range []string{"UPLOADING", "SUCCEEDED"} {
+		setStatus(ctx, t, table, "user-1", "upload-1", status, false)
+		if _, err := repo.MarkRetrying(ctx, "user-1", "upload-1", retryAt); !errors.Is(err, application.ErrUploadNotRetryable) {
+			t.Errorf("MarkRetrying(%s) error = %v, want ErrUploadNotRetryable", status, err)
+		}
+		if item := getItem(ctx, t, table, "user-1", "upload-1"); item["status"] != status || item["attempt"] != float64(4) {
+			t.Errorf("MarkRetrying(%s) should not change the item: %+v", status, item)
+		}
+	}
+	// 存在しない履歴(他人の upload_id を含む)も同じエラー
+	if _, err := repo.MarkRetrying(ctx, "user-2", "upload-1", retryAt); !errors.Is(err, application.ErrUploadNotRetryable) {
+		t.Errorf("MarkRetrying(missing) error = %v, want ErrUploadNotRetryable", err)
+	}
+}
+
+// setStatus は analyze-receipt の遷移を模して status を書き換える。withFailure なら失敗情報も付ける。
+func setStatus(ctx context.Context, t *testing.T, table *libdynamodb.Table, userID, uploadID, status string, withFailure bool) {
+	t.Helper()
+	expr := "SET #status=:status"
+	values := map[string]ddbtypes.AttributeValue{":status": &ddbtypes.AttributeValueMemberS{Value: status}}
+	if withFailure {
+		expr += ", error_code=:code, error_message=:message, failed_at=:failed_at"
+		values[":code"] = &ddbtypes.AttributeValueMemberS{Value: "INTERNAL"}
+		values[":message"] = &ddbtypes.AttributeValueMemberS{Value: "boom"}
+		values[":failed_at"] = &ddbtypes.AttributeValueMemberS{Value: "2026-09-20T12:30:00Z"}
+	}
+	if _, err := table.UpdateItem(ctx, &awssdk.UpdateItemInput{
+		Key:                       uploadKey(userID, uploadID),
+		UpdateExpression:          aws.String(expr),
+		ExpressionAttributeNames:  map[string]string{"#status": "status"},
+		ExpressionAttributeValues: values,
+	}); err != nil {
+		t.Fatalf("set status %s: %v", status, err)
+	}
+}
+
+func getItem(ctx context.Context, t *testing.T, table *libdynamodb.Table, userID, uploadID string) map[string]any {
+	t.Helper()
+	out, err := table.GetItem(ctx, &awssdk.GetItemInput{Key: uploadKey(userID, uploadID), ConsistentRead: aws.Bool(true)})
+	if err != nil {
+		t.Fatalf("GetItem() error = %v", err)
+	}
+	var item map[string]any
+	if err := attributevalue.UnmarshalMap(out.Item, &item); err != nil {
+		t.Fatalf("unmarshal item: %v", err)
+	}
+	return item
+}
+
+func uploadKey(userID, uploadID string) map[string]ddbtypes.AttributeValue {
+	return map[string]ddbtypes.AttributeValue{
+		"PK": &ddbtypes.AttributeValueMemberS{Value: "USER#" + userID}, "SK": &ddbtypes.AttributeValueMemberS{Value: "UPLOAD#" + uploadID},
+	}
+}

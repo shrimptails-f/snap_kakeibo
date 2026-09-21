@@ -2,65 +2,93 @@ package main
 
 import (
 	"context"
-	"strconv"
-	"time"
+	"errors"
 
 	"snap_kakeibo/backend/internal/app"
-	"snap_kakeibo/backend/internal/auth"
+	authapp "snap_kakeibo/backend/internal/auth/application"
+	"snap_kakeibo/backend/internal/di"
 	"snap_kakeibo/backend/internal/library/awsconfig"
 	"snap_kakeibo/backend/internal/library/lambdawrap"
 	"snap_kakeibo/backend/internal/library/logger"
 	"snap_kakeibo/backend/internal/library/oswrapper"
-	libsqs "snap_kakeibo/backend/internal/library/sqs"
+	"snap_kakeibo/backend/internal/upload/application"
+	"snap_kakeibo/backend/internal/upload/library/settings"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambdacontext"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go-v2/service/ssm"
 )
 
+type response struct {
+	UploadID string `json:"upload_id"`
+	Status   string `json:"status"`
+	Attempt  int    `json:"attempt"`
+}
+
 var (
-	cfg     = app.LoadConfig()
-	log     = logger.New(logger.Options{Level: cfg.LogLevel, Service: lambdacontext.FunctionName, Environment: cfg.Stage})
-	ddb     *dynamodb.Client
-	authSvc *auth.Service
-	queue   *libsqs.Queue
+	check authapp.CheckUsecaseInterface
+	retry application.RetryUploadUsecaseInterface
+	log   logger.Interface
 )
 
 func init() {
-	// STAGE=local / ci なら Floci、それ以外は AWS を向く
-	c, e := awsconfig.Load(context.Background(), oswrapper.New())
-	if e != nil {
-		panic(e)
+	osw := oswrapper.New()
+	cfg, err := settings.LoadRetryUpload(osw)
+	if err != nil {
+		panic(err)
 	}
-	ddb = dynamodb.NewFromConfig(c)
-	authSvc = &auth.Service{DDB: ddb, SSM: ssm.NewFromConfig(c), Cfg: cfg}
-	// 送信時に ctx の trace を traceparent として付けるので、analyze-receipt 側のログが同じ trace_id で繋がる
-	queue = libsqs.New(c, log).Queue(cfg.AnalyzeQueueURL)
+	// STAGE=local / ci なら Floci、それ以外は AWS を向く
+	awsCfg, err := awsconfig.Load(context.Background(), osw)
+	if err != nil {
+		panic(err)
+	}
+	configuredLogger := logger.New(logger.Options{Level: cfg.LogLevel, Service: lambdacontext.FunctionName, Environment: cfg.Stage})
+	container, err := di.NewRetryUploadContainer(cfg, awsCfg, osw, configuredLogger)
+	if err != nil {
+		panic(err)
+	}
+	log, err = di.ResolveLogger(container)
+	if err != nil {
+		panic(err)
+	}
+	check, err = di.ResolveAuthCheckUsecase(container)
+	if err != nil {
+		panic(err)
+	}
+	retry, err = di.ResolveRetryUploadUsecase(container)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
-	id := req.PathParameters["uploadId"]
-	if id == "" {
-		return app.Error(400, "uploadId path parameter is required")
+	authorization := req.Headers["authorization"]
+	if authorization == "" {
+		authorization = req.Headers["Authorization"]
 	}
-	claims, err := authSvc.VerifyRequest(ctx, req)
+	user, err := check.Check(ctx, authapp.CheckInput{Authorization: authorization})
 	if err != nil {
-		return app.Error(401, "unauthorized")
-	}
-	out, err := ddb.UpdateItem(ctx, &dynamodb.UpdateItemInput{TableName: aws.String(cfg.UploadHistoriesTable), Key: map[string]ddbtypes.AttributeValue{"PK": &ddbtypes.AttributeValueMemberS{Value: app.UserPK(claims.UserID)}, "SK": &ddbtypes.AttributeValueMemberS{Value: app.UploadSK(id)}}, UpdateExpression: aws.String("SET #status=:analyzing,attempt=attempt+:one,updated_at=:now REMOVE error_code,error_message,failed_at"), ConditionExpression: aws.String("#status IN (:failed,:no_data,:analyzing)"), ExpressionAttributeNames: map[string]string{"#status": "status"}, ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{":analyzing": &ddbtypes.AttributeValueMemberS{Value: "ANALYZING"}, ":failed": &ddbtypes.AttributeValueMemberS{Value: "FAILED"}, ":no_data": &ddbtypes.AttributeValueMemberS{Value: "NO_DATA"}, ":one": &ddbtypes.AttributeValueMemberN{Value: "1"}, ":now": &ddbtypes.AttributeValueMemberS{Value: time.Now().UTC().Format(time.RFC3339)}}, ReturnValues: ddbtypes.ReturnValueUpdatedNew})
-	if err != nil {
-		return app.Error(409, "upload cannot be retried")
-	}
-	attempt, _ := strconv.Atoi(out.Attributes["attempt"].(*ddbtypes.AttributeValueMemberN).Value)
-	ctx = logger.ContextWith(ctx, logger.UploadID(id), logger.Int("attempt", attempt))
-	body := map[string]any{"user_id": claims.UserID, "upload_id": id, "attempt": attempt, "trigger": "RETRY"}
-	if _, err = queue.SendJSON(ctx, body); err != nil {
+		if errors.Is(err, authapp.ErrUnauthorized) {
+			return app.Error(401, "unauthorized")
+		}
 		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
 	}
-	return app.JSON(200, map[string]any{"upload_id": id, "status": "ANALYZING", "attempt": attempt})
+
+	uploadID := req.PathParameters["uploadId"]
+	if uploadID == "" {
+		return app.Error(400, "uploadId path parameter is required")
+	}
+	out, err := retry.Retry(ctx, application.RetryUploadInput{UserID: user.UserID, UploadID: uploadID})
+	if err != nil {
+		switch {
+		case errors.Is(err, application.ErrInvalidInput):
+			return app.Error(400, "invalid retry request")
+		case errors.Is(err, application.ErrUploadNotRetryable):
+			return app.Error(409, "upload cannot be retried")
+		}
+		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
+	}
+	return app.JSON(200, response{UploadID: out.UploadID, Status: string(out.Status), Attempt: out.Attempt})
 }
+
 func main() { lambda.Start(lambdawrap.Handle(log, handler)) }

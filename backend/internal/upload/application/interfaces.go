@@ -23,3 +23,16 @@ type UploadURLPresigner interface {
 type IDGenerator interface {
 	NewID() (string, error)
 }
+
+// UploadRetryMarker は再実行できる履歴を ANALYZING に戻して attempt を進める。
+type UploadRetryMarker interface {
+	// MarkRetrying は status が domain.RetryableStatuses のいずれかであるときだけ ANALYZING にし、attempt を 1 進めて
+	// 前回の失敗情報(error_code / error_message / failed_at)を消す。進めた後の attempt を返す。
+	// 履歴が無い、または再実行できない status なら ErrUploadNotRetryable を返す。
+	MarkRetrying(ctx context.Context, userID, uploadID string, now time.Time) (attempt int, err error)
+}
+
+// AnalyzeJobEnqueuer は解析のやり直しを analyze キューへ送る。
+type AnalyzeJobEnqueuer interface {
+	EnqueueRetry(ctx context.Context, job domain.RetryJob) error
+}
