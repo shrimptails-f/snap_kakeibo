@@ -25,17 +25,12 @@
 | UI test | React Testing Library | 利用者視点の component test |
 | DOM test | jsdom | test 用ブラウザ環境 |
 | HTTP | Fetch API | バックエンドおよび Presigned URL への通信 |
+| routing | React Router | 画面と URL の分離、認証ガード(`src/app/router`) |
 | styling | CSS | global style と responsive design |
 
 Node.js と pnpm の実行環境はリポジトリの Dev Container に合わせる。
 
 ## 3. 採用方針
-
-### React Router
-
-画面と URL を分離し、戻る・再読み込み・直接アクセスを成立させるために導入する。ルート定義は `src/app/router` に集約する。
-
-導入タイミングは、現在の単一画面から最初の画面分割を行う変更とする。
 
 ### TanStack Query
 

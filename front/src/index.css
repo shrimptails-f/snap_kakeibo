@@ -97,12 +97,27 @@ small {
   background: #fffdfa;
 }
 
-.loginPanel form {
+.loginPanel h1 {
+  margin-bottom: 4px;
+  font-size: 22px;
+}
+
+.loginForm {
   display: grid;
   gap: 12px;
 }
 
-.loginPanel input {
+.loginForm__field {
+  display: grid;
+  gap: 4px;
+}
+
+.loginForm__field label {
+  font-size: 14px;
+  color: #354036;
+}
+
+.loginForm input {
   min-height: 42px;
   padding: 0 12px;
   border: 1px solid #d7d0c3;
@@ -110,7 +125,11 @@ small {
   background: #fff;
 }
 
-.loginPanel button,
+.loginForm .error {
+  margin-bottom: 0;
+}
+
+.loginForm button,
 .sessionBar button {
   min-height: 40px;
   border: 0;
@@ -120,7 +139,7 @@ small {
   cursor: pointer;
 }
 
-.loginPanel button:disabled {
+.loginForm button:disabled {
   opacity: 0.6;
   cursor: default;
 }
@@ -130,8 +149,15 @@ small {
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
-  margin-bottom: 16px;
   color: #68736c;
+}
+
+.pageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
 .sessionBar button {
@@ -251,11 +277,13 @@ td:last-child {
   }
 
   header,
+  .pageHeader,
   .layout {
     grid-template-columns: 1fr;
   }
 
-  header {
+  header,
+  .pageHeader {
     display: grid;
   }
 

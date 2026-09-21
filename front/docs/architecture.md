@@ -163,15 +163,15 @@ shared HTTP client
 - screen はルートのパラメータを受け取り、feature の UI を組み立てる薄い入口にする
 - ナビゲーションを伴う要素には、可能な限りリンクを使用する
 
-Router を導入するまでは単一画面を維持できるが、新しい画面を `App.tsx` の条件分岐だけで増やさない。
+新しい画面は `app/router/routes.tsx` にルートとして追加し、既存画面の条件分岐だけで増やさない。
 
 ## 7. 移行方針
 
-現在の `App.tsx` は認証、アップロード、ポーリング、一覧、詳細表示を一つに持つ検証実装である。一括リライトではなく、次の順で分離する。
+初期の検証実装(認証、アップロード、ポーリング、一覧、詳細表示を一つに持つ `App.tsx`)を、一括リライトではなく次の順で分離する。
 
-1. 純粋な型・表示変換・HTTP クライアントを分離する
-2. 認証と解析依頼を feature に分離する
-3. Router とページ共通レイアウトを導入する
+1. 純粋な型・表示変換・HTTP クライアントを分離する(完了: `shared/api`、`shared/auth`、`shared/lib`)
+2. 認証と解析依頼を feature に分離する(認証は完了: `features/auth`。アップロード・解析依頼一覧・支出表示は `features/receipt-analysis/screens/ReceiptIntakePage.tsx` に検証実装のまま残る)
+3. Router とページ共通レイアウトを導入する(完了: `app/router`、`app/layouts`。`/months/:yearMonth`、`/analysis-requests`、`/expenses/:expenseId` は画面の実装時に追加する)
 4. API データ取得をサーバー状態管理層へ移す
 5. 共通化の実績ができた UI だけを `shared/ui` へ移す
 
