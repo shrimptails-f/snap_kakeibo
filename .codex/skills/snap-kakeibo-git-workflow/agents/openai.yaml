@@ -1,0 +1,4 @@
+interface:
+  display_name: "Snap Kakeibo Git Workflow"
+  short_description: "snap_kakeibo の Issue / PR / commit / マージ / deploy ブランチの運用"
+  default_prompt: "$snap-kakeibo-git-workflow を使って Issue と PR を作成し、deploy/dev へ反映してください。"
