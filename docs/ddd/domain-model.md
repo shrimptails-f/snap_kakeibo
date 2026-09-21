@@ -6,7 +6,7 @@
 
 本書は目標とするモデルを示す。現在のpackage名、API名、DynamoDBのテーブル名を一括で変更する指示ではない。
 
-用語の意味は[ユビキタス言語](./ubiquitous-language.md)を正とする。
+用語の意味は[ユビキタス言語](./ubiquitous-language.md)、既存実装との名称対応は[命名変換表](./naming-mapping.md)を正とする。
 
 ## 境界づけられたコンテキスト
 
