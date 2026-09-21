@@ -1,0 +1,4 @@
+interface:
+  display_name: "Snap Kakeibo Frontend"
+  short_description: "snap_kakeibo の React フロントエンド実装規約"
+  default_prompt: "$snap-kakeibo-frontend を使ってフロントエンド機能を実装してください。"
