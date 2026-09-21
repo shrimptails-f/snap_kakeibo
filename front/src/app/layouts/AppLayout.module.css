@@ -1,0 +1,11 @@
+/* ログイン前後の共通レイアウト(AppLayout / GuestLayout)。値は globals.css のトークンだけを使う */
+
+.layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.main {
+  flex: 1;
+}

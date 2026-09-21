@@ -1,22 +1,22 @@
 .spinner {
   display: inline-block;
   color: var(--color-primary);
-  animation: spinner-rotate 0.9s linear infinite;
+  animation: rotate 0.9s linear infinite;
 }
 
-.spinner__track {
+.track {
   opacity: 0.25;
 }
 
 /* prefers-reduced-motion のときは globals.css が animation を止めるので、静止した円 + aria-label になる */
-@keyframes spinner-rotate {
+@keyframes rotate {
   to {
     transform: rotate(360deg);
   }
 }
 
 /* 本文領域の中央に置く(画面やパネルの初回 loading) */
-.spinner-block {
+.block {
   display: flex;
   justify-content: center;
   padding-block: var(--space-12);

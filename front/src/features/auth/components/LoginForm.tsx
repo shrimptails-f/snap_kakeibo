@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form'
 import { loginErrorMessage } from '../lib/loginErrorMessage'
 import { loginFormSchema } from '../types/login.schema'
 import type { LoginFormValues } from '../types/login.schema'
+import styles from './LoginForm.module.css'
 
 type Props = {
   onSubmit: (values: LoginFormValues) => Promise<void>
@@ -33,11 +34,12 @@ export function LoginForm({ onSubmit }: Props) {
   }
 
   return (
-    <form className="loginForm" noValidate onSubmit={handleSubmit(submit)}>
-      <div className="loginForm__field">
-        <label htmlFor="login-email">メールアドレス</label>
+    <form className={styles.form} noValidate onSubmit={handleSubmit(submit)}>
+      <div className={styles.field}>
+        <label className={styles.label} htmlFor="login-email">メールアドレス</label>
         <input
           id="login-email"
+          className={styles.input}
           autoComplete="email"
           inputMode="email"
           required
@@ -47,15 +49,16 @@ export function LoginForm({ onSubmit }: Props) {
           {...register('email')}
         />
         {errors.email && (
-          <p id="login-email-error" className="loginForm__fieldError">
+          <p id="login-email-error" className={styles.fieldError}>
             {errors.email.message}
           </p>
         )}
       </div>
-      <div className="loginForm__field">
-        <label htmlFor="login-password">パスワード</label>
+      <div className={styles.field}>
+        <label className={styles.label} htmlFor="login-password">パスワード</label>
         <input
           id="login-password"
+          className={styles.input}
           autoComplete="current-password"
           required
           type="password"
@@ -64,17 +67,17 @@ export function LoginForm({ onSubmit }: Props) {
           {...register('password')}
         />
         {errors.password && (
-          <p id="login-password-error" className="loginForm__fieldError">
+          <p id="login-password-error" className={styles.fieldError}>
             {errors.password.message}
           </p>
         )}
       </div>
       {errors.root?.server && (
-        <p className="error" role="alert">
+        <p className={styles.formError} role="alert">
           {errors.root.server.message}
         </p>
       )}
-      <button disabled={isSubmitting} type="submit">
+      <button className={styles.submit} disabled={isSubmitting} type="submit">
         {isSubmitting ? 'ログイン中...' : 'ログイン'}
       </button>
     </form>

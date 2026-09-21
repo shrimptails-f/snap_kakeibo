@@ -8,9 +8,20 @@ import { SpinnerBlock } from '@/shared/ui/Spinner'
 import { useAnalysisRequests } from '../hooks/useAnalysisRequests'
 import { useUploadReceipt } from '../hooks/useUploadReceipt'
 import { analysisRequestStatus } from '../lib/analysisRequestStatus'
+import type { StatusTone } from '../lib/analysisRequestStatus'
+import styles from './ReceiptIntakePage.module.css'
 
 // 移行途中の検証画面。アップロード、解析依頼一覧、支出の表示を一つに持つ。
 // 月の選択(URL 化)と支出詳細の別画面化は次の段階で行う
+
+// 状態バッジの色。neutral は基本の .status だけ
+const STATUS_TONE_CLASS: Record<StatusTone, string> = {
+  neutral: styles.status,
+  info: `${styles.status} ${styles.statusInfo}`,
+  primary: `${styles.status} ${styles.statusPrimary}`,
+  warning: `${styles.status} ${styles.statusWarning}`,
+  danger: `${styles.status} ${styles.statusDanger}`,
+}
 
 function currentMonth(): string {
   return new Date().toISOString().slice(0, 7)
@@ -32,55 +43,55 @@ export function ReceiptIntakePage() {
 
   return (
     <>
-      <div className="pageHeader">
-        <h1>{month} のレシート取り込み</h1>
-        <label className="uploadButton">
+      <div className={styles.pageHeader}>
+        <h1 className={styles.title}>{month} のレシート取り込み</h1>
+        <label className={styles.uploadButton}>
           <input type="file" accept="image/*,.pdf" onChange={handleFileChange} disabled={upload.isPending} />
           {upload.isPending ? 'アップロード中...' : 'ファイルを選択'}
         </label>
       </div>
 
       {upload.isSuccess && (
-        <p className="notice" role="status">
+        <p className={styles.notice} role="status">
           アップロードしました。解析が完了すると解析依頼の一覧に反映されます。
         </p>
       )}
       {upload.isError && (
-        <p className="error" role="alert">
+        <p className={styles.error} role="alert">
           {toFriendlyMessage(upload.error)}
         </p>
       )}
 
-      <section className="layout">
-        <div className="panel">
+      <section className={styles.layout}>
+        <div className={styles.panel}>
           <h2>解析依頼</h2>
-          <div className="list">
+          <div className={styles.list}>
             {requests.items.length === 0 && <p className="muted">まだ解析依頼がありません。</p>}
             {requests.items.map((item) => {
               const status = analysisRequestStatus(item)
               return (
                 <button
-                  className="row"
+                  className={styles.row}
                   key={item.analysis_request_id}
                   type="button"
                   disabled={!item.expense_id}
                   onClick={() => item.expense_id && setSelectedExpenseId(item.expense_id)}
                 >
-                  <span>
+                  <span className={styles.rowBody}>
                     <strong>{item.file_name || item.analysis_request_id}</strong>
                     <small>{new Date(item.created_at).toLocaleString('ja-JP')}</small>
                     <small>試行 {item.attempt} 回目</small>
                     {item.error_message && <small>{item.error_message}</small>}
                     {item.failed_at && <small>失敗日時: {new Date(item.failed_at).toLocaleString('ja-JP')}</small>}
                   </span>
-                  <span className={`status status--${status.tone}`}>{status.label}</span>
+                  <span className={STATUS_TONE_CLASS[status.tone]}>{status.label}</span>
                 </button>
               )
             })}
           </div>
         </div>
 
-        <div className="panel">
+        <div className={styles.panel}>
           <h2>支出</h2>
           {!selectedExpenseId && <p className="muted">登録完了した解析依頼を選択してください。</p>}
           {selectedExpenseId && (
@@ -90,9 +101,9 @@ export function ReceiptIntakePage() {
               key={selectedExpenseId}
               onReset={queryErrorReset.reset}
               fallback={(error, reset) => (
-                <div className="panelError">
+                <div className={styles.panelError}>
                   <p role="alert">{toFriendlyMessage(error)}</p>
-                  <button type="button" onClick={reset}>
+                  <button className={styles.retryButton} type="button" onClick={reset}>
                     再試行
                   </button>
                 </div>

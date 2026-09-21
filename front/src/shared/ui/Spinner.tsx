@@ -1,4 +1,4 @@
-import './Spinner.css'
+import styles from './Spinner.module.css'
 
 type Props = {
   // 直径(px)
@@ -13,14 +13,14 @@ export function Spinner({ size = 24, label = '読み込み中' }: Props) {
     <svg
       role="status"
       aria-label={label}
-      className="spinner"
+      className={styles.spinner}
       width={size}
       height={size}
       viewBox="0 0 24 24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
-      <circle className="spinner__track" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <circle className={styles.track} cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
     </svg>
   )
@@ -31,7 +31,7 @@ type BlockProps = Props
 // 画面やパネルの本文領域を占める loading 表示(Suspense の fallback 向け)
 export function SpinnerBlock({ size = 32, label }: BlockProps) {
   return (
-    <div className="spinner-block">
+    <div className={styles.block}>
       <Spinner size={size} label={label} />
     </div>
   )

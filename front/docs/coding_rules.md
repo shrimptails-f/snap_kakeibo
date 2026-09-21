@@ -91,8 +91,10 @@ API のフィールド名は境界では snake_case のまま扱ってよい。U
 
 - 色、余白、角丸、影、画面幅は [デザインガイドライン](./design_guidelines.md) の CSS custom properties を使う
 - 業務上の状態を色だけで表現しない
-- feature 固有の class をグローバルな短い名前（`.row`、`.panel` など）で追加しない
-- style の適用範囲を限定できる方式を採用するまでは、Block を含む具体的な class 名を使う
+- component の style は同じディレクトリの `<Component>.module.css` に置き、`import styles from './X.module.css'` で参照する。class 名は camelCase(`.fieldError`)にし、BEM の接頭辞は付けない
+- グローバル CSS は `app/styles/globals.css` だけとし、トークン、リセット、`.page-shell` / `.amount` / `.muted` のような全画面共通の class に限定する。feature 固有の class を追加しない
+- 状態による見た目の切り替えは、`aria-invalid` などの属性セレクタか、`.status` + `.statusDanger` のような追加 class で表す
+- 別 component の module を import するのは、同じ見た目を意図的に共有する場合(`GuestLayout` が `AppHeader.module.css` を使うなど)に限る。2 つ以上の feature で同じ部品が必要になったら `shared/ui` へ移す
 - inline style は動的な数値など、CSS で表現しにくい場合に限定する
 - `!important` は原則使用しない
 

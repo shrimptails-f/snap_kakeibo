@@ -2,6 +2,7 @@ import { formatYen } from '@/shared/lib/formatYen'
 import { useExpense } from '../hooks/useExpense'
 import { categoryLabel } from '../lib/categoryLabel'
 import { sourceLabel } from '../lib/sourceLabel'
+import styles from './ExpenseDetailPanel.module.css'
 
 type Props = {
   expenseId: string
@@ -14,7 +15,7 @@ export function ExpenseDetailPanel({ expenseId }: Props) {
 
   return (
     <>
-      <div className="summary">
+      <div className={styles.summary}>
         <span>{expense.store_name}</span>
         <strong className="amount">{formatYen(expense.recorded_amount)}</strong>
         <small>{expense.purchase_date}</small>
@@ -28,7 +29,7 @@ export function ExpenseDetailPanel({ expenseId }: Props) {
           </small>
         )}
       </div>
-      <table>
+      <table className={styles.details}>
         <thead>
           <tr>
             <th>品目</th>

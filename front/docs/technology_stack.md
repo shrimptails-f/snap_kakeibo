@@ -29,7 +29,7 @@
 | server state | TanStack Query | API 由来のデータの取得、cache、再取得、mutation。初回 loading は Suspense で扱う |
 | form | React Hook Form | 入力状態、送信中、validation lifecycle(`features/*/components` のフォーム) |
 | validation | Zod | フォーム入力と API レスポンスの境界検証(`*.schema.ts`、`shared/api/parseResponse`) |
-| styling | CSS | global style と responsive design |
+| styling | CSS Modules | component ごとの `*.module.css`。トークン・リセット・全画面共通の class は `app/styles/globals.css` |
 
 Node.js と pnpm の実行環境はリポジトリの Dev Container に合わせる。
 
@@ -41,16 +41,10 @@ Node.js と pnpm の実行環境はリポジトリの Dev Container に合わせ
 
 ### スタイリング方式
 
-現時点では CSS を継続する。CSS Modules、Tailwind CSS、CSS-in-JS の追加導入は決定していない。
+CSS Modules を採用した(§2)。Tailwind CSS や CSS-in-JS は、次のいずれかが具体化するまで再検討しない。
 
-選定時は次を比較する。
-
-- style の適用範囲を feature 内に閉じられるか
-- design token と responsive design を一貫して扱えるか
-- class の可読性と component test を損なわないか
-- build、保守、依存更新の負担
-
-方針決定までは、具体的な class 名と CSS custom properties で衝突を防ぐ。
+- design token を CSS custom properties だけで扱えなくなる(テーマ切替など)
+- 動的な style が増え、class の組み合わせで表現しきれなくなる
 
 ### UI component library
 
