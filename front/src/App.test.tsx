@@ -3,6 +3,11 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App.tsx'
 
+// 通貨の記号(¥ / ￥)は Node の ICU によって変わるので、画面と同じフォーマッタで期待値を作る
+function yen(value: number) {
+  return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(value)
+}
+
 // fetch を差し替えて、パスごとの応答を返す
 function mockFetch(routes: Record<string, unknown>) {
   const defaultRoutes: Record<string, unknown> = {
@@ -119,8 +124,8 @@ describe('App', () => {
     await user.click(await screen.findByRole('button', { name: /receipt-1\.jpg/ }))
 
     expect(await screen.findByText('居酒屋')).toBeInTheDocument()
-    expect(screen.getByText('¥2,500')).toBeInTheDocument()
-    expect(screen.getByText('読取金額 ¥5,000 / 調整額 -¥2,500')).toBeInTheDocument()
+    expect(screen.getByText(yen(2500))).toBeInTheDocument()
+    expect(screen.getByText(`読取金額 ${yen(5000)} / 調整額 ${yen(-2500)}`)).toBeInTheDocument()
     expect(screen.getByText('交際・会食')).toBeInTheDocument()
   })
 
