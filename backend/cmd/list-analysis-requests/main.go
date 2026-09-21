@@ -33,6 +33,7 @@ type item struct {
 	UploadExpiresAt   string `json:"upload_expires_at"`
 	ErrorCode         string `json:"error_code,omitempty"`
 	ErrorMessage      string `json:"error_message,omitempty"`
+	FailedAt          string `json:"failed_at,omitempty"`
 	CreatedAt         string `json:"created_at"`
 	UpdatedAt         string `json:"updated_at"`
 }
@@ -125,6 +126,9 @@ func toItem(r domain.AnalysisRequest) item {
 	}
 	if reason, ok := r.FailureReason(); ok {
 		out.ErrorCode, out.ErrorMessage = reason.Code(), reason.SafeMessage()
+	}
+	if failedAt, ok := r.FailedAt(); ok {
+		out.FailedAt = failedAt.UTC().Format(time.RFC3339)
 	}
 	return out
 }

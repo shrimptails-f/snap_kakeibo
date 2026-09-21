@@ -179,10 +179,11 @@ func TestListByMonthAgainstDynamoDB(t *testing.T) {
 		createdAt time.Time
 		expenseID string
 		errorCode string
+		failedAt  time.Time
 	}{
-		{"request-3", analysisdomain.AnalysisStatusUploading, integrationNow.Add(2 * time.Hour), "", ""},
-		{"request-2", analysisdomain.AnalysisStatusSucceeded, integrationNow.Add(time.Hour), "expense-1", ""},
-		{"request-1", analysisdomain.AnalysisStatusFailed, integrationNow, "", "INTERNAL"},
+		{"request-3", analysisdomain.AnalysisStatusUploading, integrationNow.Add(2 * time.Hour), "", "", time.Time{}},
+		{"request-2", analysisdomain.AnalysisStatusSucceeded, integrationNow.Add(time.Hour), "expense-1", "", time.Time{}},
+		{"request-1", analysisdomain.AnalysisStatusFailed, integrationNow, "", "INTERNAL", time.Date(2026, 9, 20, 12, 30, 0, 0, time.UTC)},
 	} {
 		r := got[i]
 		if r.ID().String() != want.id || r.UserID() != "user-1" || r.Status() != want.status || r.CurrentAttempt().Int() != 1 || r.ExpenseID().String() != want.expenseID {
@@ -197,6 +198,10 @@ func TestListByMonthAgainstDynamoDB(t *testing.T) {
 		reason, ok := r.FailureReason()
 		if (want.errorCode != "") != ok || reason.Code() != want.errorCode || ok && reason.SafeMessage() != "boom" {
 			t.Errorf("ListByMonth()[%d].FailureReason() = %+v, %v, want %q", i, reason, ok, want.errorCode)
+		}
+		failedAt, failed := r.FailedAt()
+		if failed != !want.failedAt.IsZero() || !failedAt.Equal(want.failedAt) {
+			t.Errorf("ListByMonth()[%d].FailedAt() = %v, %v, want %v", i, failedAt, failed, want.failedAt)
 		}
 	}
 

@@ -99,13 +99,16 @@ func TestRestoreAnalysisRequest(t *testing.T) {
 	restored, err := RestoreAnalysisRequest(AnalysisRequestState{
 		ID: request.ID(), UserID: request.UserID(), Image: request.Image(), Status: request.Status(),
 		CurrentAttempt: request.CurrentAttempt(), UploadExpiresAt: request.UploadExpiresAt(),
-		FailureReason: &reason, CreatedAt: request.CreatedAt(), UpdatedAt: request.UpdatedAt(),
+		FailureReason: &reason, FailedAt: request.UpdatedAt(), CreatedAt: request.CreatedAt(), UpdatedAt: request.UpdatedAt(),
 	})
 	if err != nil {
 		t.Fatalf("RestoreAnalysisRequest() error = %v", err)
 	}
 	if restored.Status() != AnalysisStatusFailed || restored.CurrentAttempt().Int() != 1 {
 		t.Errorf("restored = status %q, attempt %d", restored.Status(), restored.CurrentAttempt().Int())
+	}
+	if failedAt, ok := restored.FailedAt(); !ok || !failedAt.Equal(now.Add(time.Minute)) {
+		t.Errorf("FailedAt() = %v, %t", failedAt, ok)
 	}
 }
 

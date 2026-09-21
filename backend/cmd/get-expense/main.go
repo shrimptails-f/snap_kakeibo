@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"time"
 
 	authapp "snap_kakeibo/backend/internal/auth/application"
 	"snap_kakeibo/backend/internal/di"
@@ -31,6 +32,8 @@ type expenseResponse struct {
 	AdjustmentAmount  int64  `json:"adjustment_amount"`
 	RecordedAmount    int64  `json:"recorded_amount"`
 	IsEdited          bool   `json:"is_edited"`
+	Source            string `json:"source"`
+	UpdatedAt         string `json:"updated_at"`
 }
 
 type detailResponse struct {
@@ -40,6 +43,8 @@ type detailResponse struct {
 	CategorySource string `json:"category_source"`
 	Amount         int64  `json:"amount"`
 	Quantity       int64  `json:"quantity"`
+	Source         string `json:"source"`
+	IsEdited       bool   `json:"is_edited"`
 }
 
 type response struct {
@@ -118,13 +123,14 @@ func toResponse(e domain.Expense) response {
 	source := e.Details()
 	details := make([]detailResponse, 0, len(source))
 	for _, d := range source {
-		details = append(details, detailResponse{DetailID: d.ID().String(), Name: d.Name(), Category: d.Category().String(), CategorySource: d.CategorySource().String(), Amount: d.Amount().Yen(), Quantity: d.Quantity().Int64()})
+		details = append(details, detailResponse{DetailID: d.ID().String(), Name: d.Name(), Category: d.Category().String(), CategorySource: d.CategorySource().String(), Amount: d.Amount().Yen(), Quantity: d.Quantity().Int64(), Source: d.Source().String(), IsEdited: d.Edited()})
 	}
 	return response{
 		Expense: expenseResponse{
 			ExpenseID: e.ID().String(), AnalysisRequestID: e.SourceRequestID().String(), StoreName: e.StoreName(),
 			PurchaseDate: e.PurchaseDate().String(), YearMonth: e.PurchaseDate().YearMonth().String(),
 			ReadAmount: e.ReadAmount().Yen(), AdjustmentAmount: e.AdjustmentAmount().Yen(), RecordedAmount: e.RecordedAmount().Yen(), IsEdited: e.Edited(),
+			Source: e.Source().String(), UpdatedAt: e.UpdatedAt().UTC().Format(time.RFC3339),
 		},
 		Details: details,
 	}

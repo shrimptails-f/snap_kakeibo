@@ -13,6 +13,8 @@ var (
 	ErrAmountOverflow = errors.New("recorded amount overflows int64")
 	// ErrInvalidCategorySource はカテゴリ決定元が AI と USER のいずれでもないことを表す。
 	ErrInvalidCategorySource = errors.New("unknown category source")
+	// ErrInvalidRecordSource は支出または明細の作成元が AI と USER のいずれでもないことを表す。
+	ErrInvalidRecordSource = errors.New("unknown record source")
 )
 
 // ExpenseDetailID は支出明細を一意に識別する値オブジェクト。
@@ -70,3 +72,23 @@ func NewCategorySource(value string) (CategorySource, error) {
 
 // String は保存に使用するカテゴリ決定元を返す。
 func (s CategorySource) String() string { return string(s) }
+
+// RecordSource は支出または明細を作成した主体。
+type RecordSource string
+
+const (
+	RecordSourceAI   RecordSource = "AI"
+	RecordSourceUser RecordSource = "USER"
+)
+
+// NewRecordSource は定義済みの作成元を生成する。
+func NewRecordSource(value string) (RecordSource, error) {
+	source := RecordSource(value)
+	if source != RecordSourceAI && source != RecordSourceUser {
+		return "", ErrInvalidRecordSource
+	}
+	return source, nil
+}
+
+// String は保存に使用する作成元を返す。
+func (s RecordSource) String() string { return string(s) }

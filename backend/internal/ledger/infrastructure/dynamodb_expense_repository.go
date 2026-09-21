@@ -4,6 +4,7 @@ package infrastructure
 import (
 	"context"
 	"fmt"
+	"time"
 
 	common "snap_kakeibo/backend/internal/common/domain"
 	"snap_kakeibo/backend/internal/ledger/application"
@@ -26,6 +27,8 @@ type expenseItem struct {
 	ReadAmount        int64  `dynamodbav:"read_amount"`
 	AdjustmentAmount  int64  `dynamodbav:"adjustment_amount"`
 	IsEdited          bool   `dynamodbav:"is_edited"`
+	Source            string `dynamodbav:"source"`
+	UpdatedAt         string `dynamodbav:"updated_at"`
 }
 
 // expenseDetailItem は expense_details の項目のうち支出明細の復元に使う属性。
@@ -36,6 +39,8 @@ type expenseDetailItem struct {
 	CategorySource string `dynamodbav:"category_source"`
 	Amount         int64  `dynamodbav:"amount"`
 	Quantity       int64  `dynamodbav:"quantity"`
+	Source         string `dynamodbav:"source"`
+	IsEdited       bool   `dynamodbav:"is_edited"`
 }
 
 // DynamoDBExpenseRepository は expenses と expense_details から支出集約を復元する。
@@ -106,10 +111,18 @@ func restoreExpense(userID common.UserID, expenseID domain.ExpenseID, item expen
 	}
 	// 手入力の支出は解析依頼を持たないので空を許容する
 	sourceRequestID, _ := common.NewAnalysisRequestID(item.AnalysisRequestID)
+	source, err := domain.NewRecordSource(item.Source)
+	if err != nil {
+		return domain.Expense{}, fmt.Errorf("restore expense %s: %w", expenseID, err)
+	}
+	updatedAt, err := time.Parse(time.RFC3339, item.UpdatedAt)
+	if err != nil {
+		return domain.Expense{}, fmt.Errorf("restore expense %s updated_at: %w", expenseID, err)
+	}
 	expense, err := domain.RestoreExpense(domain.ExpenseState{
 		ID: expenseID, UserID: userID, SourceRequestID: sourceRequestID,
 		StoreName: item.StoreName, PurchaseDate: purchaseDate, ReadAmount: readAmount,
-		Adjustment: domain.NewAdjustmentAmount(item.AdjustmentAmount), Details: details, Edited: item.IsEdited,
+		Adjustment: domain.NewAdjustmentAmount(item.AdjustmentAmount), Details: details, Edited: item.IsEdited, Source: source, UpdatedAt: updatedAt,
 	})
 	if err != nil {
 		return domain.Expense{}, fmt.Errorf("restore expense %s: %w", expenseID, err)
@@ -138,7 +151,11 @@ func restoreDetail(item expenseDetailItem) (domain.ExpenseDetail, error) {
 	if err != nil {
 		return domain.ExpenseDetail{}, err
 	}
-	return domain.NewExpenseDetail(id, item.Name, amount, quantity, category, source)
+	recordSource, err := domain.NewRecordSource(item.Source)
+	if err != nil {
+		return domain.ExpenseDetail{}, err
+	}
+	return domain.RestoreExpenseDetail(id, item.Name, amount, quantity, category, source, recordSource, item.IsEdited)
 }
 
 func stringValue(v string) ddbtypes.AttributeValue { return &ddbtypes.AttributeValueMemberS{Value: v} }
