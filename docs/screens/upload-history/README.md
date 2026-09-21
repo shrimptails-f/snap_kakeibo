@@ -68,62 +68,64 @@
 
 ### GET /months/{yyyy-MM}/uploads
 
-指定月のアップロード履歴を取得する。
+指定月のアップロード履歴を作成日時の降順で取得する。`{yyyy-MM}` が `YYYY-MM` の形式でなければ `400`。
 
 Response:
 
 ```json
 {
-  "year_month": "2026-09",
-  "uploads": [
+  "items": [
     {
       "upload_id": "01JUPLOADXXX",
       "billing_id": "01JBILLXXX",
       "status": "SUCCEEDED",
-      "attempt": 1,
       "file_name": "receipt.jpg",
-      "store_name": "スーパー",
-      "final_amount": 2780,
-      "expires_at": "2026-09-15T12:15:00Z",
-      "error_code": null,
-      "error_message": null,
-      "failed_at": null,
+      "content_type": "image/jpeg",
+      "year_month": "2026-09",
       "created_at": "2026-09-15T12:00:00Z",
       "updated_at": "2026-09-15T12:01:00Z"
     },
     {
       "upload_id": "01JUPLOADYYY",
-      "billing_id": null,
       "status": "NO_DATA",
-      "attempt": 1,
       "file_name": "receipt-2.jpg",
-      "store_name": null,
-      "final_amount": null,
-      "expires_at": "2026-09-15T12:20:00Z",
-      "error_code": null,
-      "error_message": null,
-      "failed_at": null,
+      "content_type": "image/jpeg",
+      "year_month": "2026-09",
       "created_at": "2026-09-15T12:05:00Z",
       "updated_at": "2026-09-15T12:06:00Z"
     },
     {
       "upload_id": "01JUPLOADZZZ",
-      "billing_id": null,
       "status": "FAILED",
-      "attempt": 2,
       "file_name": "receipt-3.jpg",
-      "store_name": null,
-      "final_amount": null,
-      "expires_at": "2026-09-15T12:20:00Z",
+      "content_type": "image/jpeg",
+      "year_month": "2026-09",
       "error_code": "NO_TOTAL_AMOUNT",
       "error_message": "合計金額を取得できませんでした",
-      "failed_at": "2026-09-15T12:06:00Z",
       "created_at": "2026-09-15T12:05:00Z",
       "updated_at": "2026-09-15T12:06:00Z"
     }
   ]
 }
 ```
+
+| 項目 | 備考 |
+| --- | --- |
+| `billing_id` | `SUCCEEDED` のときだけ。請求詳細・編集画面への遷移に使う |
+| `error_code` / `error_message` | `FAILED` のときだけ |
+| `items` | 該当が無ければ `[]` |
+
+値が無い項目は `null` ではなく省略する。ページネーションは持たない(1 回の Query の範囲を返す)。
+
+#### 画面設計に対して未対応の項目
+
+以下は画面設計にあるが API が返していない。対応するときは backend / frontend / 本書を合わせて変える。
+
+| 項目 | 用途 | 未対応の理由 |
+| --- | --- | --- |
+| `expires_at` | 「期限切れ」表示(`UPLOADING` かつ `now > expires_at`) | `upload_histories` にはあるが返していない |
+| `attempt` / `failed_at` | 再実行回数・失敗日時の表示 | 同上 |
+| `store_name` / `final_amount` | 一覧の「店舗名」「請求金額」列 | `billings` にしか無く、一覧で請求を結合していない |
 
 ### POST /uploads/{upload_id}/retry
 
