@@ -2,6 +2,7 @@ import { Navigate, type RouteObject } from 'react-router'
 import { LoginPage } from '@/features/auth'
 import { ReceiptIntakePage } from '@/features/receipt-analysis'
 import { AppLayout } from '../layouts/AppLayout'
+import { GuestLayout } from '../layouts/GuestLayout'
 import { AuthGuard, LOGIN_PATH } from './guards/AuthGuard'
 import { GuestGuard } from './guards/GuestGuard'
 
@@ -10,7 +11,7 @@ import { GuestGuard } from './guards/GuestGuard'
 export const routes: RouteObject[] = [
   {
     element: <GuestGuard />,
-    children: [{ path: LOGIN_PATH, element: <LoginPage /> }],
+    children: [{ element: <GuestLayout />, children: [{ path: LOGIN_PATH, element: <LoginPage /> }] }],
   },
   {
     element: <AuthGuard />,

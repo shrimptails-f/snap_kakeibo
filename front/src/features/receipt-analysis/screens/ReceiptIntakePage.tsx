@@ -93,7 +93,7 @@ export function ReceiptIntakePage() {
   return (
     <>
       <div className="pageHeader">
-        <p>{month} のレシート取り込み</p>
+        <h1>{month} のレシート取り込み</h1>
         <label className="uploadButton">
           <input type="file" accept="image/*,.pdf" onChange={handleFileChange} disabled={isUploading} />
           {isUploading ? 'アップロード中...' : 'ファイルを選択'}

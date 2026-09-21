@@ -6,12 +6,9 @@ export function LoginPage() {
   const { login } = useAuthSession()
 
   return (
-    <main className="page-shell">
-      <section className="loginPanel">
-        <h1>snap_kakeibo</h1>
-        <h2>ログイン</h2>
-        <LoginForm onSubmit={login} />
-      </section>
-    </main>
+    <section className="loginPanel">
+      <h1>ログイン</h1>
+      <LoginForm onSubmit={login} />
+    </section>
   )
 }
