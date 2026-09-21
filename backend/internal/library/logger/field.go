@@ -110,11 +110,11 @@ func RequestID(value string) Field { return String("request_id", value) }
 // UserID はユーザー ID を付与する。
 func UserID(value string) Field { return String("user_id", value) }
 
-// UploadID はアップロード ID を付与する。
-func UploadID(value string) Field { return String("upload_id", value) }
+// AnalysisRequestID は解析依頼 ID を付与する。
+func AnalysisRequestID(value string) Field { return String("analysis_request_id", value) }
 
-// BillingID は請求 ID を付与する。
-func BillingID(value string) Field { return String("billing_id", value) }
+// ExpenseID は支出 ID を付与する。
+func ExpenseID(value string) Field { return String("expense_id", value) }
 
 // HTTPStatusCode は HTTP ステータスコードを付与する。
 func HTTPStatusCode(value int) Field { return Int("http_status_code", value) }

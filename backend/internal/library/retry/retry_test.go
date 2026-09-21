@@ -212,14 +212,14 @@ func TestDoAttemptTimeoutAppliesPerAttempt(t *testing.T) {
 func TestDoWithoutAttemptTimeoutPassesParentContext(t *testing.T) {
 	t.Parallel()
 	r := New(nil, timewrapper.NewFixed(time.Now()))
-	parent := logger.ContextWith(context.Background(), logger.UploadID("u1"))
+	parent := logger.ContextWith(context.Background(), logger.AnalysisRequestID("u1"))
 
 	err := r.Do(parent, "op", Policy{}, func(ctx context.Context) error {
 		if _, ok := ctx.Deadline(); ok {
 			t.Fatal("no AttemptTimeout -> no deadline")
 		}
 		fields := logger.FieldsFromContext(ctx)
-		if len(fields) == 0 || fields[0].Key != "upload_id" {
+		if len(fields) == 0 || fields[0].Key != "analysis_request_id" {
 			t.Fatalf("parent fields must propagate: %v", fields)
 		}
 		return nil

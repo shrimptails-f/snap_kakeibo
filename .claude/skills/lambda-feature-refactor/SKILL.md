@@ -1,6 +1,6 @@
 ---
 name: lambda-feature-refactor
-description: backend/cmd/<lambda>/main.go を internal/<feature> の application / domain / infrastructure / library に分割し、internal/library の共通基盤(logger / lambdawrap / dynamodb / s3 / sqs / oswrapper / timewrapper / ulid)と DI に載せ替えるための手順書。Issue #23 の Sub-issue 作成 → ブランチ → 実装 → 検証 → PR → deploy/dev → ログ確認 → #23 更新 までを一気通貫で扱う。「〜を feature パッケージに分割して」「retry-upload / list-uploads / get-billing を対応して」「#23 の残りをやって」「Lambda を共通基盤に載せ替えて」「新しい Lambda を追加して」のように backend の Lambda の構成に触れる依頼では、明示されなくても必ずこのスキルを読んでから着手する。
+description: backend/cmd/<lambda>/main.go を internal/<feature> の application / domain / infrastructure / library に分割し、internal/library の共通基盤(logger / lambdawrap / dynamodb / s3 / sqs / oswrapper / timewrapper / ulid)と DI に載せ替えるための手順書。Issue #23 の Sub-issue 作成 → ブランチ → 実装 → 検証 → PR → deploy/dev → ログ確認 → #23 更新 までを一気通貫で扱う。「〜を feature パッケージに分割して」「retry-analysis / list-analysis-requests / get-expense を対応して」「#23 の残りをやって」「Lambda を共通基盤に載せ替えて」「新しい Lambda を追加して」のように backend の Lambda の構成に触れる依頼では、明示されなくても必ずこのスキルを読んでから着手する。
 ---
 
 # Lambda を feature パッケージに分割する
@@ -64,8 +64,8 @@ internal/di/<lambda>.go   New<Lambda>Container + Resolve<Lambda>Usecase
 cmd/<lambda>/main.go      settings.Load → awsconfig.Load → logger.New → di → Resolve、handler は入出力変換だけ
 ```
 
-feature 名は既存に合わせる: アップロード系(`upload` / `retry-upload` / `list-uploads`)は `internal/upload`、
-請求系(`get-billing`)は `internal/billing` を新設。同じ feature に usecase を足すときは
+feature 名は既存に合わせる: 画像受付系(`upload` / `retry-analysis` / `list-analysis-requests`)は `internal/upload`、
+解析(`analyze-receipt`)は `internal/analysis`、家計簿(`get-expense`)は `internal/ledger`。名称は `docs/ddd/naming-mapping.md` に従う。同じ feature に usecase を足すときは
 既存の `interfaces.go` / `errors.go` / `keys.go` に追記し、新しい DI ファイルから既存 provider を再利用する。
 
 ### 揃えるもの(#23「残りの Lambda で揃えること」の具体)
@@ -80,11 +80,11 @@ feature 名は既存に合わせる: アップロード系(`upload` / `retry-upl
 - **時刻 / ID**: `timewrapper.Interface`(DI の共通 provider にある)、`ulid.New(clock)` を `application.IDGenerator` として登録。
 - **DynamoDB**: `client.Table(cfg.XxxTable)` を repository に持たせる。条件式・キー構築・attribute 変換は infrastructure に閉じる。
   `libdynamodb.IsConditionalCheckFailed(err)` で条件不一致を判定し、application の sentinel error に変換する。
-  `ReturnValues` で更新後の値が要るなら UpdateItem の出力を repository で読む(retry-upload の attempt)。
+  `ReturnValues` で更新後の値が要るなら UpdateItem の出力を repository で読む(retry-analysis の attempt)。
 - **キー形式**: `keys.go` に `UserPK` / `UploadSK` などを置き、`keys_test.go` で書く側(`analysis/infrastructure`)の関数と一致することを確認する。
 - **SQS**: `libsqs.Client.Queue(cfg.AnalyzeQueueURL)` を `application` の送信 interface の実装に包む。
-  `SendJSON` は ctx の trace を traceparent に載せるので、usecase で `logger.ContextWith(ctx, logger.UploadID(...))` を先に積む。
-- **ログ**: usecase の先頭で `logger.ContextWith(ctx, logger.UserID(...), logger.UploadID(...))`。以降の `dynamodb_*` span に自動で付く。
+  `SendJSON` は ctx の trace を traceparent に載せるので、usecase で `logger.ContextWith(ctx, logger.AnalysisRequestID(...))` を先に積む。
+- **ログ**: usecase の先頭で `logger.ContextWith(ctx, logger.UserID(...), logger.AnalysisRequestID(...))`。以降の `dynamodb_*` span に自動で付く。
   `http_status_code` は `lambdawrap.Handle` が `invocation_finished` に付けるので個別対応不要。
 - **HTTP 変換**: `apigateway.JSON` / `apigateway.Error`(`internal/library/apigateway`)を cmd で使う。
   application の sentinel error → ステータスの対応は handler の `errors.Is` で行う。
@@ -94,8 +94,8 @@ feature 名は既存に合わせる: アップロード系(`upload` / `retry-upl
 | 場所 | 中身 | 参考 |
 | --- | --- | --- |
 | `application/<usecase>_test.go` | interface の stub を fixture にまとめ、成功 / 各 sentinel error / 依存の失敗時に後続を呼ばないこと | `upload/application/create_upload_test.go` |
-| `domain/*_test.go` | 不変条件、既定値、境界(JST → UTC の月跨ぎなど) | `upload/domain/upload_history_test.go` |
-| `infrastructure/*_integration_test.go` | `dynamodbtest.Connect(t)` + `env.CreateTable(t, libdynamodb.XxxSchema)`。書いた属性一式と条件式の拒否を確認。`package infrastructure_test` | `upload/infrastructure/dynamodb_upload_history_repository_integration_test.go` |
+| `domain/*_test.go` | 不変条件、既定値、境界(JST → UTC の月跨ぎなど) | `upload/domain/upload_test.go` |
+| `infrastructure/*_integration_test.go` | `dynamodbtest.Connect(t)` + `env.CreateTable(t, libdynamodb.XxxSchema)`。書いた属性一式と条件式の拒否を確認。`package infrastructure_test` | `upload/infrastructure/dynamodb_analysis_request_repository_integration_test.go` |
 | `di/<lambda>_test.go` | コンテナからユースケースが解決できること。SSM は遅延取得なので `JWTSecretParameter: "/test/jwt-secret"` で Floci 不要 | `di/upload_test.go` |
 
 S3 / SQS の infrastructure は `libs3.NewWithAPI(api, presigner, nil)` / `libsqs.NewWithAPI` にフェイクを渡す単体テストにする。
@@ -140,7 +140,7 @@ git checkout refactor/<lambda>-feature-package
 
 - `invocation_started` → `<span> started / finished` → `invocation_finished` が同じ `trace_id` / `request_id`
 - span の `parent_span_id` が invocation の `span_id`
-- span に `user_id` / `upload_id` / `table_name` が付いている
+- span に `user_id` / `analysis_request_id` / `table_name` が付いている
 - `invocation_finished` に `http_status_code` がある(API の場合)
 - span が無ければ handler が 401 / 400 で早期 return している。`http_status_code` で切り分ける
 

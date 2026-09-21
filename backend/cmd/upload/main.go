@@ -27,10 +27,10 @@ type request struct {
 }
 
 type response struct {
-	UploadID  string `json:"upload_id"`
-	S3Key     string `json:"s3_key"`
-	PutURL    string `json:"put_url"`
-	ExpiresAt string `json:"expires_at"`
+	AnalysisRequestID string `json:"analysis_request_id"`
+	S3Key             string `json:"s3_key"`
+	PutURL            string `json:"put_url"`
+	ExpiresAt         string `json:"expires_at"`
 }
 
 var (
@@ -96,10 +96,10 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
 	}
 	return apigateway.JSON(200, response{
-		UploadID:  out.UploadID,
-		S3Key:     out.S3Key,
-		PutURL:    out.PutURL,
-		ExpiresAt: out.ExpiresAt.UTC().Format(time.RFC3339),
+		AnalysisRequestID: out.AnalysisRequestID,
+		S3Key:             out.S3Key,
+		PutURL:            out.PutURL,
+		ExpiresAt:         out.ExpiresAt.UTC().Format(time.RFC3339),
 	})
 }
 

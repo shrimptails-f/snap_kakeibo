@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App.tsx'
 
@@ -38,25 +39,25 @@ describe('App', () => {
     vi.unstubAllGlobals()
   })
 
-  it('履歴が空のときは案内を表示する', async () => {
+  it('解析依頼が空のときは案内を表示する', async () => {
     const month = new Date().toISOString().slice(0, 7)
-    const fetchMock = mockFetch({ [`/api/months/${month}/uploads`]: { items: [] } })
+    const fetchMock = mockFetch({ [`/api/months/${month}/analysis-requests`]: { items: [] } })
 
     render(<App />)
 
     expect(screen.getByRole('heading', { level: 1, name: 'snap_kakeibo' })).toBeInTheDocument()
-    expect(await screen.findByText('まだ履歴がありません。')).toBeInTheDocument()
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(`/api/months/${month}/uploads`, expect.any(Object)))
+    expect(await screen.findByText('まだ解析依頼がありません。')).toBeInTheDocument()
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(`/api/months/${month}/analysis-requests`, expect.any(Object)))
   })
 
-  it('履歴を一覧に表示し、解析完了していない行は選択できない', async () => {
+  it('解析依頼を一覧に表示し、登録完了していない行は選択できない', async () => {
     const month = new Date().toISOString().slice(0, 7)
     mockFetch({
-      [`/api/months/${month}/uploads`]: {
+      [`/api/months/${month}/analysis-requests`]: {
         items: [
           {
-            upload_id: 'up1',
-            billing_id: 'b1',
+            analysis_request_id: 'req1',
+            expense_id: 'e1',
             status: 'SUCCEEDED',
             file_name: 'receipt-1.jpg',
             year_month: month,
@@ -64,7 +65,7 @@ describe('App', () => {
             updated_at: '2026-09-18T00:00:00Z',
           },
           {
-            upload_id: 'up2',
+            analysis_request_id: 'req2',
             status: 'ANALYZING',
             file_name: 'receipt-2.jpg',
             year_month: month,
@@ -81,6 +82,46 @@ describe('App', () => {
     const analyzing = screen.getByRole('button', { name: /receipt-2\.jpg/ })
     expect(done).toBeEnabled()
     expect(analyzing).toBeDisabled()
+  })
+
+  it('登録完了した解析依頼を選ぶと支出と明細をカテゴリの表示名付きで表示する', async () => {
+    const month = new Date().toISOString().slice(0, 7)
+    mockFetch({
+      [`/api/months/${month}/analysis-requests`]: {
+        items: [
+          {
+            analysis_request_id: 'req1',
+            expense_id: 'e1',
+            status: 'SUCCEEDED',
+            file_name: 'receipt-1.jpg',
+            year_month: month,
+            created_at: '2026-09-18T00:00:00Z',
+            updated_at: '2026-09-18T00:00:00Z',
+          },
+        ],
+      },
+      '/api/expenses/e1': {
+        expense: {
+          expense_id: 'e1',
+          store_name: '居酒屋',
+          purchase_date: '2026-09-18',
+          read_amount: 5000,
+          adjustment_amount: -2500,
+          recorded_amount: 2500,
+        },
+        details: [{ detail_id: 'd1', name: '飲み会', category: 'social', amount: 5000, quantity: 1 }],
+      },
+    })
+
+    render(<App />)
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    await user.click(await screen.findByRole('button', { name: /receipt-1\.jpg/ }))
+
+    expect(await screen.findByText('居酒屋')).toBeInTheDocument()
+    expect(screen.getByText('¥2,500')).toBeInTheDocument()
+    expect(screen.getByText('読取金額 ¥5,000 / 調整額 -¥2,500')).toBeInTheDocument()
+    expect(screen.getByText('交際・会食')).toBeInTheDocument()
   })
 
   it('取得に失敗したらエラーを表示する', async () => {

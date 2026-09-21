@@ -2,159 +2,157 @@
 
 ## 目的
 
-本書は、既存実装の名称とDDDで採用する業務上の名称の対応を定める。
+本書は、旧実装の名称と、DDDで採用した業務上の名称の対応を定める。
 
-ドメイン層では[ユビキタス言語](./ubiquitous-language.md)に合わせた名称を使う。既存API、DynamoDB、Lambdaなど外部契約の名称は、互換性を維持するため直ちには変更せず、境界で変換する。
+コード、API、DynamoDB、Lambda、設定、画面、文書はすべて[ユビキタス言語](./ubiquitous-language.md)に合わせた名称へ全面移行済みである。旧名称は互換性のために維持せず、境界で変換もしない。本書は「何が何に変わったか」を示す記録であり、旧名称を新たに使う根拠にはしない。
 
-## 移行区分
+## 移行方針
 
-| 区分 | 意味 |
-| --- | --- |
-| 今変更する | 新しいドメインモデルや内部コードでは新名称を使用する |
-| 接続時に変更する | 既存featureを新しいモデルへ接続するときに内部名称を変更する |
-| 当面維持する | API、DynamoDB、Lambdaなど互換性へ影響するため、既存名称を境界で維持する |
-| 将来検討する | APIバージョン変更やデータ移行を伴うため、独立した変更として判断する |
+- 後方互換性は維持しない。旧API、旧DynamoDBスキーマ、旧Lambda名、旧データの移行経路は用意しない。
+- 旧テーブルのバックフィル、二重書き、dual read、deprecated alias、互換用type aliasは行わない。
+- 開発環境の既存データは破棄し、新スキーマで再作成する。CDK上では旧テーブル・旧ECR・旧ロググループを置換する。
+- backend、infra、画面、テスト、文書を一度の変更で整合させる。
 
 ## コンテキストとpackage
 
-| 対象 | 現在・移行途中の名称 | 推奨名称 | 日本語 | 区分 | 理由・補足 |
-| --- | --- | --- | --- | --- | --- |
-| 家計簿コンテキスト | `internal/billing` | `internal/ledger` | 家計簿 | 接続時に変更する | 支出だけでなく月次集計も含むため、コンテキスト全体の名前は`expense`より`ledger`が広さに合う |
-| 家計簿コンテキスト（PR #55） | `internal/expense` | `internal/ledger` | 家計簿 | 接続前に変更可能 | 現在は未接続なので、既存APIへの影響なしに変更できる |
-| 画像受付・解析 | `internal/upload`、`internal/analysis` | 現状維持 | 画像受付・解析 | 当面維持する | 受付と解析で責務が分かれており、既存feature構成と一致する |
-| 認証 | `internal/auth` | 現状維持 | 認証 | 当面維持する | 業務上の意味とコード名が一致している |
-| 共有ドメイン | `internal/common/domain` | 現状維持 | 共有ドメイン | 当面維持する | 複数コンテキストで同じ意味と制約を持つ型だけを置く |
+| 旧名称 | 新名称 | 日本語 | 備考 |
+| --- | --- | --- | --- |
+| `internal/billing`、`internal/expense` | `internal/ledger` | 家計簿 | 支出集約と月次集計(読み取りモデル)を持つ。package名は帳簿一般を表す`ledger` |
+| `internal/upload` | `internal/upload` | 画像受付 | 解析依頼の登録、一覧、再解析。解析依頼の集約は`analysis/domain`を共有する |
+| `internal/analysis` | `internal/analysis` | 解析 | 解析依頼の集約、解析ジョブ、読み取り内容の検証、解析結果 |
+| `internal/auth` | `internal/auth` | 認証 | 変更なし |
+| `internal/common/domain` | `internal/common/domain` | 共有ドメイン | 複数コンテキストで同じ意味を持つID、購入日、対象月、金額、カテゴリ |
 
-`ledger`は帳簿一般を表す。日本語での会話では「家計簿コンテキスト」と呼び、コード上のpackage名として`ledger`を使う。
+`ledger`は帳簿一般を表す。日本語での会話では「家計簿コンテキスト」と呼ぶ。
 
 ## 集約・エンティティ・読み取りモデル
 
-| 現在の名称 | 推奨名称 | 日本語 | 区分 | 備考 |
-| --- | --- | --- | --- | --- |
-| `Billing` | `Expense` | 支出 | 今変更する | 購入、取引、請求、返金など、家計へ金額上の影響を与えるもの |
-| `BillingDetail` | `ExpenseDetail` | 支出明細 | 今変更する | 支出に含まれる商品またはサービスの1行 |
-| `UploadHistory` | `AnalysisRequest` | 解析依頼 | 接続時に変更する | 履歴レコードではなく、画像受付から解析終端までを管理する集約として扱う |
-| `Receipt`（OpenAI出力と検証対象を兼用） | `AnalysisResult` | 解析結果 | 接続時に変更する | OpenAIレスポンスそのものとは分離する |
-| `Detail`（解析結果内） | `AnalyzedDetail` | 解析明細 | 接続時に変更する | 支出として確定する前の解析結果であることを示す |
-| `MonthlySummary` | `MonthlySummary` | 月次集計 | 維持する | 家計簿コンテキスト内の読み取りモデル |
-| `User` | `User` | 利用者 | 維持する | 現在の意味と一致している |
+| 旧名称 | 新名称 | 日本語 | 備考 |
+| --- | --- | --- | --- |
+| `Billing`(`billing/domain`、`analysis/domain`) | `ledger/domain.Expense` | 支出 | 解析からの登録と参照の両方で同じ集約を使う |
+| `BillingDetail` | `ledger/domain.ExpenseDetail` | 支出明細 | 支出集約の内部エンティティ |
+| `UploadHistory`(`upload/domain`) | `analysis/domain.AnalysisRequest` | 解析依頼 | `upload/domain`は型エイリアスで参照する。永続化からの復元で状態と付随する値の整合を検証する |
+| `Receipt`(OpenAI出力と検証対象を兼用) | `analysis/domain.ReceiptReading`(検証前)と`AnalysisResult`(検証済み) | 読み取り内容・解析結果 | OpenAIのJSON形式は`infrastructure`の`receiptOutput`に閉じ込める |
+| `Detail`(解析結果内) | `ReadDetail`(検証前)と`AnalyzedDetail`(検証済み) | 解析明細 | |
+| `Job` | `AnalysisJob` | 解析ジョブ | キューのメッセージから復元する解析試行1件 |
+| `Status`(analysis) | `AnalysisOutcome` | 解析試行の結末 | 状態に保存しない`SKIPPED`を含むため`AnalysisStatus`と分ける |
+| `Status`(upload) | `AnalysisStatus` | 解析依頼の状態 | `UPLOADING` / `ANALYZING` / `SUCCEEDED` / `NO_DATA` / `FAILED` |
+| `Failure` | `FailureReason` | 失敗理由 | 状態に保存する値。`AnalysisFailed` / `InternalFailure`で生成する |
+| `RetryJob` | `RetryAnalysisJob` | 再解析ジョブ | |
+| `MonthlySummary` | `MonthlySummary` | 月次集計 | 家計簿コンテキスト内の読み取りモデル |
+| `User` | `User` | 利用者 | 変更なし |
 
 ## ID
 
-| 現在の名称 | 推奨名称 | 日本語 | 区分 | 境界での扱い |
-| --- | --- | --- | --- | --- |
-| `BillingID` | `ExpenseID` | 支出ID | 今変更する | APIの`billing_id`、DBの`billing_id`とはrepository・handlerで変換する |
-| `BillingDetailID` / `DetailID` | `ExpenseDetailID` | 支出明細ID | 今変更する | DBの`detail_id`は当面維持する |
-| `UploadID` | `AnalysisRequestID` | 解析依頼ID | 接続時に変更する | APIの`upload_id`、S3キー、DB属性は当面維持する |
-| `UserID` | `UserID` | 利用者ID | 維持する | 全コンテキストで同じ意味を持つ共有ID |
+| 旧名称 | 新名称 | 日本語 | API / DB |
+| --- | --- | --- | --- |
+| `BillingID` / `billing_id` | `ExpenseID` / `expense_id` | 支出ID | パス`{expenseId}`、属性`expense_id` |
+| `BillingDetailID` / `DetailID` | `ExpenseDetailID` / `detail_id` | 支出明細ID | 属性`detail_id`は維持 |
+| `UploadID` / `upload_id` | `AnalysisRequestID` / `analysis_request_id` | 解析依頼ID | パス`{analysisRequestId}`、属性・S3キー・SQSメッセージも`analysis_request_id` |
+| `UserID` / `user_id` | `UserID` / `user_id` | 利用者ID | 変更なし |
 
 ## 金額
 
-| 現在の名称 | 推奨名称 | 日本語 | 計算・意味 | 区分 |
-| --- | --- | --- | --- | --- |
-| `OriginalAmount` / `original_amount` | `ReadAmount` / `read_amount` | 読取金額 | 店舗側の値引きや税を反映済みの、レシートに記載された最終支払合計 | Goは今変更、DBは当面維持 |
-| `DiscountAmount` / `discount_amount` | `AdjustmentAmount` / `adjustment_amount` | 調整額 | 利用者が加減する符号付き金額。減額は負数、増額は正数 | Goは今変更、DBは移行が必要 |
-| `FinalAmount` / `final_amount` | `RecordedAmount` / `recorded_amount` | 計上額 | `読取金額 + 調整額`。月次集計へ反映し、負数を許容する | Goは今変更、DBは移行が必要 |
-| 解析結果の`TotalAmount` / `total_amount` | `ReadAmount` / `read_amount` | 読取金額 | OpenAIから得た最終支払合計 | ドメイン変換時に変更する |
-| 明細の`Amount` / `amount` | `DetailAmount` / `amount` | 明細金額 | 数量を反映した支出明細1行の金額 | Goでは型名を明確化、外部属性は維持 |
-| 月次集計の`TotalAmount` / `total_amount` | `TotalRecordedAmount` / `total_recorded_amount` | 計上額合計 | 対象月の`RecordedAmount`の合計 | Goは接続時に変更、DBは当面維持 |
-| 月次集計の`BillingCount` / `billing_count` | `ExpenseCount` / `expense_count` | 支出件数 | 対象月に含まれる支出の件数 | Goは接続時に変更、DBは当面維持 |
-| 月次集計の`DetailCount` / `detail_count` | `DetailCount` / `detail_count` | 明細件数 | 対象月に含まれる支出明細の件数 | 維持する |
+| 旧名称 | 新名称 | 日本語 | 計算・意味 |
+| --- | --- | --- | --- |
+| `OriginalAmount` / `original_amount` | `ReadAmount` / `read_amount` | 読取金額 | 店舗側の値引きや税を反映済みの、レシートに記載された最終支払合計 |
+| `DiscountAmount` / `discount_amount` | `AdjustmentAmount` / `adjustment_amount` | 調整額 | 利用者が加減する符号付き金額。減額は負数、増額は正数 |
+| `FinalAmount` / `final_amount` | `RecordedAmount` / `recorded_amount` | 計上額 | `read_amount + adjustment_amount`。月次集計へ反映し、負数を許容する |
+| 解析結果の`TotalAmount` | `ReadAmount` | 読取金額 | OpenAIの出力(`total_amount`)を読み取り内容の`ReadAmount`として扱う |
+| 明細の`Amount` / `amount` | `DetailAmount` / `amount` | 明細金額 | 数量を反映した支出明細1行の金額 |
+| 月次集計の`TotalAmount` / `total_amount` | `TotalRecordedAmount` / `total_recorded_amount` | 計上額合計 | 対象月の`recorded_amount`の合計 |
+| 月次集計の`BillingCount` / `billing_count` | `ExpenseCount` / `expense_count` | 支出件数 | |
+| 月次集計の`DetailCount` / `detail_count` | `DetailCount` / `detail_count` | 明細件数 | 変更なし |
 
-既存DBの`discount_amount`は「正数を差し引く」意味で、新しい`AdjustmentAmount`は「符号付きで加算する」意味である。名称だけを置換してはならず、移行時には符号の反転が必要になる。
+旧`discount_amount`は「正数を差し引く」意味で、新`adjustment_amount`は「符号付きで加算する」意味である。旧データは移行しないため符号の変換処理は持たない。
 
 ```text
-旧: final_amount = original_amount - discount_amount
+旧: final_amount    = original_amount - discount_amount
 新: recorded_amount = read_amount + adjustment_amount
-
-移行時: adjustment_amount = -discount_amount
 ```
 
 ## 日付・月
 
-| 現在の名称 | 推奨名称 | 日本語 | 区分 | 備考 |
-| --- | --- | --- | --- | --- |
-| `PurchasedAt` | `PurchaseDate` | 購入日 | 今変更する | 時刻を持たないため、Goの型名では`At`より`Date`が正確 |
-| `purchased_at` | `purchased_at` | 購入日 | 当面維持する | API・DB互換性のため維持し、境界で`PurchaseDate`へ変換する |
-| `YearMonth` / `year_month` | `YearMonth` / `year_month` | 対象月 | 維持する | `YYYY-MM`を表し、現在の意味と一致している |
-| `IsEdited` / `is_edited` | `Edited` / `is_edited` | 編集済み | Goは変更、DBは維持 | Goでは真偽値のgetterを`Edited()`として扱い、保存属性は互換性を維持する |
-| `CreatedAt` / `UpdatedAt` | 現状維持 | 作成日時・更新日時 | 維持する | 実際に時刻を持つため`At`が適切 |
+| 旧名称 | 新名称 | 日本語 | 備考 |
+| --- | --- | --- | --- |
+| `PurchasedAt` / `purchased_at` | `PurchaseDate` / `purchase_date` | 購入日 | 時刻を持たない暦日。OpenAIのJSON Schemaも`purchase_date` |
+| `ExpiresAt` / `expires_at`(解析依頼) | `UploadExpiresAt` / `upload_expires_at` | アップロード期限 | 署名付きURLの期限 |
+| `YearMonth` / `year_month` | `YearMonth` / `year_month` | 対象月 | 変更なし |
+| `IsEdited` / `is_edited` | `Edited()` / `is_edited` | 編集済み | Goのgetterは`Edited()`、保存属性とAPIは`is_edited` |
+| `CreatedAt` / `UpdatedAt` | 変更なし | 作成日時・更新日時 | 実際に時刻を持つため`At` |
 
 ## 解析と再実行
 
-| 現在の名称 | 推奨名称 | 日本語 | 区分 | 備考 |
-| --- | --- | --- | --- | --- |
-| `RetryUpload` | `RetryAnalysis` | 再解析 | 接続時に変更する | 画像の再アップロードではなく、新しい解析試行を開始する操作 |
-| `retry-upload` Lambda | 当面維持 | 再解析Lambda | 当面維持する | Lambda名変更はinfraとデプロイに影響する |
-| `/uploads/{upload_id}/retry` | 当面維持 | 再解析API | 当面維持する | 外部API互換性を優先する |
-| `attempt` | `Attempt` | 解析試行番号 | 維持する | 同一試行のSQS再配信では増やさず、再解析時だけ増やす |
-| `Retry`（SQS・HTTP・OpenAIで曖昧） | `RetryAnalysis`、`Redelivery`、`TransientRetry` | 再解析・再配信・一時エラー再試行 | 接続時に区別する | 同じ「retry」で異なる操作を表さない |
-| `Job` | `AnalysisJob` | 解析ジョブ | 接続時に変更する | package外や複数ジョブが並ぶ箇所では対象を明確にする |
-| `Failure` | `FailureReason` / `AnalysisFailure` | 失敗理由・解析失敗 | 接続時に変更する | 状態に保存する値と処理結果のエラーを区別する |
+| 旧名称 | 新名称 | 日本語 | 備考 |
+| --- | --- | --- | --- |
+| `RetryUpload` | `RetryAnalysis` | 再解析 | 新しい解析試行を開始し、`attempt`を1増やす |
+| `retry-upload` Lambda | `retry-analysis` | 再解析Lambda | |
+| `POST /uploads/{upload_id}/retry` | `POST /analysis-requests/{analysis_request_id}/retry` | 再解析API | |
+| `ListUploads` / `list-uploads` / `GET /months/{yyyy-MM}/uploads` | `ListAnalysisRequests` / `list-analysis-requests` / `GET /months/{yyyy-MM}/analysis-requests` | 解析依頼一覧 | |
+| `attempt` | `Attempt` | 解析試行番号 | 同一試行のSQS再配信では増やさず、再解析時だけ増やす |
+| SQSの`retry` | 同一試行の再配信 | 再配信 | `attempt`を進めない |
+| OpenAIの`retry` | 一時エラーの再試行 | 一時エラー再試行 | 同じ呼び出しの中でバックオフ付きで再送する |
 
 ## ユースケース・repository
 
-| 現在の名称 | 推奨名称 | 区分 | 備考 |
-| --- | --- | --- | --- |
-| `GetBilling` | `GetExpense` | 接続時に変更する | HTTPパスは既存の`/billings/{billing_id}`を維持してよい |
-| `GetBillingUsecaseInterface` | `GetExpenseUsecaseInterface` | 接続時に変更する | handler境界で旧API名と対応付ける |
-| `BillingRepository` | `ExpenseRepository` | 接続時に変更する | domain/application側の能力名を業務用語へ合わせる |
-| `BillingDetailRepository` | `ExpenseDetailRepository` | 接続時に変更する | 支出集約単位で保存する場合は1つの`ExpenseRepository`への統合も検討する |
-| `BillingRegistrar` | `ExpenseRegistrar` | 接続時に変更する | 解析結果から支出を登録する能力 |
-| `ListExpenses` | 現状維持 | 維持する | すでにユビキタス言語と一致している |
-| `RecalculateMonthlySummary` | `RebuildMonthlySummary` | Go内部は変更する | 差分計算ではなく正本から作り直すため`Rebuild`が正確 |
-| `/monthly-summaries/{yyyy-MM}/recalculate` | 当面維持 | 当面維持する | 外部APIの破壊的変更を避ける |
+| 旧名称 | 新名称 | 備考 |
+| --- | --- | --- |
+| `GetBilling` / `GetBillingUsecaseInterface` | `GetExpense` / `GetExpenseUsecaseInterface` | 支出集約を支出明細ごと返す |
+| `BillingFinder` + `BillingDetailLister` | `ExpenseFinder` | 支出集約単位で読むため1つに統合 |
+| `BillingRegistrar` / `ErrBillingRejected` | `ExpenseRegistrar` / `ErrExpenseRejected` | 解析結果から支出を登録する |
+| `UploadHistoryRepository`(analysis) | `AnalysisRequestRepository` | `MarkAnalyzing` / `MarkFailed` / `MarkNoData` |
+| `UploadHistoryRepository` / `UploadRetryMarker` / `UploadHistoryLister`(upload) | `AnalysisRequestRepository` / `RetryAnalysisMarker` / `AnalysisRequestLister` | |
+| `AnalyzeJobEnqueuer.EnqueueRetry` | `RetryAnalysisEnqueuer.EnqueueRetryAnalysis` | |
+| `ErrUploadAlreadyExists` / `ErrUploadNotRetryable` | `ErrAnalysisRequestAlreadyExists` / `ErrAnalysisRequestNotRetryable` | |
+| `AnalysisResult`(application、OpenAI応答) | `AnalyzerResponse` | domainの`AnalysisResult`(検証済み解析結果)と区別する |
+| `RecalculateMonthlySummary` / `/recalculate` | `RebuildMonthlySummary` / `/rebuild` | 差分計算ではなく正本から作り直す |
+| `ListExpenses` | 変更なし | |
 
 ## API・Lambda・DynamoDB
 
-次の名称はドメイン用語とは異なるが、外部契約または保存済みデータとの互換性を優先して当面維持する。
+| 種別 | 旧名称 | 新名称 |
+| --- | --- | --- |
+| API | `GET /billings/{billing_id}` | `GET /expenses/{expense_id}` |
+| API | `PATCH /billings/{billing_id}` | `PATCH /expenses/{expense_id}` |
+| API | `POST /uploads/{upload_id}/retry` | `POST /analysis-requests/{analysis_request_id}/retry` |
+| API | `GET /months/{yyyy-MM}/uploads` | `GET /months/{yyyy-MM}/analysis-requests` |
+| API | `POST /monthly-summaries/{yyyy-MM}/recalculate` | `POST /monthly-summaries/{yyyy-MM}/rebuild` |
+| API レスポンス | `upload_id`、`billing`、`billing_id`、`purchased_at`、`original_amount` / `discount_amount` / `final_amount` | `analysis_request_id`、`expense`、`expense_id`、`purchase_date`、`read_amount` / `adjustment_amount` / `recorded_amount` |
+| Lambda | `get-billing` | `get-expense` |
+| Lambda | `retry-upload` | `retry-analysis` |
+| Lambda | `list-uploads` | `list-analysis-requests` |
+| 環境変数 | `BILLINGS_TABLE` / `BILLING_DETAILS_TABLE` / `UPLOAD_HISTORIES_TABLE` | `EXPENSES_TABLE` / `EXPENSE_DETAILS_TABLE` / `ANALYSIS_REQUESTS_TABLE` |
+| DynamoDB テーブル | `billings` / `billing-details` / `upload-histories` | `expenses` / `expense-details` / `analysis-requests` |
+| DynamoDB SK | `BILLING#{billing_id}` / `UPLOAD#{upload_id}` | `EXPENSE#{expense_id}` / `ANALYSIS_REQUEST#{analysis_request_id}` |
+| DynamoDB PK(明細) | `USER#{user_id}#BILLING#{billing_id}` | `USER#{user_id}#EXPENSE#{expense_id}` |
+| DynamoDB GSI | `upload_month_index`、`UPLOAD_CREATED_AT#...` | `analysis_request_month_index`、`ANALYSIS_REQUEST_CREATED_AT#...` |
+| DynamoDB type | `BILLING` / `BILLING_DETAIL` / `UPLOAD_HISTORY` | `EXPENSE` / `EXPENSE_DETAIL` / `ANALYSIS_REQUEST` |
+| DynamoDB 属性 | `billing_id`、`upload_id`、`purchased_at`、`original_amount`、`discount_amount`、`final_amount`、`expires_at`、`total_amount`、`billing_count` | `expense_id`、`analysis_request_id`、`purchase_date`、`read_amount`、`adjustment_amount`、`recorded_amount`、`upload_expires_at`、`total_recorded_amount`、`expense_count` |
+| ログ field | `upload_id` / `billing_id` | `analysis_request_id` / `expense_id` |
+| SQS メッセージ | `{"user_id","upload_id","attempt","trigger"}` | `{"user_id","analysis_request_id","attempt","trigger"}` |
 
-| 種別 | 現在の名称 | ドメインでの対応 | 方針 |
-| --- | --- | --- | --- |
-| API | `GET /billings/{billing_id}` | 支出を取得する | handlerで`billing_id`を`ExpenseID`へ変換する |
-| API | `PATCH /billings/{billing_id}` | 支出を編集する | handlerで支出編集ユースケースへ変換する |
-| API | `POST /uploads/{upload_id}/retry` | 解析依頼を再解析する | handlerで`AnalysisRequestID`へ変換する |
-| Lambda | `get-billing` | 支出取得 | デプロイ名は維持し、内部の型・usecase名だけ変更できる |
-| Lambda | `retry-upload` | 再解析 | デプロイ名は維持し、内部の型・usecase名だけ変更できる |
-| DynamoDB | `billings` | 支出 | repositoryの永続化モデルで対応付ける |
-| DynamoDB | `billing_details` | 支出明細 | repositoryの永続化モデルで対応付ける |
-| DynamoDB | `upload_histories` | 解析依頼 | repositoryの永続化モデルで対応付ける |
-| DynamoDB | `monthly_summaries` | 月次集計 | 名称を維持する |
-| DynamoDB属性 | `billing_id` | `ExpenseID` | 読み書き時に変換する |
-| DynamoDB属性 | `upload_id` | `AnalysisRequestID` | 読み書き時に変換する |
-| DynamoDB属性 | `original_amount` | `ReadAmount` | 読み書き時に変換する |
-| DynamoDB属性 | `discount_amount` | `AdjustmentAmount` | 現行値の符号を反転して変換する |
-| DynamoDB属性 | `final_amount` | `RecordedAmount` | 読み書き時に変換する |
+S3のオブジェクトキーは`receipts/{user_id}/{analysis_request_id}/original.jpg`と`analysis-results/{user_id}/{analysis_request_id}/{attempt}/{response_id}.json`で、形式は変えず名前の意味だけを改める。
 
-テーブル名や属性名を将来変更する場合は、二重書き、バックフィル、読み取りの切り替え、旧属性の廃止というデータ移行が必要になる。DDD導入だけを理由に即時変更しない。
+## 変更しない外部名称
+
+| 名称 | 理由 |
+| --- | --- |
+| OpenAI JSON Schemaの`total_amount` | レシートの「合計金額」そのものを表す外部モデルの項目。ドメインへ変換する時点で読取金額(`ReadAmount`)になる |
+| 失敗コード`NO_TOTAL_AMOUNT` | 「合計金額を取得できなかった」というOpenAI出力に対する失敗の意味を保つ |
+| `detail_id` / `detail_count` / `category_total_{category}` / `monthly_summaries` | ユビキタス言語と一致している |
+| DynamoDB SDKの`BillingMode` | AWSの課金モードを表す語で、業務上の「請求」ではない |
 
 ## 状態とカテゴリ
 
-| 現在の名称 | 推奨名称 | 区分 | 備考 |
-| --- | --- | --- | --- |
-| `UPLOADING` | 現状維持 | 維持する | アップロード待ち |
-| `ANALYZING` | 現状維持 | 維持する | 解析中 |
-| `SUCCEEDED` | 現状維持 | 維持する | 登録完了 |
-| `NO_DATA` | 現状維持 | 維持する | 明細0件のため登録対象なし |
-| `FAILED` | 現状維持 | 維持する | 解析失敗 |
-| `CategorySourceAI` / `AI` | 現状維持 | 維持する | AIがカテゴリを決定した |
-| `CategorySourceUser` / `USER` | 現状維持 | 維持する | 利用者がカテゴリを決定した |
-| 既存カテゴリ一覧 | `social`を追加 | 接続時に変更する | OpenAI Schema、集計属性、API、画面を同時に更新する |
-
-## 移行順序
-
-1. 新規ドメインコードで`AnalysisRequest`、`Expense`、`ExpenseDetail`と新しい金額名を使用する。
-2. 家計簿コンテキストのpackage名を`ledger`に確定し、未接続の`internal/expense`を必要なら移動する。
-3. infrastructureに既存DynamoDBレコードとドメインモデルの変換を実装する。
-4. applicationのusecase・interfaceを新しい名称へ変更する。
-5. handlerで既存APIの`billing_id`、`upload_id`を新しいID型へ変換する。
-6. `social`をOpenAI Schema、集計、API、画面へ同時に追加する。
-7. APIパスやDynamoDB名の変更は、必要性が生じた場合だけ別Issueで実施する。
+| 名称 | 備考 |
+| --- | --- |
+| `UPLOADING` / `ANALYZING` / `SUCCEEDED` / `NO_DATA` / `FAILED` | 変更なし |
+| `CategorySourceAI` / `AI`、`CategorySourceUser` / `USER` | 変更なし |
+| カテゴリ | `social`(交際・会食)を追加。語彙は`internal/common/domain.Categories()`が正で、OpenAI Schema、検証、月次集計、APIレスポンス、画面の表示名がこれに従う |
 
 ## 命名原則
 
-- ドメイン層ではユビキタス言語を優先する。
-- APIやDynamoDBの既存名を、そのままドメインモデル名にしない。
+- ドメイン層ではユビキタス言語を優先し、API・DynamoDB・Lambdaもドメインと同じ語を使う。
 - 同じ言葉で異なる処理を表さない。特に「retry」と「amount」は具体的な意味を付ける。
 - `At`は時刻、`Date`は暦日、`YearMonth`は暦月に使用する。
-- 永続化名を変更するときは、コードのrenameではなくデータ移行として計画する。
+- 永続化名を変更するときは、開発環境では作り直し、本番運用後はデータ移行として計画する。

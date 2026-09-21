@@ -56,9 +56,19 @@ func TestStorageStackResources(t *testing.T) {
 		},
 	})
 	storage.HasResourceProperties(jsii.String("AWS::DynamoDB::Table"), map[string]any{
-		"TableName": cfg.Tables.UploadHistories,
+		"TableName": cfg.Tables.AnalysisRequests,
 		"GlobalSecondaryIndexes": []any{map[string]any{
-			"IndexName": common.UploadMonthIndex,
+			"IndexName": common.AnalysisRequestMonthIndex,
+		}},
+	})
+	// 支出と支出明細は expenses / expense-details。明細は月ごとに金額順で引く GSI を持つ
+	storage.HasResourceProperties(jsii.String("AWS::DynamoDB::Table"), map[string]any{
+		"TableName": cfg.Tables.Expenses,
+	})
+	storage.HasResourceProperties(jsii.String("AWS::DynamoDB::Table"), map[string]any{
+		"TableName": cfg.Tables.ExpenseDetails,
+		"GlobalSecondaryIndexes": []any{map[string]any{
+			"IndexName": common.DetailMonthAmountIndex,
 		}},
 	})
 	// refresh token は専用テーブル。期限切れは TTL、ユーザー単位の一括失効は GSI で行う
@@ -183,7 +193,18 @@ func TestStorageStackResources(t *testing.T) {
 	app.HasResourceProperties(jsii.String("AWS::CodeDeploy::DeploymentGroup"), map[string]any{
 		"DeploymentGroupName": "dev-snap-kakeibo-analyze-receipt-deployment-group",
 	})
-	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{"RouteKey": "POST /api/uploads/{uploadId}/retry"})
+	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{"RouteKey": "POST /api/analysis-requests/{analysisRequestId}/retry"})
+	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{"RouteKey": "GET /api/months/{month}/analysis-requests"})
+	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{"RouteKey": "GET /api/expenses/{expenseId}"})
+	// 環境変数のテーブル名も新名称で渡す
+	app.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]any{
+		"FunctionName": "dev-snap-kakeibo-get-expense",
+		"Environment": map[string]any{"Variables": assertions.Match_ObjectLike(&map[string]any{
+			"EXPENSES_TABLE":          assertions.Match_AnyValue(),
+			"EXPENSE_DETAILS_TABLE":   assertions.Match_AnyValue(),
+			"ANALYSIS_REQUESTS_TABLE": assertions.Match_AnyValue(),
+		})},
+	})
 	app.HasParameter(jsii.String("*"), map[string]any{
 		"Type":    "AWS::SSM::Parameter::Value<String>",
 		"Default": "/dev/snap-kakeibo/functions/hello/image-tag",

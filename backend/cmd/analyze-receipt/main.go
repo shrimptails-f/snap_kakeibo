@@ -57,7 +57,7 @@ func init() {
 
 // handler は SQS レコードごとにジョブを取り出し、順に解析する。
 // ジョブが error を返したらそこで止めて Lambda を失敗させ、レコード全体の再配信に任せる
-// (処理済みのジョブは upload_histories の状態で弾かれる)。
+// (処理済みのジョブは analysis_requests の状態で弾かれる)。
 func handler(ctx context.Context, event events.SQSEvent) error {
 	for _, record := range event.Records {
 		// レコードが運んできた trace を引き継ぎ、message_id を積む

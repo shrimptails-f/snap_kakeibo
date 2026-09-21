@@ -101,9 +101,9 @@ CodeBuild が実行:
 | --- | --- |
 | `hello` | 対象。疎通確認用 |
 | `upload` | 対象。DynamoDB / S3 / SQS への副作用に注意 |
-| `retry-upload` | 対象。SQS メッセージ互換性に注意 |
-| `list-uploads` | 対象。読み取り系 |
-| `get-billing` | 対象。読み取り系 |
+| `retry-analysis` | 対象。SQS メッセージ互換性に注意 |
+| `list-analysis-requests` | 対象。読み取り系 |
+| `get-expense` | 対象。読み取り系 |
 | `analyze-receipt` | 対象。SQS イベントソースを `live` Alias に付ける |
 
 `analyze-receipt` は当初「SQS 起動かつ OpenAI 呼び出しと DynamoDB 更新を伴う非同期処理なので、監視を整えてから判断する」として対象外にしていた。

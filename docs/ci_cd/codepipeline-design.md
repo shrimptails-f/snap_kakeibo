@@ -132,9 +132,9 @@ marker は pipeline ごとに分ける。backend が成功して frontend が失
 ```text
 hello
 upload
-retry-upload
-list-uploads
-get-billing
+retry-analysis
+list-analysis-requests
+get-expense
 analyze-receipt
 ```
 
@@ -166,9 +166,9 @@ Lambda ごとに `go list -deps` で依存 package の集合を作る。
 cd backend
 go list -deps -f '{{.ImportPath}}' ./cmd/hello
 go list -deps -f '{{.ImportPath}}' ./cmd/upload
-go list -deps -f '{{.ImportPath}}' ./cmd/retry-upload
-go list -deps -f '{{.ImportPath}}' ./cmd/list-uploads
-go list -deps -f '{{.ImportPath}}' ./cmd/get-billing
+go list -deps -f '{{.ImportPath}}' ./cmd/retry-analysis
+go list -deps -f '{{.ImportPath}}' ./cmd/list-analysis-requests
+go list -deps -f '{{.ImportPath}}' ./cmd/get-expense
 go list -deps -f '{{.ImportPath}}' ./cmd/analyze-receipt
 ```
 

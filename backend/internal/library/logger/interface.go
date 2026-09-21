@@ -32,7 +32,7 @@
 //
 // ログ 1 行に載る相関キーは 3 層ある。追いかけるときはこの順で絞る。
 //
-//   - upload_id / billing_id: 業務のライフサイクル全体(S3 直 PUT を挟んでも切れない)
+//   - analysis_request_id / expense_id: 業務のライフサイクル全体(S3 直 PUT を挟んでも切れない)
 //   - trace_id: 1 リクエストから派生する処理の連鎖(SQS 経由を含む)
 //   - request_id: Lambda 1 回の実行
 package logger

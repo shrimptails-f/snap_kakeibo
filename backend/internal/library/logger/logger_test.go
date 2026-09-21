@@ -96,30 +96,30 @@ func TestContextFieldsPropagate(t *testing.T) {
 	log, buf := newTestLogger("debug")
 
 	ctx := ContextWith(context.Background(), RequestID("req-1"))
-	ctx = ContextWith(ctx, UserID("user-1"), UploadID("upload-1"))
+	ctx = ContextWith(ctx, UserID("user-1"), AnalysisRequestID("request-1"))
 
 	log.Info(ctx, "hello")
 
 	entry := singleEntry(t, buf)
 	assertField(t, entry, "request_id", "req-1")
 	assertField(t, entry, "user_id", "user-1")
-	assertField(t, entry, "upload_id", "upload-1")
+	assertField(t, entry, "analysis_request_id", "request-1")
 }
 
 func TestContextWithReplacesSameKey(t *testing.T) {
 	t.Parallel()
 	log, buf := newTestLogger("debug")
 
-	ctx := ContextWith(context.Background(), UploadID("first"))
-	ctx = ContextWith(ctx, UploadID("second"))
+	ctx := ContextWith(context.Background(), AnalysisRequestID("first"))
+	ctx = ContextWith(ctx, AnalysisRequestID("second"))
 
 	log.Info(ctx, "hello")
 
 	raw := buf.String()
-	if strings.Count(raw, `"upload_id"`) != 1 {
-		t.Fatalf("upload_id should appear once: %s", raw)
+	if strings.Count(raw, `"analysis_request_id"`) != 1 {
+		t.Fatalf("analysis_request_id should appear once: %s", raw)
 	}
-	assertField(t, singleEntry(t, buf), "upload_id", "second")
+	assertField(t, singleEntry(t, buf), "analysis_request_id", "second")
 }
 
 func TestContextWithDoesNotAffectParentContext(t *testing.T) {
@@ -127,15 +127,15 @@ func TestContextWithDoesNotAffectParentContext(t *testing.T) {
 	log, buf := newTestLogger("debug")
 
 	parent := ContextWith(context.Background(), RequestID("req-1"))
-	child := ContextWith(parent, UploadID("upload-1"))
+	child := ContextWith(parent, AnalysisRequestID("request-1"))
 	_ = child
 
 	log.Info(parent, "hello")
 
 	entry := singleEntry(t, buf)
 	assertField(t, entry, "request_id", "req-1")
-	if _, ok := entry["upload_id"]; ok {
-		t.Fatal("upload_id must not leak into parent context")
+	if _, ok := entry["analysis_request_id"]; ok {
+		t.Fatal("analysis_request_id must not leak into parent context")
 	}
 }
 
@@ -288,29 +288,29 @@ func TestErrorType(t *testing.T) {
 func TestDuplicateKeysAreCollapsed(t *testing.T) {
 	t.Parallel()
 	log, buf := newTestLogger("debug")
-	ctx := ContextWith(context.Background(), UploadID("from-ctx"), Component("from-ctx"), String("service", "from-ctx"))
+	ctx := ContextWith(context.Background(), AnalysisRequestID("from-ctx"), Component("from-ctx"), String("service", "from-ctx"))
 	ctx, tc := trace.Start(ctx)
 
 	log.With(Component("from-with"), Environment("from-with")).Info(ctx, "dup",
-		UploadID("from-call"),
+		AnalysisRequestID("from-call"),
 		TraceID("manual"),
 		Err(errors.New("boom")),
 		String("error", "from-call"),
 	)
 
 	raw := buf.String()
-	for _, key := range []string{"upload_id", "component", "service", "environment", "trace_id", "error", "error_type"} {
+	for _, key := range []string{"analysis_request_id", "component", "service", "environment", "trace_id", "error", "error_type"} {
 		if n := strings.Count(raw, `"`+key+`"`); n != 1 {
 			t.Fatalf("%s appears %d times: %s", key, n, raw)
 		}
 	}
 	entry := singleEntry(t, buf)
-	assertField(t, entry, "upload_id", "from-call")   // 呼び出し時 > ctx
-	assertField(t, entry, "component", "from-ctx")    // ctx > With
-	assertField(t, entry, "service", "from-ctx")      // ctx > New の固定値
-	assertField(t, entry, "environment", "from-with") // With > New の固定値
-	assertField(t, entry, "trace_id", tc.TraceID)     // trace は手動指定より ctx
-	assertField(t, entry, "error", "from-call")       // 後に渡したものが勝つ
+	assertField(t, entry, "analysis_request_id", "from-call") // 呼び出し時 > ctx
+	assertField(t, entry, "component", "from-ctx")            // ctx > With
+	assertField(t, entry, "service", "from-ctx")              // ctx > New の固定値
+	assertField(t, entry, "environment", "from-with")         // With > New の固定値
+	assertField(t, entry, "trace_id", tc.TraceID)             // trace は手動指定より ctx
+	assertField(t, entry, "error", "from-call")               // 後に渡したものが勝つ
 	assertField(t, entry, "error_type", "errors.errorString")
 }
 
@@ -404,8 +404,8 @@ func TestSchemaHelpers(t *testing.T) {
 		{Component("repo"), "component", "repo"},
 		{RequestID("r"), "request_id", "r"},
 		{UserID("u"), "user_id", "u"},
-		{UploadID("up"), "upload_id", "up"},
-		{BillingID("b"), "billing_id", "b"},
+		{AnalysisRequestID("up"), "analysis_request_id", "up"},
+		{ExpenseID("e"), "expense_id", "e"},
 		{HTTPStatusCode(500), "http_status_code", "500"},
 		{Recovered("p"), "recovered", "p"},
 		{Event("e"), "event", "e"},

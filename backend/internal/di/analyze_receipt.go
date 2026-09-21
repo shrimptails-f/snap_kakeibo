@@ -39,15 +39,15 @@ func NewAnalyzeReceiptContainer(cfg settings.Config, awsCfg aws.Config, osw oswr
 		func(client infrastructure.ResponsesClient, cfg settings.Config) application.ReceiptAnalyzer {
 			return infrastructure.OpenAIReceiptAnalyzer{Client: client, Model: cfg.OpenAIModel, ReasoningEffort: cfg.OpenAIReasoningEffort}
 		},
-		func(client *libdynamodb.Client, cfg settings.Config) application.UploadHistoryRepository {
-			return infrastructure.DynamoDBUploadHistoryRepository{Table: client.Table(cfg.UploadHistoriesTable)}
+		func(client *libdynamodb.Client, cfg settings.Config) application.AnalysisRequestRepository {
+			return infrastructure.DynamoDBAnalysisRequestRepository{Table: client.Table(cfg.AnalysisRequestsTable)}
 		},
-		func(client *libdynamodb.Client, cfg settings.Config) application.BillingRegistrar {
-			return infrastructure.DynamoDBBillingRegistrar{
+		func(client *libdynamodb.Client, cfg settings.Config) application.ExpenseRegistrar {
+			return infrastructure.DynamoDBExpenseRegistrar{
 				Client:           client,
-				UploadHistories:  client.Table(cfg.UploadHistoriesTable),
-				Billings:         client.Table(cfg.BillingsTable),
-				BillingDetails:   client.Table(cfg.BillingDetailsTable),
+				AnalysisRequests: client.Table(cfg.AnalysisRequestsTable),
+				Expenses:         client.Table(cfg.ExpensesTable),
+				ExpenseDetails:   client.Table(cfg.ExpenseDetailsTable),
 				MonthlySummaries: client.Table(cfg.MonthlySummariesTable),
 			}
 		},

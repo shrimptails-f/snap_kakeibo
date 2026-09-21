@@ -28,8 +28,8 @@ func NewUploadContainer(cfg settings.Config, awsCfg aws.Config, osw oswrapper.In
 	}
 	if err := Provide(container, "upload",
 		func() settings.Config { return cfg },
-		func(client *libdynamodb.Client, cfg settings.Config) application.UploadHistoryRepository {
-			return infrastructure.DynamoDBUploadHistoryRepository{Table: client.Table(cfg.UploadHistoriesTable)}
+		func(client *libdynamodb.Client, cfg settings.Config) application.AnalysisRequestRepository {
+			return infrastructure.DynamoDBAnalysisRequestRepository{Table: client.Table(cfg.AnalysisRequestsTable)}
 		},
 		func(client *libs3.Client, cfg settings.Config) application.UploadURLPresigner {
 			return infrastructure.S3UploadPresigner{Bucket: client.Bucket(cfg.ReceiptBucket)}

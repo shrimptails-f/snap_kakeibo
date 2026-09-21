@@ -66,7 +66,7 @@ func TestPutBytesAndGetBytes(t *testing.T) {
 	t.Parallel()
 	api := newFakeAPI()
 	log, buf := newTestLogger()
-	ctx := logger.ContextWith(context.Background(), logger.UploadID("u1"))
+	ctx := logger.ContextWith(context.Background(), logger.AnalysisRequestID("u1"))
 	c := NewWithAPI(api, nil, log)
 
 	if err := c.PutBytes(ctx, "b", "k.json", []byte(`{"a":1}`), "application/json"); err != nil {
@@ -98,7 +98,7 @@ func TestPutBytesAndGetBytes(t *testing.T) {
 	assertField(t, put, "content_type", "application/json")
 	assertField(t, put, "content_length", float64(7))
 	assertField(t, put, "status", logger.StatusOK)
-	assertField(t, put, "upload_id", "u1")
+	assertField(t, put, "analysis_request_id", "u1")
 	assertField(t, get, "span_name", SpanGetObject)
 	assertField(t, get, "content_length", float64(7))
 	assertField(t, get, "content_type", "application/octet-stream")

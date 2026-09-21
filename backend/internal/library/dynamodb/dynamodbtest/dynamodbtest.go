@@ -53,9 +53,9 @@ type Tables struct {
 	Users            *libdynamodb.Table
 	RefreshTokens    *libdynamodb.Table
 	MonthlySummaries *libdynamodb.Table
-	UploadHistories  *libdynamodb.Table
-	Billings         *libdynamodb.Table
-	BillingDetails   *libdynamodb.Table
+	AnalysisRequests *libdynamodb.Table
+	Expenses         *libdynamodb.Table
+	ExpenseDetails   *libdynamodb.Table
 }
 
 // Connect は STAGE が local / ci のときローカル DynamoDB に繋いだ Env を返し、それ以外なら t.Skip する。
@@ -107,8 +107,8 @@ func (e *Env) CreateAllTables(t testing.TB, prefix string) Tables {
 		Users:            e.CreateTableWithPrefix(t, prefix, libdynamodb.UsersSchema),
 		RefreshTokens:    e.CreateTableWithPrefix(t, prefix, libdynamodb.RefreshTokensSchema),
 		MonthlySummaries: e.CreateTableWithPrefix(t, prefix, libdynamodb.MonthlySummariesSchema),
-		UploadHistories:  e.CreateTableWithPrefix(t, prefix, libdynamodb.UploadHistoriesSchema),
-		Billings:         e.CreateTableWithPrefix(t, prefix, libdynamodb.BillingsSchema),
-		BillingDetails:   e.CreateTableWithPrefix(t, prefix, libdynamodb.BillingDetailsSchema),
+		AnalysisRequests: e.CreateTableWithPrefix(t, prefix, libdynamodb.AnalysisRequestsSchema),
+		Expenses:         e.CreateTableWithPrefix(t, prefix, libdynamodb.ExpensesSchema),
+		ExpenseDetails:   e.CreateTableWithPrefix(t, prefix, libdynamodb.ExpenseDetailsSchema),
 	}
 }

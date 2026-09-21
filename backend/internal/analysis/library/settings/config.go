@@ -11,9 +11,9 @@ import (
 
 // Config は analyze-receipt に必要な設定値。
 type Config struct {
-	UploadHistoriesTable  string
-	BillingsTable         string
-	BillingDetailsTable   string
+	AnalysisRequestsTable string
+	ExpensesTable         string
+	ExpenseDetailsTable   string
 	MonthlySummariesTable string
 	// ReceiptBucket は元画像と解析結果を置くバケット。
 	ReceiptBucket string
@@ -35,9 +35,9 @@ func Load(osw oswrapper.Interface) (Config, error) {
 		key string
 		dst *string
 	}{
-		{"UPLOAD_HISTORIES_TABLE", &cfg.UploadHistoriesTable},
-		{"BILLINGS_TABLE", &cfg.BillingsTable},
-		{"BILLING_DETAILS_TABLE", &cfg.BillingDetailsTable},
+		{"ANALYSIS_REQUESTS_TABLE", &cfg.AnalysisRequestsTable},
+		{"EXPENSES_TABLE", &cfg.ExpensesTable},
+		{"EXPENSE_DETAILS_TABLE", &cfg.ExpenseDetailsTable},
 		{"MONTHLY_SUMMARIES_TABLE", &cfg.MonthlySummariesTable},
 		{"RECEIPT_BUCKET", &cfg.ReceiptBucket},
 		{"OPENAI_MODEL", &cfg.OpenAIModel},

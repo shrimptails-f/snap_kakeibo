@@ -8,9 +8,9 @@ import (
 
 func validEnv() map[string]string {
 	return map[string]string{
-		"UPLOAD_HISTORIES_TABLE":  "upload-histories",
-		"BILLINGS_TABLE":          "billings",
-		"BILLING_DETAILS_TABLE":   "billing-details",
+		"ANALYSIS_REQUESTS_TABLE": "analysis-requests",
+		"EXPENSES_TABLE":          "expenses",
+		"EXPENSE_DETAILS_TABLE":   "expense-details",
 		"MONTHLY_SUMMARIES_TABLE": "monthly-summaries",
 		"RECEIPT_BUCKET":          "receipts",
 		"OPENAI_MODEL":            "gpt-5-mini",
@@ -51,7 +51,7 @@ func TestLoadRejectsMissingOrInvalidValues(t *testing.T) {
 		name    string
 		arrange func(env map[string]string)
 	}{
-		{"missing table", func(env map[string]string) { delete(env, "BILLINGS_TABLE") }},
+		{"missing table", func(env map[string]string) { delete(env, "EXPENSES_TABLE") }},
 		{"missing bucket", func(env map[string]string) { delete(env, "RECEIPT_BUCKET") }},
 		{"missing model", func(env map[string]string) { delete(env, "OPENAI_MODEL") }},
 		{"missing api key parameter", func(env map[string]string) { delete(env, "SSM_OPENAI_API_KEY") }},

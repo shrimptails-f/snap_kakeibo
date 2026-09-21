@@ -79,8 +79,8 @@ Response:
 {
   "uploads": [
     {
-      "upload_id": "01JUPLOADXXX",
-      "s3_key": "receipts/01JUSERXXX/01JUPLOADXXX/original.jpg",
+      "analysis_request_id": "01JREQUESTXXX",
+      "s3_key": "receipts/01JUSERXXX/01JREQUESTXXX/original.jpg",
       "upload_url": "https://example.com/presigned-url",
       "expires_at": "2026-09-15T12:15:00Z"
     }
@@ -102,7 +102,7 @@ S3へのPUT失敗
   再アップロードを促す
 
 解析失敗
-  アップロード履歴画面で理由を確認できる旨を表示する
+  解析依頼一覧画面で理由を確認できる旨を表示する
 ```
 
-アップロード画面は解析完了まで待たなくてよい。画面を離れた後の状態はアップロード履歴画面で追う。
+アップロード画面は解析完了まで待たなくてよい。画面を離れた後の状態は解析依頼一覧画面で追う。

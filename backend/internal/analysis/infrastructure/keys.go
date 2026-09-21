@@ -5,35 +5,35 @@ import (
 	"math"
 )
 
-// DynamoDB のキー構築。upload / list-uploads / get-billing が読み書きする形式と揃える(infra/stacks/storage.go のキー構成)。
+// DynamoDB のキー構築。upload / list-analysis-requests / get-expense が読み書きする形式と揃える(infra/stacks/storage.go のキー構成)。
 
-// UserPK は利用者単位のパーティションキー(upload_histories / billings / monthly_summaries)。
+// UserPK は利用者単位のパーティションキー(analysis_requests / expenses / monthly_summaries)。
 func UserPK(userID string) string { return "USER#" + userID }
 
-// UploadSK は upload_histories のソートキー。
-func UploadSK(uploadID string) string { return "UPLOAD#" + uploadID }
+// AnalysisRequestSK は analysis_requests のソートキー。
+func AnalysisRequestSK(requestID string) string { return "ANALYSIS_REQUEST#" + requestID }
 
-// BillingSK は billings のソートキー。
-func BillingSK(billingID string) string { return "BILLING#" + billingID }
+// ExpenseSK は expenses のソートキー。
+func ExpenseSK(expenseID string) string { return "EXPENSE#" + expenseID }
 
 // MonthSK は monthly_summaries のソートキー。month は YYYY-MM。
 func MonthSK(month string) string { return "MONTH#" + month }
 
-// DetailPK は billing_details のパーティションキー。請求単位で明細をまとめる。
-func DetailPK(userID, billingID string) string { return "USER#" + userID + "#BILLING#" + billingID }
+// DetailPK は expense_details のパーティションキー。支出単位で支出明細をまとめる。
+func DetailPK(userID, expenseID string) string { return "USER#" + userID + "#EXPENSE#" + expenseID }
 
-// DetailSK は billing_details のソートキー。
+// DetailSK は expense_details のソートキー。
 func DetailSK(detailID string) string { return "DETAIL#" + detailID }
 
-// UploadMonthPK は月ごとに引くための GSI1 パーティションキー(billing_details.GSI1PK)。
-func UploadMonthPK(userID, month string) string { return "USER#" + userID + "#MONTH#" + month }
+// UserMonthPK は月ごとに引くための GSI1 パーティションキー(expense_details.GSI1PK / analysis_requests.GSI1PK)。
+func UserMonthPK(userID, month string) string { return "USER#" + userID + "#MONTH#" + month }
 
-// DetailMonthSK は月内で金額の降順に並べるための GSI1 ソートキー(billing_details.GSI1SK)。
+// DetailMonthSK は月内で金額の降順に並べるための GSI1 ソートキー(expense_details.GSI1SK)。
 // 金額を MaxInt32 から引いてゼロ埋めすることで、文字列の昇順が金額の降順になる。
-func DetailMonthSK(amount int64, purchasedAt, detailID string) string {
+func DetailMonthSK(amount int64, purchaseDate, detailID string) string {
 	desc := int64(math.MaxInt32) - amount
 	if desc < 0 {
 		desc = 0
 	}
-	return fmt.Sprintf("DETAIL_AMOUNT#%010d#%s#%s", desc, purchasedAt, detailID)
+	return fmt.Sprintf("DETAIL_AMOUNT#%010d#%s#%s", desc, purchaseDate, detailID)
 }

@@ -25,7 +25,7 @@ func TestFlociTemporaryTables(t *testing.T) {
 	var names []string
 	t.Run("create, use and clean up", func(t *testing.T) {
 		tables := env.CreateAllTables(t, "scenario")
-		for _, table := range []*libdynamodb.Table{tables.Users, tables.RefreshTokens, tables.MonthlySummaries, tables.UploadHistories, tables.Billings, tables.BillingDetails} {
+		for _, table := range []*libdynamodb.Table{tables.Users, tables.RefreshTokens, tables.MonthlySummaries, tables.AnalysisRequests, tables.Expenses, tables.ExpenseDetails} {
 			names = append(names, table.Name())
 			exists, err := env.Manager.TableExists(ctx, table.Name())
 			if err != nil || !exists {
@@ -58,22 +58,22 @@ func TestFlociTemporaryTables(t *testing.T) {
 
 		// GSI が本番と同じ名前・キーで作られている(Query が通る)
 		raw := awssdk.NewFromConfig(env.Config)
-		if _, err := raw.PutItem(ctx, &awssdk.PutItemInput{TableName: aws.String(tables.UploadHistories.Name()), Item: map[string]types.AttributeValue{
+		if _, err := raw.PutItem(ctx, &awssdk.PutItemInput{TableName: aws.String(tables.AnalysisRequests.Name()), Item: map[string]types.AttributeValue{
 			"PK":     &types.AttributeValueMemberS{Value: "USER#user-1"},
-			"SK":     &types.AttributeValueMemberS{Value: "UPLOAD#1"},
+			"SK":     &types.AttributeValueMemberS{Value: "ANALYSIS_REQUEST#1"},
 			"GSI1PK": &types.AttributeValueMemberS{Value: "USER#user-1#2026-09"},
 			"GSI1SK": &types.AttributeValueMemberS{Value: "2026-09-20T00:00:00Z"},
 		}}); err != nil {
-			t.Fatalf("PutItem(upload-histories): %v", err)
+			t.Fatalf("PutItem(analysis-requests): %v", err)
 		}
 		q, err := raw.Query(ctx, &awssdk.QueryInput{
-			TableName:                 aws.String(tables.UploadHistories.Name()),
-			IndexName:                 aws.String(libdynamodb.UploadMonthIndex),
+			TableName:                 aws.String(tables.AnalysisRequests.Name()),
+			IndexName:                 aws.String(libdynamodb.AnalysisRequestMonthIndex),
 			KeyConditionExpression:    aws.String("GSI1PK = :pk"),
 			ExpressionAttributeValues: map[string]types.AttributeValue{":pk": &types.AttributeValueMemberS{Value: "USER#user-1#2026-09"}},
 		})
 		if err != nil {
-			t.Fatalf("Query(%s): %v", libdynamodb.UploadMonthIndex, err)
+			t.Fatalf("Query(%s): %v", libdynamodb.AnalysisRequestMonthIndex, err)
 		}
 		if q.Count != 1 {
 			t.Errorf("Query count = %d, want 1", q.Count)

@@ -4,7 +4,7 @@
 // GetEnv は未設定と空文字をエラーにするので、必須の設定が抜けていることに起動時に気づける。
 //
 //	osw := oswrapper.New()
-//	table, err := osw.GetEnv("UPLOAD_HISTORIES_TABLE")
+//	table, err := osw.GetEnv("ANALYSIS_REQUESTS_TABLE")
 package oswrapper
 
 // Interface は OS に対する読み取り操作の契約。

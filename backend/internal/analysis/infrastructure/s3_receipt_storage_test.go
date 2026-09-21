@@ -37,7 +37,7 @@ func (f *fakeS3) PutObject(_ context.Context, in *awss3.PutObjectInput, _ ...fun
 	return &awss3.PutObjectOutput{}, nil
 }
 
-var storageJob = domain.Job{UserID: "u1", UploadID: "up1", Attempt: 2, Bucket: "incoming", Key: "receipts/u1/up1/original.jpg"}
+var storageJob = domain.AnalysisJob{UserID: "u1", AnalysisRequestID: "req1", Attempt: 2, Bucket: "incoming", Key: "receipts/u1/req1/original.jpg"}
 
 func TestReadImageReadsFromTheJobBucket(t *testing.T) {
 	t.Parallel()
@@ -74,7 +74,7 @@ func TestSaveRawResultWritesJSONToResultsBucket(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SaveRawResult() error = %v", err)
 	}
-	if key != "analysis-results/u1/up1/2/resp_Ax.json" {
+	if key != "analysis-results/u1/req1/2/resp_Ax.json" {
 		t.Errorf("key = %q", key)
 	}
 	if aws.ToString(api.putIn.Bucket) != "results" || aws.ToString(api.putIn.Key) != key || aws.ToString(api.putIn.ContentType) != "application/json" || string(api.putted) != `{"id":"resp_A"}` {
@@ -88,7 +88,7 @@ func TestRawResultKeyKeepsResponseIDsDistinct(t *testing.T) {
 	if a == b {
 		t.Fatalf("response IDs must remain unique: %q", a)
 	}
-	if got := RawResultKey(storageJob, "///"); got != "analysis-results/u1/up1/2/response.json" {
+	if got := RawResultKey(storageJob, "///"); got != "analysis-results/u1/req1/2/response.json" {
 		t.Errorf("empty safe id = %q", got)
 	}
 }
