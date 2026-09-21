@@ -6,8 +6,8 @@ export function AppLayout() {
   const { user, logout } = useAuthSession()
 
   return (
-    <main>
-      <header>
+    <main className="page-shell">
+      <header className="appHeader">
         <h1>snap_kakeibo</h1>
         <div className="sessionBar">
           <span>{user?.email}</span>

@@ -6,7 +6,7 @@ import { toFriendlyMessage } from '@/shared/api/errors'
 import { formatYen } from '@/shared/lib/formatYen'
 import { listAnalysisRequests } from '../api/analysis-requests.api'
 import { createUpload, uploadToPresignedUrl } from '../api/uploads.api'
-import { analysisRequestStatusLabel } from '../lib/analysisRequestStatusLabel'
+import { analysisRequestStatus } from '../lib/analysisRequestStatus'
 import type { AnalysisRequestItem } from '../types/analysis-request.types'
 
 // 移行途中の検証画面。アップロード、解析依頼一覧、支出の表示を一つに持つ。
@@ -116,24 +116,27 @@ export function ReceiptIntakePage() {
           <h2>解析依頼</h2>
           <div className="list">
             {requests.length === 0 && <p className="muted">まだ解析依頼がありません。</p>}
-            {requests.map((item) => (
-              <button
-                className="row"
-                key={item.analysis_request_id}
-                type="button"
-                disabled={!item.expense_id}
-                onClick={() => item.expense_id && setSelectedExpenseId(item.expense_id)}
-              >
-                <span>
-                  <strong>{item.file_name || item.analysis_request_id}</strong>
-                  <small>{new Date(item.created_at).toLocaleString('ja-JP')}</small>
-                  <small>試行 {item.attempt} 回目</small>
-                  {item.error_message && <small>{item.error_message}</small>}
-                  {item.failed_at && <small>失敗日時: {new Date(item.failed_at).toLocaleString('ja-JP')}</small>}
-                </span>
-                <span className={`status ${item.status.toLowerCase()}`}>{analysisRequestStatusLabel(item)}</span>
-              </button>
-            ))}
+            {requests.map((item) => {
+              const status = analysisRequestStatus(item)
+              return (
+                <button
+                  className="row"
+                  key={item.analysis_request_id}
+                  type="button"
+                  disabled={!item.expense_id}
+                  onClick={() => item.expense_id && setSelectedExpenseId(item.expense_id)}
+                >
+                  <span>
+                    <strong>{item.file_name || item.analysis_request_id}</strong>
+                    <small>{new Date(item.created_at).toLocaleString('ja-JP')}</small>
+                    <small>試行 {item.attempt} 回目</small>
+                    {item.error_message && <small>{item.error_message}</small>}
+                    {item.failed_at && <small>失敗日時: {new Date(item.failed_at).toLocaleString('ja-JP')}</small>}
+                  </span>
+                  <span className={`status status--${status.tone}`}>{status.label}</span>
+                </button>
+              )
+            })}
           </div>
         </div>
 
@@ -144,7 +147,7 @@ export function ReceiptIntakePage() {
             <>
               <div className="summary">
                 <span>{expense.store_name}</span>
-                <strong>{formatYen(expense.recorded_amount)}</strong>
+                <strong className="amount">{formatYen(expense.recorded_amount)}</strong>
                 <small>{expense.purchase_date}</small>
                 <small>
                   {sourceLabel(expense.source)}
@@ -172,7 +175,7 @@ export function ReceiptIntakePage() {
                         {detail.is_edited && <small>（手動編集済み）</small>}
                       </td>
                       <td>{categoryLabel(detail.category)}</td>
-                      <td>{formatYen(detail.amount)}</td>
+                      <td className="amount">{formatYen(detail.amount)}</td>
                     </tr>
                   ))}
                 </tbody>

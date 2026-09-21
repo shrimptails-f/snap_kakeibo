@@ -1,0 +1,299 @@
+/* 移行途中の検証画面(ReceiptIntakePage、LoginPage、AppLayout)のスタイル。
+   共通化の実績ができた部品から shared/ui へ移す。色・余白は globals.css のトークンだけを使う */
+
+/* ヘッダー(AppLayout) */
+
+.appHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-bottom: var(--space-6);
+}
+
+.sessionBar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  color: var(--color-text-muted);
+}
+
+.sessionBar button {
+  min-width: 104px;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-primary);
+  background: var(--color-primary-subtle);
+  cursor: pointer;
+}
+
+/* ログイン(LoginPage / LoginForm) */
+
+.loginPanel {
+  max-width: 420px;
+  margin: var(--space-8) auto;
+  padding: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.loginPanel h1 {
+  margin-bottom: var(--space-1);
+  font-size: 22px;
+}
+
+.loginForm {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.loginForm__field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.loginForm__field label {
+  font-size: 14px;
+}
+
+.loginForm input {
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.loginForm .error {
+  margin-bottom: 0;
+}
+
+.loginForm button {
+  min-height: 44px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  background: var(--color-primary);
+  cursor: pointer;
+}
+
+.loginForm button:hover {
+  background: var(--color-primary-hover);
+}
+
+.loginForm button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* レシート取り込み(ReceiptIntakePage) */
+
+.pageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.pageHeader p {
+  color: var(--color-text-muted);
+}
+
+.uploadButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 150px;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  color: #fff;
+  background: var(--color-primary);
+  cursor: pointer;
+}
+
+.uploadButton:hover {
+  background: var(--color-primary-hover);
+}
+
+.uploadButton:has(input:disabled) {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.uploadButton:has(input:focus-visible) {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.uploadButton input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+}
+
+.notice,
+.error {
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  color: var(--color-primary);
+  background: var(--color-primary-subtle);
+}
+
+.error {
+  color: var(--color-danger);
+  background: var(--color-danger-subtle);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(360px, 1.1fr);
+  gap: var(--space-6);
+}
+
+.panel {
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: inherit;
+  background: var(--color-surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.row:disabled {
+  cursor: default;
+}
+
+.row small {
+  color: var(--color-text-muted);
+}
+
+.row span:first-child {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 解析依頼の状態バッジ。色の役割は design_guidelines.md §5、必ずテキストを併記する */
+
+.status {
+  align-self: start;
+  padding: var(--space-1) var(--space-2);
+  border-radius: 999px;
+  color: var(--color-text);
+  background: var(--color-surface-subtle);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.status--info {
+  color: var(--color-info);
+  background: var(--color-info-subtle);
+}
+
+.status--primary {
+  color: var(--color-primary);
+  background: var(--color-primary-subtle);
+}
+
+.status--warning {
+  color: var(--color-warning);
+  background: var(--color-warning-subtle);
+}
+
+.status--danger {
+  color: var(--color-danger);
+  background: var(--color-danger-subtle);
+}
+
+/* 支出(ReceiptIntakePage) */
+
+.summary {
+  display: grid;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.summary strong {
+  font-size: 26px;
+}
+
+.summary small {
+  color: var(--color-text-muted);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+
+th:last-child,
+td:last-child {
+  text-align: right;
+}
+
+td small {
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 959px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 599px) {
+  .appHeader,
+  .pageHeader {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .sessionBar {
+    justify-content: space-between;
+  }
+
+  .uploadButton {
+    width: 100%;
+  }
+}
