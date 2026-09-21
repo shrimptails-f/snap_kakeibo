@@ -172,7 +172,7 @@ shared HTTP client
 1. 純粋な型・表示変換・HTTP クライアントを分離する(完了: `shared/api`、`shared/auth`、`shared/lib`)
 2. 認証と解析依頼を feature に分離する(認証は完了: `features/auth`。アップロード・解析依頼一覧・支出表示は `features/receipt-analysis/screens/ReceiptIntakePage.tsx` に検証実装のまま残る)
 3. Router とページ共通レイアウトを導入する(完了: `app/router`、`app/layouts`。`/months/:yearMonth`、`/analysis-requests`、`/expenses/:expenseId` は画面の実装時に追加する)
-4. API データ取得をサーバー状態管理層へ移す
-5. 共通化の実績ができた UI だけを `shared/ui` へ移す
+4. API データ取得をサーバー状態管理層へ移す(完了: TanStack Query。取得は feature の `hooks`、初回 loading はレイアウトの `Suspense`)
+5. 共通化の実績ができた UI だけを `shared/ui` へ移す(`Spinner`、`ErrorBoundary` から開始)
 
 各段階で既存テストを保ち、利用者から見た振る舞いを変える場合は画面仕様も更新する。

@@ -64,7 +64,7 @@ describe('routes', () => {
     const router = renderAt('/')
 
     // 確認中もヘッダーは表示したまま、本文だけを差し替える。ログアウトは未確定なので出さない
-    expect(screen.getByRole('status')).toHaveTextContent('ログイン状態を確認しています')
+    expect(screen.getByRole('status', { name: 'ログイン状態を確認しています' })).toBeInTheDocument()
     expect(screen.getByRole('banner')).toHaveTextContent('snap_kakeibo')
     expect(screen.queryByRole('button', { name: 'ログアウト' })).not.toBeInTheDocument()
     expect(await screen.findByRole('heading', { level: 1, name: 'ログイン' })).toBeInTheDocument()

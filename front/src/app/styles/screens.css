@@ -210,6 +210,26 @@
 
 /* 支出(ReceiptIntakePage) */
 
+.panelError {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+
+.panelError p {
+  color: var(--color-danger);
+}
+
+.panelError button {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
 .summary {
   display: grid;
   gap: var(--space-1);

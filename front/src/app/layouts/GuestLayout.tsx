@@ -1,5 +1,7 @@
+import { Suspense } from 'react'
 import { Outlet } from 'react-router'
 import { APP_NAME } from '@/shared/config/app'
+import { SpinnerBlock } from '@/shared/ui/Spinner'
 
 // ログイン前(/login など)の画面共通の枠。ナビや利用者情報は出さない
 export function GuestLayout() {
@@ -11,7 +13,9 @@ export function GuestLayout() {
         </div>
       </header>
       <main className="page-shell appLayout__main">
-        <Outlet />
+        <Suspense fallback={<SpinnerBlock label="画面を読み込んでいます" />}>
+          <Outlet />
+        </Suspense>
       </main>
     </div>
   )
