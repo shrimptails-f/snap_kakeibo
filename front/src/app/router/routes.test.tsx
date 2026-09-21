@@ -67,7 +67,6 @@ describe('routes', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'ログイン' })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/login')
     expect(screen.queryByRole('button', { name: 'ログアウト' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
   })
 
   it('Cookie からセッションを復元できたときは / をそのまま表示する', async () => {
@@ -77,8 +76,7 @@ describe('routes', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: /のレシート取り込み$/ })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'snap_kakeibo' })).toHaveAttribute('href', '/')
-    expect(screen.getByRole('link', { name: 'ホーム' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByText('user@example.com')).toBeInTheDocument()
+    expect(screen.queryByText('user@example.com')).not.toBeInTheDocument()
     expect(screen.getByRole('contentinfo')).toHaveTextContent('snap_kakeibo')
     expect(await screen.findByText('まだ解析依頼がありません。')).toBeInTheDocument()
     // メモリに token が無いので refresh → check の 2 リクエストで復元する

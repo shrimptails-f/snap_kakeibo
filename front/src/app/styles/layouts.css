@@ -35,50 +35,10 @@
   color: var(--color-primary-hover);
 }
 
-.appNav {
-  display: flex;
-  flex: 1;
-  gap: var(--space-1);
-  overflow-x: auto;
-}
-
-.appNav__link {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.appNav__link:hover {
-  color: var(--color-text);
-  background: var(--color-surface-subtle);
-}
-
-/* 現在地は色だけでなく下線でも示す */
-.appNav__link[aria-current='page'] {
-  color: var(--color-primary);
-  font-weight: 700;
-  text-decoration: underline;
-  text-underline-offset: 6px;
-}
-
 .sessionBar {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
   margin-left: auto;
-  color: var(--color-text-muted);
-  font-size: 14px;
-}
-
-.sessionBar__user {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .sessionBar button {
@@ -106,14 +66,3 @@
   font-size: 14px;
 }
 
-@media (max-width: 599px) {
-  .appHeader__inner {
-    flex-wrap: wrap;
-    gap: var(--space-2) var(--space-4);
-    padding-block: var(--space-2);
-  }
-
-  .sessionBar__user {
-    display: none;
-  }
-}
