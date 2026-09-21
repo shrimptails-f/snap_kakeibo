@@ -1,8 +1,30 @@
+// Package domain は家計簿の支出集約と月次読み取りモデルを提供する。
 package domain
 
 import (
 	"errors"
 	"strings"
+
+	common "snap_kakeibo/backend/internal/common/domain"
+)
+
+type (
+	// ExpenseID は支出を識別する共有ID。
+	ExpenseID = common.ExpenseID
+	// AnalysisRequestID は支出の登録元を識別する共有ID。
+	AnalysisRequestID = common.AnalysisRequestID
+	// PurchaseDate は解析結果と支出で共有する購入日。
+	PurchaseDate = common.PurchaseDate
+	// ReadAmount は解析結果と支出で共有する読取金額。
+	ReadAmount = common.ReadAmount
+	// DetailAmount は支出明細の金額。
+	DetailAmount = common.DetailAmount
+	// Quantity は支出明細の数量。
+	Quantity = common.Quantity
+	// Category は支出明細の用途分類。
+	Category = common.Category
+	// YearMonth は支出と月次集計で共有する対象月。
+	YearMonth = common.YearMonth
 )
 
 var (
@@ -29,10 +51,10 @@ type ExpenseDetail struct {
 // NewExpenseDetail は不変条件を満たす支出明細を生成する。
 func NewExpenseDetail(id ExpenseDetailID, name string, amount DetailAmount, quantity Quantity, category Category, source CategorySource) (ExpenseDetail, error) {
 	name = strings.TrimSpace(name)
-	if id == "" || name == "" || quantity.value < 1 || quantity.value > maxQuantity || amount.yen < 0 || amount.yen > maxAmount {
+	if id == "" || name == "" || !quantity.Valid() || !amount.Valid() {
 		return ExpenseDetail{}, ErrInvalidExpenseDetail
 	}
-	if _, err := NewCategory(category.String()); err != nil {
+	if _, err := common.NewCategory(category.String()); err != nil {
 		return ExpenseDetail{}, err
 	}
 	if _, err := NewCategorySource(source.String()); err != nil {
@@ -62,7 +84,7 @@ func (d ExpenseDetail) CategorySource() CategorySource { return d.categorySource
 // Expense は家計へ金額上の影響を与える1件の支出を管理する集約ルート。
 type Expense struct {
 	id              ExpenseID
-	userID          UserID
+	userID          common.UserID
 	sourceRequestID AnalysisRequestID
 	storeName       string
 	purchasedAt     PurchaseDate
@@ -73,20 +95,56 @@ type Expense struct {
 	edited          bool
 }
 
+// ExpenseState は永続化された支出を復元するためのドメイン状態。
+// RecordedAmountは読取金額と調整額から再導出し、永続値を正として受け取らない。
+type ExpenseState struct {
+	ID              ExpenseID
+	UserID          common.UserID
+	SourceRequestID AnalysisRequestID
+	StoreName       string
+	PurchasedAt     PurchaseDate
+	ReadAmount      ReadAmount
+	Adjustment      AdjustmentAmount
+	Details         []ExpenseDetail
+	Edited          bool
+}
+
 // NewExpense は検証済み解析結果などから支出を生成する。
-func NewExpense(id ExpenseID, userID UserID, sourceRequestID AnalysisRequestID, storeName string, purchasedAt PurchaseDate, readAmount ReadAmount, details []ExpenseDetail) (Expense, error) {
-	if id == "" || userID == "" || purchasedAt.value.IsZero() || readAmount.yen == 0 || len(details) < 1 || len(details) > 50 {
+func NewExpense(id ExpenseID, userID common.UserID, sourceRequestID AnalysisRequestID, storeName string, purchasedAt PurchaseDate, readAmount ReadAmount, details []ExpenseDetail) (Expense, error) {
+	return restoreExpense(ExpenseState{ID: id, UserID: userID, SourceRequestID: sourceRequestID, StoreName: storeName, PurchasedAt: purchasedAt, ReadAmount: readAmount, Adjustment: NewAdjustmentAmount(0), Details: details})
+}
+
+// RestoreExpense は永続化された状態を検証して支出を復元する。
+func RestoreExpense(state ExpenseState) (Expense, error) { return restoreExpense(state) }
+
+func restoreExpense(state ExpenseState) (Expense, error) {
+	if state.ID == "" || state.UserID == "" || !state.PurchasedAt.Valid() || !state.ReadAmount.Valid() || len(state.Details) < 1 || len(state.Details) > 50 {
 		return Expense{}, ErrInvalidExpense
 	}
-	if hasDuplicateDetailID(details) {
+	if hasDuplicateDetailID(state.Details) {
 		return Expense{}, ErrDuplicateExpenseDetail
 	}
-	adjustment := NewAdjustmentAmount(0)
-	recorded, err := NewRecordedAmount(readAmount, adjustment)
+	for _, detail := range state.Details {
+		if detail.id == "" || strings.TrimSpace(detail.name) == "" || !detail.amount.Valid() || !detail.quantity.Valid() {
+			return Expense{}, ErrInvalidExpenseDetail
+		}
+		if _, err := common.NewCategory(detail.category.String()); err != nil {
+			return Expense{}, err
+		}
+		if _, err := NewCategorySource(detail.categorySource.String()); err != nil {
+			return Expense{}, err
+		}
+	}
+	recorded, err := NewRecordedAmount(state.ReadAmount, state.Adjustment)
 	if err != nil {
 		return Expense{}, err
 	}
-	return Expense{id: id, userID: userID, sourceRequestID: sourceRequestID, storeName: strings.TrimSpace(storeName), purchasedAt: purchasedAt, readAmount: readAmount, adjustment: adjustment, recordedAmount: recorded, details: append([]ExpenseDetail(nil), details...)}, nil
+	return Expense{
+		id: state.ID, userID: state.UserID, sourceRequestID: state.SourceRequestID,
+		storeName: strings.TrimSpace(state.StoreName), purchasedAt: state.PurchasedAt,
+		readAmount: state.ReadAmount, adjustment: state.Adjustment, recordedAmount: recorded,
+		details: append([]ExpenseDetail(nil), state.Details...), edited: state.Edited,
+	}, nil
 }
 
 func hasDuplicateDetailID(details []ExpenseDetail) bool {
@@ -110,8 +168,8 @@ func (e *Expense) ChangeStoreName(name string) {
 
 // ChangePurchaseDate は購入日を変更し、支出を編集済みにする。
 func (e *Expense) ChangePurchaseDate(date PurchaseDate) error {
-	if date.value.IsZero() {
-		return ErrInvalidPurchaseDate
+	if !date.Valid() {
+		return common.ErrInvalidPurchaseDate
 	}
 	e.purchasedAt, e.edited = date, true
 	return nil
@@ -143,6 +201,9 @@ func (e *Expense) RenameDetail(id ExpenseDetailID, name string) error {
 
 // ChangeDetailAmount は支出明細の金額と数量を変更する。
 func (e *Expense) ChangeDetailAmount(id ExpenseDetailID, amount DetailAmount, quantity Quantity) error {
+	if !amount.Valid() || !quantity.Valid() {
+		return ErrInvalidExpenseDetail
+	}
 	detail, err := e.detail(id)
 	if err != nil {
 		return err
@@ -153,7 +214,7 @@ func (e *Expense) ChangeDetailAmount(id ExpenseDetailID, amount DetailAmount, qu
 
 // ChangeDetailCategory は支出明細のカテゴリを利用者指定へ変更する。
 func (e *Expense) ChangeDetailCategory(id ExpenseDetailID, category Category) error {
-	if _, err := NewCategory(category.String()); err != nil {
+	if _, err := common.NewCategory(category.String()); err != nil {
 		return err
 	}
 	detail, err := e.detail(id)
@@ -177,7 +238,7 @@ func (e *Expense) detail(id ExpenseDetailID) (*ExpenseDetail, error) {
 func (e Expense) ID() ExpenseID { return e.id }
 
 // UserID は所有者の利用者IDを返す。
-func (e Expense) UserID() UserID { return e.userID }
+func (e Expense) UserID() common.UserID { return e.userID }
 
 // SourceRequestID は元となった解析依頼IDを返す。手入力では空を許容する。
 func (e Expense) SourceRequestID() AnalysisRequestID { return e.sourceRequestID }

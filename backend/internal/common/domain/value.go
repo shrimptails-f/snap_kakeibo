@@ -2,7 +2,6 @@ package domain
 
 import (
 	"errors"
-	"math"
 	"strings"
 	"time"
 )
@@ -25,12 +24,8 @@ var (
 	ErrInvalidDetailAmount = errors.New("detail amount must be between 0 and 10000000 yen")
 	// ErrInvalidQuantity は支出明細で扱える範囲外の数量を表す。
 	ErrInvalidQuantity = errors.New("quantity must be between 1 and 999")
-	// ErrAmountOverflow は読取金額と調整額の加算が int64 の範囲を超えたことを表す。
-	ErrAmountOverflow = errors.New("recorded amount overflows int64")
 	// ErrInvalidCategory は定義されていないカテゴリを表す。
 	ErrInvalidCategory = errors.New("unknown expense category")
-	// ErrInvalidCategorySource はカテゴリ決定元が AI と USER のいずれでもないことを表す。
-	ErrInvalidCategorySource = errors.New("unknown category source")
 )
 
 // PurchaseDate は時刻を含まない実在する購入日。
@@ -83,29 +78,8 @@ func NewReadAmount(yen int64) (ReadAmount, error) {
 // Yen は円単位の値を返す。
 func (a ReadAmount) Yen() int64 { return a.yen }
 
-// AdjustmentAmount は利用者が家計簿上で加減する符号付き金額。
-type AdjustmentAmount struct{ yen int64 }
-
-// NewAdjustmentAmount は調整額を生成する。減額は負数、増額は正数で指定する。
-func NewAdjustmentAmount(yen int64) AdjustmentAmount { return AdjustmentAmount{yen: yen} }
-
-// Yen は円単位の値を返す。
-func (a AdjustmentAmount) Yen() int64 { return a.yen }
-
-// RecordedAmount は月次集計へ反映する符号付きの計上額。
-type RecordedAmount struct{ yen int64 }
-
-// NewRecordedAmount は読取金額と調整額から計上額を導出する。
-func NewRecordedAmount(read ReadAmount, adjustment AdjustmentAmount) (RecordedAmount, error) {
-	if adjustment.yen > 0 && read.yen > math.MaxInt64-adjustment.yen ||
-		adjustment.yen < 0 && read.yen < math.MinInt64-adjustment.yen {
-		return RecordedAmount{}, ErrAmountOverflow
-	}
-	return RecordedAmount{yen: read.yen + adjustment.yen}, nil
-}
-
-// Yen は円単位の値を返す。
-func (a RecordedAmount) Yen() int64 { return a.yen }
+// Valid は画像解析で許容する読取金額かを返す。
+func (a ReadAmount) Valid() bool { return a.yen >= 1 && a.yen <= maxAmount }
 
 // DetailAmount は数量反映後の支出明細1行の金額。
 type DetailAmount struct{ yen int64 }
@@ -121,6 +95,9 @@ func NewDetailAmount(yen int64) (DetailAmount, error) {
 // Yen は円単位の値を返す。
 func (a DetailAmount) Yen() int64 { return a.yen }
 
+// Valid は支出明細で許容する金額かを返す。
+func (a DetailAmount) Valid() bool { return a.yen >= 0 && a.yen <= maxAmount }
+
 // Quantity は支出明細の数量。
 type Quantity struct{ value int64 }
 
@@ -134,6 +111,12 @@ func NewQuantity(value int64) (Quantity, error) {
 
 // Int64 は数量を返す。
 func (q Quantity) Int64() int64 { return q.value }
+
+// Valid は支出明細で許容する数量かを返す。
+func (q Quantity) Valid() bool { return q.value >= 1 && q.value <= maxQuantity }
+
+// Valid は実在する購入日が設定されているかを返す。
+func (d PurchaseDate) Valid() bool { return !d.value.IsZero() }
 
 // Category は支出明細の用途分類。
 type Category string
@@ -174,23 +157,3 @@ func (c Category) String() string { return string(c) }
 
 // Categories は定義済みカテゴリのコピーを返す。
 func Categories() []Category { return append([]Category(nil), categories[:]...) }
-
-// CategorySource はカテゴリを最後に決めた主体。
-type CategorySource string
-
-const (
-	CategorySourceAI   CategorySource = "AI"
-	CategorySourceUser CategorySource = "USER"
-)
-
-// NewCategorySource は定義済みのカテゴリ決定元を生成する。
-func NewCategorySource(value string) (CategorySource, error) {
-	source := CategorySource(value)
-	if source != CategorySourceAI && source != CategorySourceUser {
-		return "", ErrInvalidCategorySource
-	}
-	return source, nil
-}
-
-// String は保存に使用するカテゴリ決定元を返す。
-func (s CategorySource) String() string { return string(s) }

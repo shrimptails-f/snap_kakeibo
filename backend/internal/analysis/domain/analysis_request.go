@@ -4,6 +4,25 @@ import (
 	"errors"
 	"strings"
 	"time"
+
+	common "snap_kakeibo/backend/internal/common/domain"
+)
+
+type (
+	// AnalysisRequestID は解析依頼を識別する共有ID。
+	AnalysisRequestID = common.AnalysisRequestID
+	// ExpenseID は登録した支出を識別する共有ID。
+	ExpenseID = common.ExpenseID
+	// PurchaseDate は解析結果と支出で共有する購入日。
+	PurchaseDate = common.PurchaseDate
+	// ReadAmount は解析結果と支出で共有する読取金額。
+	ReadAmount = common.ReadAmount
+	// DetailAmount は解析結果と支出で共有する明細金額。
+	DetailAmount = common.DetailAmount
+	// Quantity は解析結果と支出で共有する数量。
+	Quantity = common.Quantity
+	// Category は解析結果と支出で共有するカテゴリ。
+	Category = common.Category
 )
 
 var (
@@ -100,7 +119,7 @@ func (r FailureReason) SafeMessage() string { return r.safeMessage }
 // AnalysisRequest はレシート画像の受付から解析の終端までを管理する集約ルート。
 type AnalysisRequest struct {
 	id              AnalysisRequestID
-	userID          UserID
+	userID          common.UserID
 	image           ReceiptImage
 	status          AnalysisStatus
 	currentAttempt  Attempt
@@ -111,12 +130,64 @@ type AnalysisRequest struct {
 	updatedAt       time.Time
 }
 
+// AnalysisRequestState は永続化された解析依頼を復元するためのドメイン状態。
+// DynamoDBなど特定の永続化方式には依存しない。
+type AnalysisRequestState struct {
+	ID              AnalysisRequestID
+	UserID          common.UserID
+	Image           ReceiptImage
+	Status          AnalysisStatus
+	CurrentAttempt  Attempt
+	UploadExpiresAt time.Time
+	ExpenseID       ExpenseID
+	FailureReason   *FailureReason
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
 // NewAnalysisRequest はアップロード待ちの解析依頼を生成する。
-func NewAnalysisRequest(id AnalysisRequestID, userID UserID, image ReceiptImage, uploadExpiresAt, now time.Time) (AnalysisRequest, error) {
+func NewAnalysisRequest(id AnalysisRequestID, userID common.UserID, image ReceiptImage, uploadExpiresAt, now time.Time) (AnalysisRequest, error) {
 	if id == "" || userID == "" || image.reference == "" || uploadExpiresAt.IsZero() || now.IsZero() {
 		return AnalysisRequest{}, ErrInvalidAnalysisRequest
 	}
 	return AnalysisRequest{id: id, userID: userID, image: image, status: AnalysisStatusUploading, currentAttempt: Attempt{value: 1}, uploadExpiresAt: uploadExpiresAt, createdAt: now, updatedAt: now}, nil
+}
+
+// RestoreAnalysisRequest は永続化された状態を検証して解析依頼を復元する。
+func RestoreAnalysisRequest(state AnalysisRequestState) (AnalysisRequest, error) {
+	if state.ID == "" || state.UserID == "" || state.Image.reference == "" || state.CurrentAttempt.value < 1 ||
+		state.UploadExpiresAt.IsZero() || state.CreatedAt.IsZero() || state.UpdatedAt.IsZero() || !validAnalysisStatus(state.Status) {
+		return AnalysisRequest{}, ErrInvalidAnalysisRequest
+	}
+	if state.Status == AnalysisStatusSucceeded && state.ExpenseID == "" {
+		return AnalysisRequest{}, ErrInvalidAnalysisRequest
+	}
+	if state.Status == AnalysisStatusFailed && (state.FailureReason == nil || state.FailureReason.code == "") {
+		return AnalysisRequest{}, ErrInvalidAnalysisRequest
+	}
+	if state.Status != AnalysisStatusSucceeded && state.ExpenseID != "" || state.Status != AnalysisStatusFailed && state.FailureReason != nil {
+		return AnalysisRequest{}, ErrInvalidAnalysisRequest
+	}
+	var reason *FailureReason
+	if state.FailureReason != nil {
+		copy := *state.FailureReason
+		reason = &copy
+	}
+	return AnalysisRequest{
+		id: state.ID, userID: state.UserID, image: state.Image, status: state.Status,
+		currentAttempt: state.CurrentAttempt, uploadExpiresAt: state.UploadExpiresAt,
+		expenseID: state.ExpenseID, failureReason: reason,
+		createdAt: state.CreatedAt, updatedAt: state.UpdatedAt,
+	}, nil
+}
+
+func validAnalysisStatus(status AnalysisStatus) bool {
+	switch status {
+	case AnalysisStatusUploading, AnalysisStatusAnalyzing, AnalysisStatusSucceeded, AnalysisStatusNoData, AnalysisStatusFailed:
+		return true
+	default:
+		return false
+	}
 }
 
 // StartAnalysis は一致する試行を解析中にする。同一試行の再配信は解析中から再開できる。
@@ -192,7 +263,7 @@ func (r AnalysisRequest) ensureAnalyzing(attempt Attempt) error {
 func (r AnalysisRequest) ID() AnalysisRequestID { return r.id }
 
 // UserID は所有者の利用者IDを返す。
-func (r AnalysisRequest) UserID() UserID { return r.userID }
+func (r AnalysisRequest) UserID() common.UserID { return r.userID }
 
 // Image は解析対象画像を返す。
 func (r AnalysisRequest) Image() ReceiptImage { return r.image }
@@ -234,10 +305,10 @@ type AnalyzedDetail struct {
 // NewAnalyzedDetail は名前が空でない解析明細を生成する。
 func NewAnalyzedDetail(name string, amount DetailAmount, quantity Quantity, category Category) (AnalyzedDetail, error) {
 	name = strings.TrimSpace(name)
-	if name == "" || quantity.value < 1 || quantity.value > maxQuantity || amount.yen < 0 || amount.yen > maxAmount {
+	if name == "" || !quantity.Valid() || !amount.Valid() {
 		return AnalyzedDetail{}, ErrInvalidAnalyzedDetail
 	}
-	if _, err := NewCategory(category.String()); err != nil {
+	if _, err := common.NewCategory(category.String()); err != nil {
 		return AnalyzedDetail{}, err
 	}
 	return AnalyzedDetail{name: name, amount: amount, quantity: quantity, category: category}, nil
@@ -265,7 +336,7 @@ type AnalysisResult struct {
 
 // NewAnalysisResult は支出へ変換可能な解析結果を生成する。明細0件はNO_DATA判定のため許容する。
 func NewAnalysisResult(storeName string, purchasedAt PurchaseDate, readAmount ReadAmount, details []AnalyzedDetail) (AnalysisResult, error) {
-	if purchasedAt.value.IsZero() || readAmount.yen == 0 || len(details) > 50 {
+	if !purchasedAt.Valid() || !readAmount.Valid() || len(details) > 50 {
 		return AnalysisResult{}, ErrInvalidAnalysisResult
 	}
 	return AnalysisResult{storeName: strings.TrimSpace(storeName), purchasedAt: purchasedAt, readAmount: readAmount, details: append([]AnalyzedDetail(nil), details...)}, nil
