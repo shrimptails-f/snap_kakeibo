@@ -1,8 +1,9 @@
 // localseed は Floci にローカル開発用のリソース(DynamoDB テーブル・S3 バケット・SQS キュー・SSM の JWT 署名鍵)と
 // ログイン用の利用者を作る。何度実行しても同じ状態に収束する(既にあるものは作り直さず、利用者は上書きする)。
 //
-//	go run ./tools/localseed                                  # dev@example.com / password で利用者を作る
+//	go run ./tools/localseed                                  # dev@example.com / password で利用者と画面確認用のサンプルを作る
 //	go run ./tools/localseed -email me@example.com -password secret
+//	go run ./tools/localseed -samples=false                    # サンプルは入れない
 //
 // リソース名は tools/localenv で決め、tools/localapi が同じ名前を Lambda に渡す。
 package main
@@ -40,15 +41,16 @@ const timeout = 2 * time.Minute
 func main() {
 	email := flag.String("email", "dev@example.com", "ログインに使うメールアドレス")
 	password := flag.String("password", "password", "ログインに使うパスワード(Floci 専用のダミー)")
+	withSamples := flag.Bool("samples", true, "画面確認用の解析依頼・支出のサンプルを入れる")
 	flag.Parse()
 
-	if err := run(*email, *password); err != nil {
+	if err := run(*email, *password, *withSamples); err != nil {
 		fmt.Fprintln(os.Stderr, "localseed:", err)
 		os.Exit(1)
 	}
 }
 
-func run(email, password string) error {
+func run(email, password string, withSamples bool) error {
 	if err := localenv.EnsureLocalProcessEnv(); err != nil {
 		return err
 	}
@@ -73,11 +75,15 @@ func run(email, password string) error {
 	if err := ensureJWTSecret(ctx, cfg); err != nil {
 		return err
 	}
-	if err := putUser(ctx, cfg, email, password); err != nil {
+	userID, err := putUser(ctx, cfg, email, password)
+	if err != nil {
 		return err
 	}
-	fmt.Printf("queue:    %s\nuser:     %s / %s\n", queueURL, email, password)
-	return nil
+	fmt.Printf("queue:    %s\nuser:     %s / %s (%s)\n", queueURL, email, password, userID)
+	if !withSamples {
+		return nil
+	}
+	return seedSamples(ctx, cfg, userID)
 }
 
 func ensureTables(ctx context.Context, cfg aws.Config) error {
@@ -152,23 +158,23 @@ func ensureJWTSecret(ctx context.Context, cfg aws.Config) error {
 	return nil
 }
 
-// putUser は test/auth の seedUser と同じ形で利用者を書く。既にあれば user_id を引き継いでパスワードだけ更新する。
-func putUser(ctx context.Context, cfg aws.Config, email, password string) error {
+// putUser は test/auth の seedUser と同じ形で利用者を書き、user_id を返す。既にあれば user_id を引き継いでパスワードだけ更新する。
+func putUser(ctx context.Context, cfg aws.Config, email, password string) (string, error) {
 	users := libdynamodb.New(cfg, nil).Table(localenv.TableName(libdynamodb.UsersSchema))
 	key := map[string]ddbtypes.AttributeValue{"PK": &ddbtypes.AttributeValueMemberS{Value: infrastructure.UserPKByEmail(email)}}
 
 	userID, err := existingUserID(ctx, users, key)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if userID == "" {
 		if userID, err = ulid.New(nil).NewID(); err != nil {
-			return err
+			return "", err
 		}
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return err
+		return "", err
 	}
 	_, err = users.PutItem(ctx, &awsdynamodb.PutItemInput{Item: map[string]ddbtypes.AttributeValue{
 		"PK":            key["PK"],
@@ -177,9 +183,9 @@ func putUser(ctx context.Context, cfg aws.Config, email, password string) error 
 		"password_hash": &ddbtypes.AttributeValueMemberS{Value: string(hash)},
 	}})
 	if err != nil {
-		return fmt.Errorf("put user: %w", err)
+		return "", fmt.Errorf("put user: %w", err)
 	}
-	return nil
+	return userID, nil
 }
 
 func existingUserID(ctx context.Context, users *libdynamodb.Table, key map[string]ddbtypes.AttributeValue) (string, error) {

@@ -21,7 +21,7 @@ Floci を同じ Compose 構成で起動し、開発コンテナ内の標準の A
 API Gateway と Lambda の代わりに `backend/tools/localapi` が HTTP を受け、`backend/cmd/*` の各 Lambda を子プロセス(aws-lambda-go のローカル RPC モード)として呼び出します。DynamoDB / S3 / SQS / SSM は Floci を使うので、実 AWS には繋ぎません。
 
 ```bash
-task local:seed   # 初回のみ。Floci にテーブル・バケット・キュー・JWT 署名鍵と利用者(dev@example.com / password)を作る
+task local:seed   # 初回のみ。Floci にテーブル・バケット・キュー・JWT 署名鍵、利用者(dev@example.com / password)、画面確認用のサンプルを作る
 task local:api    # :8080 で API を待ち受ける(Ctrl+C で停止)
 task web:dev      # 別の端末で。front/.env の VITE_DEV_API_PROXY=http://localhost:8080 で /api を転送する
 ```
@@ -29,7 +29,8 @@ task web:dev      # 別の端末で。front/.env の VITE_DEV_API_PROXY=http://l
 `front/.env` が無ければ `front/.env.example` をコピーしてください。ブラウザで `http://localhost:5173` を開き、seed した利用者でログインします。利用者を変えるときは `task local:seed EMAIL=... PASSWORD=...` で上書きできます。
 
 - Lambda のログは `[auth-login]` のように関数名を付けて `task local:api` の端末に出ます。`LOG_LEVEL=debug task local:api` で詳細を出せます。
-- 画像のアップロード(presigned URL への PUT)は `http://localhost:8080/s3/...` を経由して Floci に入ります。解析 Lambda(`analyze-receipt`)は動かさないため、アップロードしたものは `UPLOADING` のまま残ります。
+- サンプルは今月・先月・先々月の解析依頼と支出(今月は `SUCCEEDED` / `NO_DATA` / `FAILED` / `ANALYZING` / `UPLOADING` の全状態)で、本番と同じ upload / analysis の usecase で登録します(OpenAI だけ固定応答)。ID が固定なので `task local:seed` を繰り返しても増えません。月が変わると今月分が新しく追加され、前の月の分は残ります。サンプルを入れたくない場合は `cd backend && go run ./tools/localseed -samples=false` を使ってください。
+- 画像のアップロード(presigned URL への PUT)は `http://localhost:8080/s3/...` を経由して Floci に入ります。解析 Lambda(`analyze-receipt`)は動かさないため、自分でアップロードしたものは `UPLOADING` のまま残ります。
 - `cmd/` のコードを変えたら `task local:api` を起動し直します(起動時に `go build` します)。
 - Floci のデータを消してやり直すときは `floci-data` ボリュームを削除してから `task local:seed` を再実行します。
 
