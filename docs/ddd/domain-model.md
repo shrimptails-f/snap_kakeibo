@@ -4,15 +4,15 @@
 
 本書は、snap_kakeibo の業務概念をどの境界で扱い、どのモデルが業務ルールを保証するかを定める。
 
-本書は目標とするモデルを示す。現在のpackage名、API名、DynamoDBのテーブル名を一括で変更する指示ではない。
+用語の意味は[ユビキタス言語](./ubiquitous-language.md)、旧実装からの名称対応は[命名変換表](./naming-mapping.md)を正とする。
 
-用語の意味は[ユビキタス言語](./ubiquitous-language.md)、既存実装との名称対応は[命名変換表](./naming-mapping.md)を正とする。
+コード上の置き場所は、画像受付・解析コンテキストが`internal/upload`と`internal/analysis`、家計簿コンテキストが`internal/ledger`、認証コンテキストが`internal/auth`、共有ドメインが`internal/common/domain`である。
 
 ## 境界づけられたコンテキスト
 
-### 画像受付・解析コンテキスト
+### 画像受付・解析コンテキスト(`internal/upload`、`internal/analysis`)
 
-レシート画像を受け付け、解析を実施し、検証済みの解析結果を家計簿コンテキストへ渡す。
+レシート画像を受け付け、解析を実施し、検証済みの解析結果を家計簿コンテキストへ渡す。解析依頼の集約は`analysis/domain`に置き、`upload`はそれを共有する。
 
 主な概念:
 
@@ -24,7 +24,7 @@
 
 このコンテキストは、支出の編集や月次集計を担当しない。
 
-### 家計簿コンテキスト
+### 家計簿コンテキスト(`internal/ledger`)
 
 利用者の支出と支出明細を管理し、計上額などの不変条件を保証する。月次集計もこのコンテキストの読み取りモデルとして扱う。
 
@@ -60,7 +60,7 @@
 認証 -------- 認証済み利用者ID --------> 各コンテキスト
 ```
 
-解析結果から支出を作成するときは、解析側の型を家計簿側へ直接持ち込まず、application層で家計簿側の入力へ変換する。
+解析結果から支出を作成するときは、解析側の型を家計簿側へ直接持ち込まず、application層(`analysis/application`)で家計簿側の支出集約へ変換する。
 
 ## 集約
 
@@ -106,7 +106,7 @@ request.Retry(now)
 - 古い試行の完了、失敗、登録対象なしは現在の状態へ反映しない。
 - アップロード期限切れと解析停滞は、時刻から判定する派生状態とし、永続状態を増やさない。
 
-DynamoDBの条件付き更新は、並行処理下でこのルールを保証する永続化上の仕組みとして残す。ドメインモデルによる検証だけで排他制御を代替しない。
+DynamoDBの条件付き更新は、並行処理下でこのルールを保証する永続化上の仕組みとして残す。ドメインモデルによる検証だけで排他制御を代替しない。解析中の状態遷移(`MarkAnalyzing` / `MarkFailed` / `MarkNoData`)と再解析(`MarkRetrying`)は条件付き更新で行い、集約は登録時の生成と読み出し時の復元(状態と付随する値の整合の検証)に使う。
 
 解析中の依頼を再解析可能とする条件、および停滞と判定する時間は未決定である。決定するまでは、特定の時間条件を解析依頼集約の不変条件として固定しない。
 
@@ -189,16 +189,16 @@ expense.ChangeDetailCategory(detailID, category)
 
 | 値オブジェクト | 責務 |
 | --- | --- |
-| `ExpenseID` | 支出IDが空でないことを保証する |
-| `AnalysisRequestID` | 解析依頼IDが空でないことを保証する |
-| `Attempt` | 1以上の解析試行番号を表し、次の試行番号を作る |
-| `PurchaseDate` | 時刻を含まない実在する購入日を表す |
-| `YearMonth` | 有効な年と月を表し、購入日から生成する |
-| `ReadAmount` | レシートから読み取った最終的な支払合計と許容範囲を表す |
-| `AdjustmentAmount` | 利用者が加減する符号付きの調整額を表す |
-| `RecordedAmount` | 読取金額と調整額から導出される計上額を表す |
-| `Category` | 定義済みカテゴリだけを表す |
-| `FailureReason` | 解析失敗コードと安全に表示できる理由を表す |
+| `ExpenseID` | 支出IDが空でないことを保証する(`common/domain`) |
+| `AnalysisRequestID` | 解析依頼IDが空でないことを保証する(`common/domain`) |
+| `Attempt` | 1以上の解析試行番号を表し、次の試行番号を作る(`analysis/domain`) |
+| `PurchaseDate` | 時刻を含まない実在する購入日を表す(`common/domain`) |
+| `YearMonth` | 有効な年と月を表し、購入日から生成する(`common/domain`) |
+| `ReadAmount` | レシートから読み取った最終的な支払合計と許容範囲を表す(`common/domain`) |
+| `AdjustmentAmount` | 利用者が加減する符号付きの調整額を表す(`ledger/domain`) |
+| `RecordedAmount` | 読取金額と調整額から導出される計上額を表す(`ledger/domain`) |
+| `Category` | 定義済みカテゴリ(`social`を含む)だけを表す(`common/domain`) |
+| `FailureReason` | 解析失敗コードと安全に表示できる理由を表す(`analysis/domain`) |
 
 ## 外部境界のモデル
 
@@ -206,18 +206,22 @@ expense.ChangeDetailCategory(detailID, category)
 
 ### OpenAIレスポンス
 
-OpenAI固有のJSON Schema、`refusal`、`incomplete`などを表すinfrastructureのモデルとする。
+OpenAI固有のJSON Schema、`refusal`、`incomplete`などを表すinfrastructureのモデル(`receiptOutput`)とする。infrastructureはそれを検証前の読み取り内容(`ReceiptReading`)へ変換し、domainの`ValidateReading`が業務上の検証を行って検証済みの解析結果(`AnalysisResult`)を返す。
 
 ```text
 OpenAIレスポンス
        |
        | infrastructureで解釈
        v
-解析結果
+読み取り内容(ReceiptReading)
        |
-       | applicationで検証・変換
+       | domainで検証(ValidateReading)
        v
-支出
+解析結果(AnalysisResult)
+       |
+       | applicationで支出集約へ変換
+       v
+支出(Expense)
 ```
 
 ### 永続化モデル
@@ -226,25 +230,21 @@ DynamoDBの属性名、PK、SK、GSI用属性、marshal用タグを持つモデ�
 
 ### APIモデル
 
-HTTP request/response、パスパラメータ、HTTPステータスは`cmd/<lambda>`の境界でapplicationのinput/outputへ変換する。
+HTTP request/response、パスパラメータ、HTTPステータスは`cmd/<lambda>`の境界でapplicationのinput/outputへ変換する。APIのキーもユビキタス言語に合わせる(`expense_id`、`analysis_request_id`、`purchase_date`、`read_amount` / `adjustment_amount` / `recorded_amount`)。
 
-## 現在の実装との主な差分
+## 実装の現状
 
-| 現在 | 目標 |
+| 項目 | 状態 |
 | --- | --- |
-| `analysis/domain.Receipt`がOpenAI出力と検証対象を兼ねる | 外部レスポンスと解析結果を分離する |
-| `analysis/domain.Billing`と`billing/domain.Billing`が異なる役割で存在する | 家計簿コンテキストの支出モデルと、参照用モデルの役割を明示する |
-| `upload/domain.Status`と`analysis/domain.Status`が重複する | 解析依頼の状態と、ユースケースの実行結果を別の概念として命名する |
-| 日付、対象月、カテゴリが文字列で表現される | 不変条件が必要な箇所から値オブジェクトを導入する |
-| 状態遷移の判断がapplicationとDynamoDB条件式に分散する | ドメインモデルに遷移規則を置き、DynamoDBでも並行処理時の整合性を保証する |
-| `original_amount`、`discount_amount`、`final_amount`が値引きを前提とした名前になっている | 読取金額、符号付き調整額、計上額として扱い、`計上額 = 読取金額 + 調整額`で導出する |
+| OpenAIレスポンスと解析結果の分離 | infrastructureの`receiptOutput` → `ReceiptReading` → `AnalysisResult`で分離済み |
+| 支出モデル | `ledger/domain.Expense`が登録(analyze-receipt)と参照(get-expense)の両方で使われる |
+| 解析依頼の状態と実行結果 | `AnalysisStatus`(状態)と`AnalysisOutcome`(解析試行の結末)で区別済み |
+| 値オブジェクト | 購入日、対象月、金額、数量、カテゴリを`common/domain`の値オブジェクトで表現済み |
+| 状態遷移 | 集約に遷移規則を持ち、永続化はDynamoDBの条件付き更新で並行処理時の整合を保証する。解析中の再解析条件は未決定のまま(集約の`Retry`は`ANALYZING`を受け付けず、再解析APIは停滞した`ANALYZING`もやり直せる) |
+| 金額 | `read_amount` / `adjustment_amount` / `recorded_amount`で保存し、`計上額 = 読取金額 + 調整額`で導出する |
 
-## 段階的な導入順
+## 今後の導入順
 
-1. 解析依頼の状態遷移をドメインモデルへ集約し、遷移規則を単体テストで固定する。
-2. OpenAIレスポンスと検証済み解析結果を分離する。
-3. 支出集約を導入し、読取金額、調整額、計上額と編集操作の不変条件を集約へ移す。
-4. `PurchaseDate`、`YearMonth`、`Category`など、重複する検証を持つ値オブジェクトを必要な範囲で導入する。
-5. 月次集計を家計簿コンテキスト内で、支出から再構築できる読み取りモデルとして整理する。
-
-各段階で既存APIとDynamoDBスキーマの互換性を保つ。`Billing`から`Expense`へのコード上の改名は影響範囲が広いため、用語の合意後に独立した変更として実施する。
+1. 支出編集(`PATCH /expenses/{expense_id}`)を支出集約の編集操作で実装する。
+2. 月次再構築(`POST /monthly-summaries/{yyyy-MM}/rebuild`)を`RebuildMonthlySummary`で実装する。
+3. 解析中の解析依頼を再解析可能とする条件と、停滞と判定する時間を決め、集約の`Retry`と再解析APIの条件を揃える。

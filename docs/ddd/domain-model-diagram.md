@@ -4,7 +4,7 @@
 
 本書は、snap_kakeibo のドメインモデル、集約境界、モデル間の関係を図示する。
 
-用語の意味は[ユビキタス言語](./ubiquitous-language.md)、境界とルールの詳細は[ドメイン境界とモデル](./domain-model.md)を正とする。本図は目標とするモデルであり、現在のGoの型やDynamoDBの構造をそのまま表すものではない。
+用語の意味は[ユビキタス言語](./ubiquitous-language.md)、境界とルールの詳細は[ドメイン境界とモデル](./domain-model.md)を正とする。本図はドメインモデルを表し、DynamoDBの属性やAPIのキーは[DB設計](../infra/database.md)と各画面の仕様を参照する。
 
 ## コンテキスト間の関係
 
@@ -77,13 +77,21 @@ classDiagram
         +string safeMessage
     }
 
+    class ReceiptReading {
+        <<読み取り内容>>
+        +string storeName
+        +string purchaseDate
+        +int64 readAmount
+        +List~ReadDetail~ details
+    }
+
     class AnalysisResult {
         <<解析結果>>
         +StoreName storeName
-        +PurchaseDate purchasedAt
+        +PurchaseDate purchaseDate
         +ReadAmount readAmount
         +List~AnalyzedDetail~ details
-        +validate(now) Result
+        +hasData() bool
     }
 
     class AnalyzedDetail {
@@ -98,10 +106,12 @@ classDiagram
     AnalysisRequest *-- "1" Attempt : 現在の試行
     AnalysisRequest --> "1" AnalysisStatus : 状態
     AnalysisRequest o-- "0..1" FailureReason : 失敗時のみ
+    ReceiptReading ..> AnalysisResult : validateReading(now)
+    ReceiptReading ..> FailureReason : 検証違反
     AnalysisResult *-- "0..50" AnalyzedDetail : 検証後
 ```
 
-解析結果はOpenAIのレスポンスそのものではない。外部レスポンスを解釈し、業務上の検証を行う対象である。明細が0件の場合は支出を作らず、解析依頼を`NO_DATA`にする。
+読み取り内容(`ReceiptReading`)はOpenAIのレスポンスを解釈した検証前の値で、読めなかった項目を持たないことがある。`validateReading`が業務上の検証を行い、検証済みの解析結果(`AnalysisResult`)か失敗理由(`FailureReason`)を返す。明細が0件の場合は支出を作らず、解析依頼を`NO_DATA`にする。
 
 解析中の依頼を再解析可能とする条件と、停滞と判定する時間は未決定のため、図では`retry`の詳細な事前条件を固定しない。
 
@@ -117,7 +127,7 @@ classDiagram
         +UserID userID
         +AnalysisRequestID sourceRequestID
         +StoreName storeName
-        +PurchaseDate purchasedAt
+        +PurchaseDate purchaseDate
         +ReadAmount readAmount
         +AdjustmentAmount adjustmentAmount
         +RecordedAmount recordedAmount
@@ -210,12 +220,14 @@ classDiagram
 ```mermaid
 flowchart LR
     External[OpenAIレスポンス<br/>外部モデル]
+    Reading[読み取り内容<br/>画像受付・解析]
     Result[解析結果<br/>画像受付・解析]
     Expense[支出<br/>家計簿の集約ルート]
     Summary[月次集計<br/>読み取りモデル]
 
-    External -- 解釈 --> Result
-    Result -- 検証・変換 --> Expense
+    External -- 解釈 --> Reading
+    Reading -- 検証 --> Result
+    Result -- 変換 --> Expense
     Expense -- 投影・再構築 --> Summary
 ```
 

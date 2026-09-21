@@ -3,9 +3,9 @@ import type { ChangeEvent, FormEvent } from 'react'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
 
-type UploadItem = {
-  upload_id: string
-  billing_id?: string
+type AnalysisRequestItem = {
+  analysis_request_id: string
+  expense_id?: string
   status: 'UPLOADING' | 'ANALYZING' | 'SUCCEEDED' | 'NO_DATA' | 'FAILED'
   file_name: string
   year_month: string
@@ -15,11 +15,13 @@ type UploadItem = {
   updated_at: string
 }
 
-type Billing = {
-  billing_id: string
+type Expense = {
+  expense_id: string
   store_name: string
-  purchased_at: string
-  final_amount: number
+  purchase_date: string
+  read_amount: number
+  adjustment_amount: number
+  recorded_amount: number
 }
 
 type Detail = {
@@ -28,6 +30,25 @@ type Detail = {
   category: string
   amount: number
   quantity: number
+}
+
+// カテゴリの表示名。保存値は docs/ddd/ubiquitous-language.md の語彙と同じ
+const CATEGORY_LABELS: Record<string, string> = {
+  food: '食費',
+  daily_goods: '日用品',
+  medical: '医療',
+  transport: '交通',
+  utilities: '水道・光熱・通信',
+  entertainment: '娯楽',
+  social: '交際・会食',
+  clothing: '衣類',
+  education: '教育',
+  other: 'その他',
+  unknown: '分類不能',
+}
+
+function categoryLabel(category: string) {
+  return CATEGORY_LABELS[category] ?? category
 }
 
 type AuthUser = {
@@ -66,9 +87,9 @@ export default function App() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [month] = useState(currentMonth)
-  const [uploads, setUploads] = useState<UploadItem[]>([])
-  const [selectedBillingID, setSelectedBillingID] = useState<string | null>(null)
-  const [billing, setBilling] = useState<Billing | null>(null)
+  const [requests, setRequests] = useState<AnalysisRequestItem[]>([])
+  const [selectedExpenseID, setSelectedExpenseID] = useState<string | null>(null)
+  const [expense, setExpense] = useState<Expense | null>(null)
   const [details, setDetails] = useState<Detail[]>([])
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -93,10 +114,10 @@ export default function App() {
     [accessToken, refreshAccessToken],
   )
 
-  const refreshUploads = useCallback(async () => {
+  const refreshRequests = useCallback(async () => {
     if (!accessToken) return
-    const data = await authorizedJSON<{ items: UploadItem[] }>(`/api/months/${month}/uploads`)
-    setUploads(data.items)
+    const data = await authorizedJSON<{ items: AnalysisRequestItem[] }>(`/api/months/${month}/analysis-requests`)
+    setRequests(data.items)
   }, [accessToken, authorizedJSON, month])
 
   useEffect(() => {
@@ -107,26 +128,26 @@ export default function App() {
   }, [refreshAccessToken])
 
   useEffect(() => {
-    refreshUploads().catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+    refreshRequests().catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
     const timer = window.setInterval(() => {
-      refreshUploads().catch(() => undefined)
+      refreshRequests().catch(() => undefined)
     }, 5000)
     return () => window.clearInterval(timer)
-  }, [month, refreshUploads])
+  }, [month, refreshRequests])
 
   useEffect(() => {
-    if (!selectedBillingID) {
-      setBilling(null)
+    if (!selectedExpenseID) {
+      setExpense(null)
       setDetails([])
       return
     }
-    authorizedJSON<{ billing: Billing; details: Detail[] }>(`/api/billings/${selectedBillingID}`)
+    authorizedJSON<{ expense: Expense; details: Detail[] }>(`/api/expenses/${selectedExpenseID}`)
       .then((data) => {
-        setBilling(data.billing)
+        setExpense(data.expense)
         setDetails(data.details)
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
-  }, [authorizedJSON, selectedBillingID])
+  }, [authorizedJSON, selectedExpenseID])
 
   async function login(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -152,8 +173,8 @@ export default function App() {
     await readJSON('/api/auth/logout', { method: 'POST' }).catch(() => undefined)
     setAccessToken(null)
     setUser(null)
-    setUploads([])
-    setSelectedBillingID(null)
+    setRequests([])
+    setSelectedExpenseID(null)
   }
 
   async function upload(file: File) {
@@ -161,7 +182,7 @@ export default function App() {
     setError(null)
     setMessage(null)
     try {
-      const data = await authorizedJSON<{ put_url: string; upload_id: string }>('/api/uploads', {
+      const data = await authorizedJSON<{ put_url: string; analysis_request_id: string }>('/api/uploads', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ file_name: file.name, content_type: file.type || 'image/jpeg' }),
@@ -172,8 +193,8 @@ export default function App() {
         body: file,
       })
       if (!put.ok) throw new Error(`S3 upload failed: ${put.status} ${put.statusText}`)
-      setMessage('アップロードしました。解析が完了すると履歴に反映されます。')
-      await refreshUploads()
+      setMessage('アップロードしました。解析が完了すると解析依頼の一覧に反映されます。')
+      await refreshRequests()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -243,19 +264,19 @@ export default function App() {
       {accessToken && (
         <section className="layout">
         <div className="panel">
-          <h2>アップロード履歴</h2>
+          <h2>解析依頼</h2>
           <div className="list">
-            {uploads.length === 0 && <p className="muted">まだ履歴がありません。</p>}
-            {uploads.map((item) => (
+            {requests.length === 0 && <p className="muted">まだ解析依頼がありません。</p>}
+            {requests.map((item) => (
               <button
                 className="row"
-                key={item.upload_id}
+                key={item.analysis_request_id}
                 type="button"
-                disabled={!item.billing_id}
-                onClick={() => item.billing_id && setSelectedBillingID(item.billing_id)}
+                disabled={!item.expense_id}
+                onClick={() => item.expense_id && setSelectedExpenseID(item.expense_id)}
               >
                 <span>
-                  <strong>{item.file_name || item.upload_id}</strong>
+                  <strong>{item.file_name || item.analysis_request_id}</strong>
                   <small>{new Date(item.created_at).toLocaleString('ja-JP')}</small>
                   {item.error_message && <small>{item.error_message}</small>}
                 </span>
@@ -266,14 +287,19 @@ export default function App() {
         </div>
 
         <div className="panel">
-          <h2>詳細</h2>
-          {!billing && <p className="muted">解析完了した履歴を選択してください。</p>}
-          {billing && (
+          <h2>支出</h2>
+          {!expense && <p className="muted">登録完了した解析依頼を選択してください。</p>}
+          {expense && (
             <>
               <div className="summary">
-                <span>{billing.store_name}</span>
-                <strong>{yen(billing.final_amount)}</strong>
-                <small>{billing.purchased_at}</small>
+                <span>{expense.store_name}</span>
+                <strong>{yen(expense.recorded_amount)}</strong>
+                <small>{expense.purchase_date}</small>
+                {expense.adjustment_amount !== 0 && (
+                  <small>
+                    読取金額 {yen(expense.read_amount)} / 調整額 {yen(expense.adjustment_amount)}
+                  </small>
+                )}
               </div>
               <table>
                 <thead>
@@ -287,7 +313,7 @@ export default function App() {
                   {details.map((detail) => (
                     <tr key={detail.detail_id}>
                       <td>{detail.name}</td>
-                      <td>{detail.category}</td>
+                      <td>{categoryLabel(detail.category)}</td>
                       <td>{yen(detail.amount)}</td>
                     </tr>
                   ))}

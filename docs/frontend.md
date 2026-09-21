@@ -48,8 +48,8 @@ SPA のルーティングは CloudFront のエラー応答(403 / 404 → `/index
 * [ダッシュボード画面](./screens/dashboard/README.md)
 * [月別支出画面](./screens/monthly-expenses/README.md)
 * [アップロード画面](./screens/upload/README.md)
-* [アップロード履歴画面](./screens/upload-history/README.md)
-* [請求詳細・編集画面](./screens/receipt-detail/README.md)
+* [解析依頼一覧画面](./screens/analysis-requests/README.md)
+* [支出詳細・編集画面](./screens/expense-detail/README.md)
 
 ---
 
@@ -89,8 +89,8 @@ Request:
    POST /uploads
 
 2. Backend
-   upload_idを画像ごとに生成
-   upload_historiesレコード作成
+   analysis_request_idを画像ごとに生成
+   analysis_requestsレコード作成
    S3 Presigned PUT URLを画像ごとに発行
 
 3. React
@@ -110,15 +110,15 @@ S3キーはクライアントから指定しない。
 
 月別支出の内訳
 
-購入明細
+支出明細
 
-請求詳細
+支出詳細
 
 月次集計
 
-解析ステータス
+解析依頼の状態
 
-アップロード履歴
+解析依頼一覧
 ```
 
 ---
@@ -130,25 +130,25 @@ POST /auth/login
 
 POST /uploads
 
-POST /uploads/{upload_id}/retry
+POST /analysis-requests/{analysis_request_id}/retry
 
 GET /monthly-summaries
 
-POST /monthly-summaries/{yyyy-MM}/recalculate
+POST /monthly-summaries/{yyyy-MM}/rebuild
 
 GET /months/{yyyy-MM}/expenses
 
-GET /months/{yyyy-MM}/uploads
+GET /months/{yyyy-MM}/analysis-requests
 
-GET /billings/{billing_id}
+GET /expenses/{expense_id}
 
-PATCH /billings/{billing_id}
+PATCH /expenses/{expense_id}
 ```
 
 ---
 
 ## 失敗時の表示
 
-バックエンドは `UPLOADING` の期限切れや `ANALYZING` の停滞で状態を変更しない。画面側が `expires_at` や `updated_at` からの経過時間で表示を切り替え、再実行APIで手動回復する。
+バックエンドは `UPLOADING` の期限切れや `ANALYZING` の停滞で状態を変更しない。画面側が `upload_expires_at` や `updated_at` からの経過時間で表示を切り替え、再解析APIで手動回復する。
 
-詳細は [アップロード履歴画面](./screens/upload-history/README.md) に置く。
+詳細は [解析依頼一覧画面](./screens/analysis-requests/README.md) に置く。

@@ -30,8 +30,8 @@
 * [ダッシュボード画面](./screens/dashboard/README.md)
 * [月別支出画面](./screens/monthly-expenses/README.md)
 * [アップロード画面](./screens/upload/README.md)
-* [アップロード履歴画面](./screens/upload-history/README.md)
-* [請求詳細・編集画面](./screens/receipt-detail/README.md)
+* [解析依頼一覧画面](./screens/analysis-requests/README.md)
+* [支出詳細・編集画面](./screens/expense-detail/README.md)
 
 ---
 
@@ -120,15 +120,15 @@ DynamoDB Atomic Update
 
 DynamoDB Transaction
 
-失敗は upload_histories に理由付きで残す
+失敗は analysis_requests に理由付きで残す
 
 月次集計 = monthly_summaries
 
-請求書・レシート画像1枚 = upload_histories 1件
+レシート画像1枚 = analysis_requests 1件(解析依頼)
 
-請求単位の支出 = billings 1件
+支出 = expenses 1件
 
-購入商品 = billing_details
+支出明細 = expense_details
 ```
 
 ---

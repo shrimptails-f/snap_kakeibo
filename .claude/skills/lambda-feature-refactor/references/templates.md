@@ -83,7 +83,7 @@ internal/di/<lambda>.go
 ### 旧実装からの差分
 
 - 認証は旧 `internal/auth.Service` から `auth/application.CheckUsecase` + `token.JWTVerifier` に変更(HS256 / issuer / 期限の検証は同じ)
-- DynamoDB は生 SDK から `library/dynamodb` に変更し、`dynamodb_<操作>` span が出る。ctx に `user_id` / `upload_id` を積むので span にも付く
+- DynamoDB は生 SDK から `library/dynamodb` に変更し、`dynamodb_<操作>` span が出る。ctx に `user_id` / `analysis_request_id` を積むので span にも付く
 - handler 内の `app.Required` をやめ、必須の環境変数が無ければ起動時に落とす
 - <挙動が変わる点があれば明示。無ければ「API のリクエスト / レスポンス形式と DynamoDB の項目は変更なし」>
 

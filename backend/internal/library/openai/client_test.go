@@ -97,7 +97,7 @@ func TestResponsesSuccess(t *testing.T) {
 	srv := newFakeServer(t, func(_ int, w http.ResponseWriter) { respond(w, 200, completedBody) })
 	c, buf := newClient(t, srv, retry.Policy{})
 
-	ctx := logger.ContextWith(context.Background(), logger.UploadID("u1"))
+	ctx := logger.ContextWith(context.Background(), logger.AnalysisRequestID("u1"))
 	resp, err := c.Responses(ctx, Request{
 		Model:           "gpt-5-mini",
 		Instructions:    "read the receipt",
@@ -153,7 +153,7 @@ func TestResponsesSuccess(t *testing.T) {
 	assertField(t, finished, "input_tokens", float64(10))
 	assertField(t, finished, "output_tokens", float64(5))
 	assertField(t, finished, "reasoning_tokens", float64(2))
-	assertField(t, finished, "upload_id", "u1")
+	assertField(t, finished, "analysis_request_id", "u1")
 	if strings.Contains(buf.String(), "store_name") || strings.Contains(buf.String(), "sk-test") || strings.Contains(buf.String(), "base64") {
 		t.Fatalf("response body / api key / image must not be logged: %s", buf.String())
 	}

@@ -87,7 +87,7 @@ func NewAppStack(scope constructs.Construct, id string, props *AppStackProps) *A
 
 	upload := s.newFunction("upload", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
 	addRoute(s.API, awsapigatewayv2.HttpMethod_POST, APIPathPrefix+"/uploads", upload.Handler)
-	s.storage.UploadHistoriesTable.GrantWriteData(upload.Handler)
+	s.storage.AnalysisRequestsTable.GrantWriteData(upload.Handler)
 	s.storage.Bucket.GrantPut(upload.Handler, jsii.String("receipts/*"))
 	s.grantJWTSecretRead(upload.Function)
 
@@ -99,9 +99,9 @@ func NewAppStack(scope constructs.Construct, id string, props *AppStackProps) *A
 	}))
 	s.storage.Bucket.GrantRead(analyzeReceipt.Handler, jsii.String("receipts/*"))
 	s.storage.Bucket.GrantPut(analyzeReceipt.Handler, jsii.String("analysis-results/*"))
-	s.storage.UploadHistoriesTable.GrantReadWriteData(analyzeReceipt.Handler)
-	s.storage.BillingsTable.GrantReadWriteData(analyzeReceipt.Handler)
-	s.storage.BillingDetailsTable.GrantReadWriteData(analyzeReceipt.Handler)
+	s.storage.AnalysisRequestsTable.GrantReadWriteData(analyzeReceipt.Handler)
+	s.storage.ExpensesTable.GrantReadWriteData(analyzeReceipt.Handler)
+	s.storage.ExpenseDetailsTable.GrantReadWriteData(analyzeReceipt.Handler)
 	s.storage.MonthlySummariesTable.GrantReadWriteData(analyzeReceipt.Handler)
 	analyzeReceipt.Function.AddToRolePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
 		Actions: jsii.Strings("ssm:GetParameter"),
@@ -110,22 +110,22 @@ func NewAppStack(scope constructs.Construct, id string, props *AppStackProps) *A
 		),
 	}))
 
-	retryUpload := s.newFunction("retry-upload", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
-	addRoute(s.API, awsapigatewayv2.HttpMethod_POST, APIPathPrefix+"/uploads/{uploadId}/retry", retryUpload.Handler)
-	s.storage.UploadHistoriesTable.GrantReadWriteData(retryUpload.Handler)
-	s.storage.AnalyzeQueue.GrantSendMessages(retryUpload.Handler)
-	s.grantJWTSecretRead(retryUpload.Function)
+	retryAnalysis := s.newFunction("retry-analysis", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
+	addRoute(s.API, awsapigatewayv2.HttpMethod_POST, APIPathPrefix+"/analysis-requests/{analysisRequestId}/retry", retryAnalysis.Handler)
+	s.storage.AnalysisRequestsTable.GrantReadWriteData(retryAnalysis.Handler)
+	s.storage.AnalyzeQueue.GrantSendMessages(retryAnalysis.Handler)
+	s.grantJWTSecretRead(retryAnalysis.Function)
 
-	listUploads := s.newFunction("list-uploads", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
-	addRoute(s.API, awsapigatewayv2.HttpMethod_GET, APIPathPrefix+"/months/{month}/uploads", listUploads.Handler)
-	s.storage.UploadHistoriesTable.GrantReadData(listUploads.Handler)
-	s.grantJWTSecretRead(listUploads.Function)
+	listAnalysisRequests := s.newFunction("list-analysis-requests", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
+	addRoute(s.API, awsapigatewayv2.HttpMethod_GET, APIPathPrefix+"/months/{month}/analysis-requests", listAnalysisRequests.Handler)
+	s.storage.AnalysisRequestsTable.GrantReadData(listAnalysisRequests.Handler)
+	s.grantJWTSecretRead(listAnalysisRequests.Function)
 
-	getBilling := s.newFunction("get-billing", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
-	addRoute(s.API, awsapigatewayv2.HttpMethod_GET, APIPathPrefix+"/billings/{billingId}", getBilling.Handler)
-	s.storage.BillingsTable.GrantReadData(getBilling.Handler)
-	s.storage.BillingDetailsTable.GrantReadData(getBilling.Handler)
-	s.grantJWTSecretRead(getBilling.Function)
+	getExpense := s.newFunction("get-expense", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
+	addRoute(s.API, awsapigatewayv2.HttpMethod_GET, APIPathPrefix+"/expenses/{expenseId}", getExpense.Handler)
+	s.storage.ExpensesTable.GrantReadData(getExpense.Handler)
+	s.storage.ExpenseDetailsTable.GrantReadData(getExpense.Handler)
+	s.grantJWTSecretRead(getExpense.Function)
 
 	return s
 }
@@ -247,9 +247,9 @@ func (s *AppStack) commonEnvironment() map[string]*string {
 		common.EnvUsersTable:            st.UsersTable.TableName(),
 		common.EnvRefreshTokensTable:    st.RefreshTokensTable.TableName(),
 		common.EnvMonthlySummariesTable: st.MonthlySummariesTable.TableName(),
-		common.EnvUploadHistoriesTable:  st.UploadHistoriesTable.TableName(),
-		common.EnvBillingsTable:         st.BillingsTable.TableName(),
-		common.EnvBillingDetailsTable:   st.BillingDetailsTable.TableName(),
+		common.EnvAnalysisRequestsTable: st.AnalysisRequestsTable.TableName(),
+		common.EnvExpensesTable:         st.ExpensesTable.TableName(),
+		common.EnvExpenseDetailsTable:   st.ExpenseDetailsTable.TableName(),
 		common.EnvReceiptBucket:         st.Bucket.BucketName(),
 		common.EnvAnalyzeQueueURL:       st.AnalyzeQueue.QueueUrl(),
 		common.EnvImageMaxEdge:          jsii.String("2048"),

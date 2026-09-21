@@ -3,11 +3,13 @@ package infrastructure
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"snap_kakeibo/backend/internal/analysis/domain"
+	common "snap_kakeibo/backend/internal/common/domain"
 	"snap_kakeibo/backend/internal/library/openai"
 )
 
@@ -31,7 +33,7 @@ func completedResponse(text string) *openai.Response {
 
 func TestAnalyzeSendsImageWithSchema(t *testing.T) {
 	t.Parallel()
-	client := &fakeResponses{resp: completedResponse(`{"store_name":null,"purchased_at":"2026-09-18","total_amount":100,"details":[]}`)}
+	client := &fakeResponses{resp: completedResponse(`{"store_name":null,"purchase_date":"2026-09-18","total_amount":100,"details":[]}`)}
 	analyzer := OpenAIReceiptAnalyzer{Client: client, Model: "gpt-5-mini", ReasoningEffort: "low"}
 
 	before := time.Now()
@@ -42,8 +44,8 @@ func TestAnalyzeSendsImageWithSchema(t *testing.T) {
 	if result.Failure != nil || result.ResponseID != "resp_1" || string(result.Raw) != `{"id":"resp_1"}` {
 		t.Fatalf("result = %+v", result)
 	}
-	if result.Receipt.PurchasedAt == nil || *result.Receipt.PurchasedAt != "2026-09-18" || *result.Receipt.TotalAmount != 100 {
-		t.Errorf("receipt = %+v", result.Receipt)
+	if result.Reading.PurchaseDate == nil || *result.Reading.PurchaseDate != "2026-09-18" || *result.Reading.ReadAmount != 100 || result.Reading.StoreName != nil {
+		t.Errorf("reading = %+v", result.Reading)
 	}
 	if result.Usage.InputTokens != 10 || result.Usage.OutputTokens != 5 || result.Usage.ReasoningTokens != 2 {
 		t.Errorf("usage = %+v", result.Usage)
@@ -85,7 +87,7 @@ func TestAnalyzeReturnsFailureForUnusableResponses(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Analyze() error = %v", err)
 			}
-			if result.Failure == nil || result.Failure.Code != domain.FailureAnalysisFailed || !strings.Contains(result.Failure.Message, tt.message) {
+			if result.Failure == nil || result.Failure.Code() != domain.FailureAnalysisFailed || !strings.Contains(result.Failure.SafeMessage(), tt.message) {
 				t.Fatalf("failure = %v, want %s containing %q", result.Failure, domain.FailureAnalysisFailed, tt.message)
 			}
 			if result.ResponseID != "r" && result.ResponseID != "resp_1" || len(result.Raw) == 0 {
@@ -102,7 +104,7 @@ func TestAnalyzeTreatsClientErrorsAsFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Analyze() error = %v", err)
 	}
-	if result.Failure == nil || result.Failure.Code != domain.FailureAnalysisFailed || !strings.Contains(result.Failure.Message, "400") || !strings.Contains(result.Failure.Message, "invalid_request_error/invalid_image") {
+	if result.Failure == nil || result.Failure.Code() != domain.FailureAnalysisFailed || !strings.Contains(result.Failure.SafeMessage(), "400") || !strings.Contains(result.Failure.SafeMessage(), "invalid_request_error/invalid_image") {
 		t.Fatalf("failure = %v", result.Failure)
 	}
 	if result.ResponseID != "" || result.Raw != nil {
@@ -137,14 +139,36 @@ func TestAnalyzeReturnsTemporaryErrors(t *testing.T) {
 func TestReceiptSchemaRequiresDateOnly(t *testing.T) {
 	t.Parallel()
 	properties := ReceiptSchema()["properties"].(map[string]any)
-	purchasedAt := properties["purchased_at"].(map[string]any)
-	variants := purchasedAt["anyOf"].([]any)
+	purchaseDate := properties["purchase_date"].(map[string]any)
+	variants := purchaseDate["anyOf"].([]any)
 	date := variants[0].(map[string]any)
 	if got := date["pattern"]; got != `^\d{4}-\d{2}-\d{2}$` {
-		t.Fatalf("purchased_at pattern = %v", got)
+		t.Fatalf("purchase_date pattern = %v", got)
 	}
 	details := properties["details"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)
-	if got := details["category"].(map[string]any)["enum"]; len(got.([]string)) != len(domain.Categories) {
-		t.Fatalf("category enum = %v", got)
+	enum := details["category"].(map[string]any)["enum"].([]string)
+	if len(enum) != len(common.Categories()) {
+		t.Fatalf("category enum = %v", enum)
+	}
+	if !slices.Contains(enum, "social") {
+		t.Errorf("category enum must include social: %v", enum)
+	}
+}
+
+// TestAnalyzeConvertsDetailsIncludingSocial は OpenAI の出力(purchase_date / total_amount)が
+// domain.ReceiptReading の読み取り内容へ変換され、social カテゴリがそのまま通ることを確認する。
+func TestAnalyzeConvertsDetailsIncludingSocial(t *testing.T) {
+	t.Parallel()
+	client := &fakeResponses{resp: completedResponse(`{"store_name":"居酒屋","purchase_date":"2026-09-18","total_amount":5000,"details":[{"name":"飲み会","amount":5000,"quantity":1,"category":"social"}]}`)}
+	result, err := OpenAIReceiptAnalyzer{Client: client}.Analyze(context.Background(), []byte("jpeg"))
+	if err != nil || result.Failure != nil {
+		t.Fatalf("Analyze() = %+v, %v", result, err)
+	}
+	reading := result.Reading
+	if *reading.StoreName != "居酒屋" || *reading.PurchaseDate != "2026-09-18" || *reading.ReadAmount != 5000 {
+		t.Errorf("reading = %+v", reading)
+	}
+	if len(reading.Details) != 1 || reading.Details[0] != (domain.ReadDetail{Name: "飲み会", Amount: 5000, Quantity: 1, Category: "social"}) {
+		t.Errorf("details = %+v", reading.Details)
 	}
 }

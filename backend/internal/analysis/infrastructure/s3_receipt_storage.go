@@ -40,8 +40,8 @@ func (s S3ReceiptStorage) ReadImage(ctx context.Context, bucket, key string) ([]
 	return s.Client.GetBytes(ctx, bucket, key, maxBytes)
 }
 
-// SaveRawResult は生レスポンスを analysis-results/<user_id>/<upload_id>/<attempt>/<response_id>.json に保存する。
-func (s S3ReceiptStorage) SaveRawResult(ctx context.Context, job domain.Job, responseID string, raw []byte) (string, error) {
+// SaveRawResult は生レスポンスを analysis-results/<user_id>/<analysis_request_id>/<attempt>/<response_id>.json に保存する。
+func (s S3ReceiptStorage) SaveRawResult(ctx context.Context, job domain.AnalysisJob, responseID string, raw []byte) (string, error) {
 	key := RawResultKey(job, responseID)
 	if err := s.Results.PutBytes(ctx, key, raw, "application/json"); err != nil {
 		return "", err
@@ -50,8 +50,8 @@ func (s S3ReceiptStorage) SaveRawResult(ctx context.Context, job domain.Job, res
 }
 
 // RawResultKey は生レスポンスの保存キーを返す。responseID はキーに使える文字だけに落とす。
-func RawResultKey(job domain.Job, responseID string) string {
-	return fmt.Sprintf("%s/%s/%s/%d/%s.json", rawResultPrefix, job.UserID, job.UploadID, job.Attempt, safeID(responseID))
+func RawResultKey(job domain.AnalysisJob, responseID string) string {
+	return fmt.Sprintf("%s/%s/%s/%d/%s.json", rawResultPrefix, job.UserID, job.AnalysisRequestID, job.Attempt, safeID(responseID))
 }
 
 // safeID は英数字と - _ 以外を取り除く。空になれば "response"。

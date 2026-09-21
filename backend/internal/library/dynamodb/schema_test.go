@@ -10,11 +10,11 @@ import (
 
 func TestSchemaCreateTableInput(t *testing.T) {
 	t.Parallel()
-	in, err := UploadHistoriesSchema.CreateTableInput("scenario-upload-histories-1")
+	in, err := AnalysisRequestsSchema.CreateTableInput("scenario-analysis-requests-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := aws.ToString(in.TableName); got != "scenario-upload-histories-1" {
+	if got := aws.ToString(in.TableName); got != "scenario-analysis-requests-1" {
 		t.Errorf("TableName = %q", got)
 	}
 	if in.BillingMode != types.BillingModePayPerRequest {
@@ -27,7 +27,7 @@ func TestSchemaCreateTableInput(t *testing.T) {
 		t.Fatalf("GSIs = %d, want 1", len(in.GlobalSecondaryIndexes))
 	}
 	gsi := in.GlobalSecondaryIndexes[0]
-	if aws.ToString(gsi.IndexName) != UploadMonthIndex || keyNames(gsi.KeySchema) != "GSI1PK/HASH,GSI1SK/RANGE" {
+	if aws.ToString(gsi.IndexName) != AnalysisRequestMonthIndex || keyNames(gsi.KeySchema) != "GSI1PK/HASH,GSI1SK/RANGE" {
 		t.Errorf("GSI = %s %s", aws.ToString(gsi.IndexName), keyNames(gsi.KeySchema))
 	}
 	if gsi.Projection == nil || gsi.Projection.ProjectionType != types.ProjectionTypeAll {
@@ -94,7 +94,7 @@ func TestRandomTableName(t *testing.T) {
 		}
 		seen[name] = true
 	}
-	if got := RandomTableName("  ", BillingsSchema); !regexp.MustCompile(`^test-billings-`).MatchString(got) {
+	if got := RandomTableName("  ", ExpensesSchema); !regexp.MustCompile(`^test-expenses-`).MatchString(got) {
 		t.Errorf("empty prefix: %q", got)
 	}
 }

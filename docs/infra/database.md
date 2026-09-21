@@ -29,7 +29,7 @@ is_edited
 ユーザーが後から編集したかどうか
 ```
 
-解析結果をあとから検証したい場合は、明細にconfidenceを散らすのではなく、S3にOpenAIの生レスポンスJSONを保存し、`upload_histories.raw_result_s3_key` から参照する。
+解析結果をあとから検証したい場合は、明細にconfidenceを散らすのではなく、S3にOpenAIの生レスポンスJSONを保存し、`analysis_requests.raw_result_s3_key` から参照する。
 
 ---
 
@@ -39,12 +39,12 @@ is_edited
 erDiagram
   USER ||--o{ REFRESH_TOKEN : signs_in_with
   USER ||--o{ MONTHLY_SUMMARY : has
-  USER ||--o{ UPLOAD_HISTORY : uploads
-  USER ||--o{ BILLING : owns
-  UPLOAD_HISTORY ||--o| BILLING : creates
-  BILLING ||--o{ BILLING_DETAIL : contains
-  MONTHLY_SUMMARY ||--o{ BILLING : aggregates
-  MONTHLY_SUMMARY ||--o{ BILLING_DETAIL : aggregates
+  USER ||--o{ ANALYSIS_REQUEST : requests
+  USER ||--o{ EXPENSE : owns
+  ANALYSIS_REQUEST ||--o| EXPENSE : creates
+  EXPENSE ||--o{ EXPENSE_DETAIL : contains
+  MONTHLY_SUMMARY ||--o{ EXPENSE : aggregates
+  MONTHLY_SUMMARY ||--o{ EXPENSE_DETAIL : aggregates
 
   USER {
     string user_id
@@ -66,19 +66,19 @@ erDiagram
   MONTHLY_SUMMARY {
     string user_id
     string year_month
-    int total_amount
-    int billing_count
+    int total_recorded_amount
+    int expense_count
     int detail_count
     int category_total_food
-    int category_total_other
+    int category_total_social
     int version
     string updated_at
   }
 
-  UPLOAD_HISTORY {
+  ANALYSIS_REQUEST {
     string user_id
-    string upload_id
-    string billing_id
+    string analysis_request_id
+    string expense_id
     string status
     int attempt
     string s3_key
@@ -86,7 +86,7 @@ erDiagram
     string file_name
     string content_type
     string year_month
-    string expires_at
+    string upload_expires_at
     string error_code
     string error_message
     string failed_at
@@ -94,37 +94,36 @@ erDiagram
     string updated_at
   }
 
-  BILLING {
+  EXPENSE {
     string user_id
-    string billing_id
-    string upload_id
+    string expense_id
+    string analysis_request_id
     string store_name
-    string purchased_at
+    string purchase_date
     string year_month
-    int original_amount
-    int discount_amount
-    int final_amount
+    int read_amount
+    int adjustment_amount
+    int recorded_amount
     string source
     string is_edited
     string created_at
     string updated_at
   }
 
-  BILLING_DETAIL {
+  EXPENSE_DETAIL {
     string user_id
-    string billing_id
+    string expense_id
     string detail_id
-    string upload_id
+    string analysis_request_id
     string name
     string category
     string category_source
-    string ai_category_confidence
     int amount
     int quantity
     string source
     string is_edited
     string store_name
-    string purchased_at
+    string purchase_date
     string year_month
     string created_at
     string updated_at
@@ -143,17 +142,17 @@ erDiagram
 | ログアウトする | `POST /auth/logout` | Cookieのrefresh tokenのdigestで失効 | refresh_tokens | UpdateItem |
 | 全端末からログアウトする | パスワード変更など(未実装) | user_idで未失効のrefresh tokenを一覧し失効 | refresh_tokens | GSI Query + UpdateItem |
 | 月ごとの合計を見る | ダッシュボード画面 | user_idで月次集計を一覧取得 | monthly_summaries | Query |
-| 指定月の支出内訳を見る | 月別支出画面 | user_id + year_monthで購入明細を金額降順取得 | billing_details | GSI Query |
-| 指定月のアップロード履歴を見る | アップロード履歴画面 | user_id + year_monthでアップロード履歴を日時降順取得 | upload_histories | GSI Query |
-| 請求詳細を見る | 請求詳細・編集画面 | user_id + billing_idで請求を1件取得 | billings | GetItem |
-| 請求に含まれる商品を見る | 請求詳細・編集画面 | user_id + billing_idで購入明細を一覧取得 | billing_details | Query |
-| 複数画像のアップロード枠を作る | アップロード画面 | user_id配下にupload_idを画像ごとに作成 | upload_histories | PutItem |
-| S3アップロード完了を処理する | Analyze Lambda | S3キーからuser_id + upload_idを復元し履歴を更新 | upload_histories | UpdateItem |
-| 解析結果を登録する | Analyze Lambda | user_id + upload_id + attemptを条件に登録 | upload_histories / billings / billing_details / monthly_summaries | TransactWriteItems |
-| 解析失敗を記録する | Analyze Lambda | user_id + upload_idで履歴を更新 | upload_histories | UpdateItem |
-| 解析を再実行する | `POST /uploads/{upload_id}/retry` | user_id + upload_idで履歴を更新 | upload_histories | UpdateItem |
-| 請求を編集する | `PATCH /billings/{billing_id}` | user_id + billing_idで請求を更新し、billing_id配下の商品を更新 | billings / billing_details | TransactWriteItems |
-| 月次集計を再計算する | `POST /monthly-summaries/{yyyy-MM}/recalculate` / 請求編集後 | user_idでbillingsを全件取得、user_id + year_monthでbilling_detailsを取得 | monthly_summaries | Query + UpdateItem |
+| 指定月の支出内訳を見る | 月別支出画面 | user_id + year_monthで支出明細を金額降順取得 | expense_details | GSI Query |
+| 指定月の解析依頼を見る | 解析依頼一覧画面 | user_id + year_monthで解析依頼を日時降順取得 | analysis_requests | GSI Query |
+| 支出詳細を見る | 支出詳細・編集画面 | user_id + expense_idで支出を1件取得 | expenses | GetItem |
+| 支出に含まれる支出明細を見る | 支出詳細・編集画面 | user_id + expense_idで支出明細を一覧取得 | expense_details | Query |
+| 複数画像のアップロード枠を作る | アップロード画面 | user_id配下にanalysis_request_idを画像ごとに作成 | analysis_requests | PutItem |
+| S3アップロード完了を処理する | Analyze Lambda | S3キーからuser_id + analysis_request_idを復元し解析依頼を更新 | analysis_requests | UpdateItem |
+| 解析結果を登録する | Analyze Lambda | user_id + analysis_request_id + attemptを条件に登録 | analysis_requests / expenses / expense_details / monthly_summaries | TransactWriteItems |
+| 解析失敗を記録する | Analyze Lambda | user_id + analysis_request_idで解析依頼を更新 | analysis_requests | UpdateItem |
+| 再解析する | `POST /analysis-requests/{analysis_request_id}/retry` | user_id + analysis_request_idで解析依頼を更新 | analysis_requests | UpdateItem |
+| 支出を編集する | `PATCH /expenses/{expense_id}` | user_id + expense_idで支出を更新し、expense_id配下の支出明細を更新 | expenses / expense_details | TransactWriteItems |
+| 月次集計を再構築する | `POST /monthly-summaries/{yyyy-MM}/rebuild` / 支出編集後 | user_idでexpensesを全件取得、user_id + year_monthでexpense_detailsを取得 | monthly_summaries | Query + UpdateItem |
 
 ---
 
@@ -166,12 +165,14 @@ refresh_tokens
 
 monthly_summaries
 
-upload_histories
+analysis_requests
 
-billings
+expenses
 
-billing_details
+expense_details
 ```
+
+テーブル名・属性名は [ユビキタス言語](../ddd/ubiquitous-language.md) に合わせる。旧名称(`upload_histories` / `billings` / `billing_details`、`billing_id` / `upload_id` / `original_amount` / `discount_amount` / `final_amount`)のテーブルと属性は持たず、旧データからの移行経路も用意しない。
 
 ---
 
@@ -284,7 +285,7 @@ user_idはJWTに入れて、ログイン後の各APIで利用する。
 
 1ユーザー1月につき1レコードを作る。
 
-月次集計の識別子は `user_id + year_month` とし、初回作成判定用のUUIDカラムは持たない。UUIDを持っても、同じ月の集計レコードを一意にする条件や再計算時の競合制御には使えないため。
+月次集計の識別子は `user_id + year_month` とし、初回作成判定用のUUIDカラムは持たない。UUIDを持っても、同じ月の集計レコードを一意にする条件や再構築時の競合制御には使えないため。
 
 カテゴリごとに月次集計レコードを複数作る設計にはしない。
 
@@ -292,18 +293,18 @@ user_idはJWTに入れて、ログイン後の各APIで利用する。
 
 AIの読み取り精度を考慮し、月の総額とカテゴリ別内訳は信頼度を分けて扱う。
 
-月の総額は請求単位の `billings.final_amount` を正とする。
+月の総額は支出単位の `expenses.recorded_amount`(計上額)を正とする。
 
-カテゴリ別内訳は `billing_details` の明細を元にする。
+カテゴリ別内訳は `expense_details` の明細を元にする。
 
 AI由来のカテゴリは参考値として扱い、ユーザーが修正した明細では修正後の `category` を優先する。
 
 ```text
 月の総額
-billings.final_amount の合計
+expenses.recorded_amount の合計
 
 カテゴリ別内訳
-billing_details.amount を category ごとに合計
+expense_details.amount を category ごとに合計
 ```
 
 ### Primary Key
@@ -330,15 +331,16 @@ billing_details.amount を category ごとに合計
   "type": "MONTHLY_SUMMARY", // レコード種別
 
   "year_month": "2026-09", // 集計対象の年月
-  "total_amount": 128500, // 月の合計金額。billings.final_amountの合計
-  "billing_count": 25, // 月内の請求件数
-  "detail_count": 120, // 月内の購入明細件数
+  "total_recorded_amount": 128500, // 月の計上額合計。expenses.recorded_amountの合計
+  "expense_count": 25, // 月内の支出件数
+  "detail_count": 120, // 月内の支出明細件数
   "category_total_food": 86000, // 食費カテゴリの合計金額。カテゴリごとにトップレベル属性で持ち、ADD で加算する
   "category_total_daily_goods": 22500, // 日用品カテゴリの合計金額
-  "category_total_other": 20000, // その他カテゴリの合計金額
+  "category_total_social": 15000, // 交際・会食カテゴリの合計金額
+  "category_total_other": 5000, // その他カテゴリの合計金額
   "category_total_unknown": 12000, // 分類できなかった明細の合計金額。登場していないカテゴリは属性なし(= 0)
 
-  "version": 26, // 楽観ロック用。Analyze LambdaはADD、再計算はCondition付きSET
+  "version": 26, // 楽観ロック用。Analyze LambdaはADD、再構築はCondition付きSET
 
   "updated_at": "2026-09-15T12:01:00Z" // 集計を最後に更新した日時
 }
@@ -350,27 +352,27 @@ billing_details.amount を category ごとに合計
 
 ---
 
-## upload_histories
+## analysis_requests
 
-請求書・レシート画像1枚単位のアップロード履歴と解析状態を保持する。
+レシート画像1枚単位の解析依頼(受付から解析の終端まで)を保持する。
 
-主キーは、S3イベントや再実行APIから `user_id + upload_id` で直接更新できる形にする。
+主キーは、S3イベントや再解析APIから `user_id + analysis_request_id` で直接更新できる形にする。
 
-月別の履歴一覧だけは主キーと検索条件が合わないため、GSIを1つ使う。
+月別の一覧だけは主キーと検索条件が合わないため、GSIを1つ使う。
 
 ### Primary Key
 
 | Key | Value |
 | --- | --- |
 | PK | `USER#{user_id}` |
-| SK | `UPLOAD#{upload_id}` |
+| SK | `ANALYSIS_REQUEST#{analysis_request_id}` |
 
-### GSI: upload_month_index
+### GSI: analysis_request_month_index
 
 | Key | Value |
 | --- | --- |
 | GSI1PK | `USER#{user_id}#MONTH#{yyyy-MM}` |
-| GSI1SK | `UPLOAD_CREATED_AT#{created_at}#{upload_id}` |
+| GSI1SK | `ANALYSIS_REQUEST_CREATED_AT#{created_at}#{analysis_request_id}` |
 
 日時降順で表示する場合は `ScanIndexForward = false` を使う。
 
@@ -378,102 +380,106 @@ billing_details.amount を category ごとに合計
 
 | 用途 | 条件 |
 | --- | --- |
-| アップロード履歴を直接取得 | `PK = USER#{user_id}` and `SK = UPLOAD#{upload_id}` |
-| 指定月のアップロード履歴 | `GSI1PK = USER#{user_id}#MONTH#{yyyy-MM}` |
+| 解析依頼を直接取得 | `PK = USER#{user_id}` and `SK = ANALYSIS_REQUEST#{analysis_request_id}` |
+| 指定月の解析依頼 | `GSI1PK = USER#{user_id}#MONTH#{yyyy-MM}` |
 
 ### Item
 
 ```jsonc
 {
-  "PK": "USER#01JUSERXXX", // ユーザー単位でアップロード履歴をまとめるパーティションキー
-  "SK": "UPLOAD#01JUPLOADXXX", // アップロード画像1枚を識別するソートキー
+  "PK": "USER#01JUSERXXX", // ユーザー単位で解析依頼をまとめるパーティションキー
+  "SK": "ANALYSIS_REQUEST#01JREQUESTXXX", // レシート画像1枚の解析依頼を識別するソートキー
 
-  "GSI1PK": "USER#01JUSERXXX#MONTH#2026-09", // 月別アップロード履歴一覧用のGSIパーティションキー
-  "GSI1SK": "UPLOAD_CREATED_AT#2026-09-15T12:00:00Z#01JUPLOADXXX", // アップロード日時順に並べるGSIソートキー
+  "GSI1PK": "USER#01JUSERXXX#MONTH#2026-09", // 月別解析依頼一覧用のGSIパーティションキー
+  "GSI1SK": "ANALYSIS_REQUEST_CREATED_AT#2026-09-15T12:00:00Z#01JREQUESTXXX", // 作成日時順に並べるGSIソートキー
 
-  "type": "UPLOAD_HISTORY", // レコード種別
+  "type": "ANALYSIS_REQUEST", // レコード種別
 
-  "upload_id": "01JUPLOADXXX", // アップロード画像1枚を識別するID
-  "billing_id": "01JBILLXXX", // 解析成功後に作成された請求ID。解析前や失敗時は未設定
+  "analysis_request_id": "01JREQUESTXXX", // 解析依頼を識別するID
+  "expense_id": "01JEXPENSEXXX", // 解析成功後に作成された支出ID。解析前や失敗時は未設定
 
-  "status": "SUCCEEDED", // アップロードおよび解析の状態。UPLOADING / ANALYZING / SUCCEEDED / NO_DATA / FAILED
-  "attempt": 1, // 解析の試行回数。手動再実行のたびに+1。登録時の条件に使う
-  "s3_key": "receipts/01JUSERXXX/01JUPLOADXXX/original.jpg", // 元画像を保存したS3キー
-  "raw_result_s3_key": "analysis-results/01JUSERXXX/01JUPLOADXXX/1/resp_01JRESPONSEXXX.json", // OpenAIの生レスポンスJSONを保存したS3キー。responseごとに別ファイル。S3側は90日で削除されるため、古い履歴では参照先が無いことがある。レスポンスを保存できなかった失敗では未設定
+  "status": "SUCCEEDED", // 解析依頼の状態。UPLOADING / ANALYZING / SUCCEEDED / NO_DATA / FAILED
+  "attempt": 1, // 解析試行番号。再解析のたびに+1。登録時の条件に使う
+  "s3_key": "receipts/01JUSERXXX/01JREQUESTXXX/original.jpg", // 元画像を保存したS3キー
+  "raw_result_s3_key": "analysis-results/01JUSERXXX/01JREQUESTXXX/1/resp_01JRESPONSEXXX.json", // OpenAIの生レスポンスJSONを保存したS3キー。responseごとに別ファイル。S3側は90日で削除されるため、古い解析依頼では参照先が無いことがある。レスポンスを保存できなかった失敗では未設定
 
   "file_name": "receipt.jpg", // ユーザーがアップロードした元ファイル名
   "content_type": "image/jpeg", // アップロード画像のContent-Type
-  "year_month": "2026-09", // 履歴一覧で使う対象年月
-  "expires_at": "2026-09-15T12:15:00Z", // Presigned URLの有効期限。画面側の期限切れ判定に使う
+  "year_month": "2026-09", // 一覧で使う対象年月(作成日時のUTCの月)
+  "upload_expires_at": "2026-09-15T12:15:00Z", // Presigned URLの有効期限。画面側の期限切れ判定に使う
 
   "error_code": "NO_TOTAL_AMOUNT", // 失敗理由の列挙値。FAILED時のみ。NO_DATA時は未設定
   "error_message": "合計金額を取得できませんでした", // 失敗理由の詳細。FAILED時のみ
   "failed_at": "2026-09-15T12:01:00Z", // 失敗日時。FAILED時のみ
 
   "created_at": "2026-09-15T12:00:00Z", // アップロード枠を作成した日時
-  "updated_at": "2026-09-15T12:01:00Z" // 履歴を最後に更新した日時
+  "updated_at": "2026-09-15T12:01:00Z" // 解析依頼を最後に更新した日時
 }
 ```
 
-`error_code` / `error_message` / `failed_at` は再実行時に削除する。
+`error_code` / `error_message` / `failed_at` は再解析時に削除する。
+
+読み出し時は `analysis/domain.AnalysisRequest` の集約へ復元し、状態と付随する値(SUCCEEDED なら `expense_id`、FAILED なら `error_code`)の整合を検証する。
 
 ### 失敗時のレコード
 
-`FAILED` の場合も `upload_histories` は残す。`billings` / `billing_details` は作らないため、`billing_id` は未設定のまま。履歴画面から `error_code` を参照して理由を表示し、再実行を促す。
+`FAILED` の場合も `analysis_requests` は残す。`expenses` / `expense_details` は作らないため、`expense_id` は未設定のまま。解析依頼一覧画面から `error_code` を参照して理由を表示し、再解析を促す。
 
-`NO_DATA` の場合も `upload_histories` は残す。解析は完了したが明細0件のため、`billings` / `billing_details` / `monthly_summaries` は作成・更新しない。`error_code` は使わず、履歴画面では「登録対象なし」として表示する。
+`NO_DATA` の場合も `analysis_requests` は残す。解析は完了したが明細0件のため、`expenses` / `expense_details` / `monthly_summaries` は作成・更新しない。`error_code` は使わず、解析依頼一覧画面では「登録対象なし」として表示する。
 
 ---
 
-## billings
+## expenses
 
-請求単位の情報を保持する。
+支出単位の情報を保持する。
 
-詳細表示と編集は `user_id + billing_id` で直接行う。
+詳細表示と編集は `user_id + expense_id` で直接行う。
 
-月別一覧は購入明細と月次集計から表示できるため、billingsには月別一覧用GSIを作らない。
+月別一覧は支出明細と月次集計から表示できるため、expensesには月別一覧用GSIを作らない。
 
 ### Primary Key
 
 | Key | Value |
 | --- | --- |
 | PK | `USER#{user_id}` |
-| SK | `BILLING#{billing_id}` |
+| SK | `EXPENSE#{expense_id}` |
 
 ### Query
 
 | 用途 | 条件 |
 | --- | --- |
-| 請求詳細取得 | `PK = USER#{user_id}` and `SK = BILLING#{billing_id}` |
-| 請求編集 | `PK = USER#{user_id}` and `SK = BILLING#{billing_id}` |
+| 支出詳細取得 | `PK = USER#{user_id}` and `SK = EXPENSE#{expense_id}` |
+| 支出編集 | `PK = USER#{user_id}` and `SK = EXPENSE#{expense_id}` |
 
 ### Item
 
 ```jsonc
 {
-  "PK": "USER#01JUSERXXX", // ユーザー単位で請求をまとめるパーティションキー
-  "SK": "BILLING#01JBILLXXX", // 請求1件を識別するソートキー
+  "PK": "USER#01JUSERXXX", // ユーザー単位で支出をまとめるパーティションキー
+  "SK": "EXPENSE#01JEXPENSEXXX", // 支出1件を識別するソートキー
 
-  "type": "BILLING", // レコード種別
+  "type": "EXPENSE", // レコード種別
 
-  "billing_id": "01JBILLXXX", // 請求1件を識別するID
-  "upload_id": "01JUPLOADXXX", // 元になったアップロード画像ID
+  "expense_id": "01JEXPENSEXXX", // 支出1件を識別するID
+  "analysis_request_id": "01JREQUESTXXX", // 元になった解析依頼ID
 
   "store_name": "スーパー", // 購入店舗名
-  "purchased_at": "2026-09-15", // 購入日
+  "purchase_date": "2026-09-15", // 購入日(時刻を含まない暦日)
   "year_month": "2026-09", // 月次集計や月別表示で使う年月
 
-  "original_amount": 3280, // レシート・請求書上の元の合計金額
-  "discount_amount": 500, // 割り勘や値引きとしてあとから差し引く金額
-  "final_amount": 2780, // 自分の支出として月次集計に反映する金額
+  "read_amount": 3280, // 読取金額。レシートに記載された最終支払合計(店舗側の値引き・税は反映済み)
+  "adjustment_amount": -500, // 調整額。利用者が加減する符号付き金額。減額は負数、増額は正数
+  "recorded_amount": 2780, // 計上額。read_amount + adjustment_amount。月次集計に反映し、負数を許容する
 
   "source": "AI", // データの作成元。AIまたはMANUAL
   "is_edited": false, // ユーザーが後から編集したかどうか
 
-  "created_at": "2026-09-15T12:00:00Z", // 請求レコードを作成した日時
-  "updated_at": "2026-09-15T12:01:00Z" // 請求レコードを最後に更新した日時
+  "created_at": "2026-09-15T12:00:00Z", // 支出レコードを作成した日時
+  "updated_at": "2026-09-15T12:01:00Z" // 支出レコードを最後に更新した日時
 }
 ```
+
+`recorded_amount` は導出値で、読み出し時は `read_amount + adjustment_amount` から再計算して集約を復元する。
 
 ### GSI
 
@@ -481,19 +487,19 @@ billing_details.amount を category ごとに合計
 
 ---
 
-## billing_details
+## expense_details
 
-請求単位に紐づく購入明細を保持する。
+支出単位に紐づく支出明細を保持する。
 
-主キーは請求詳細・編集に合わせて、`user_id + billing_id` で商品一覧をQueryできる形にする。
+主キーは支出詳細・編集に合わせて、`user_id + expense_id` で明細一覧をQueryできる形にする。
 
-月別支出画面では `user_id + year_month` で購入明細を金額降順に取得したいため、GSIを1つ使う。
+月別支出画面では `user_id + year_month` で支出明細を金額降順に取得したいため、GSIを1つ使う。
 
 ### Primary Key
 
 | Key | Value |
 | --- | --- |
-| PK | `USER#{user_id}#BILLING#{billing_id}` |
+| PK | `USER#{user_id}#EXPENSE#{expense_id}` |
 | SK | `DETAIL#{detail_id}` |
 
 ### GSI: detail_month_amount_index
@@ -501,54 +507,53 @@ billing_details.amount を category ごとに合計
 | Key | Value |
 | --- | --- |
 | GSI1PK | `USER#{user_id}#MONTH#{yyyy-MM}` |
-| GSI1SK | `DETAIL_AMOUNT#{amount_desc_key}#{purchased_at}#{detail_id}` |
+| GSI1SK | `DETAIL_AMOUNT#{amount_desc_key}#{purchase_date}#{detail_id}` |
 
 `amount_desc_key` は金額降順でQueryするためのソート用キー。
 
 例:
 
 ```text
-amount_desc_key = 9999999999 - amount
+amount_desc_key = 2147483647 - amount(10 桁ゼロ埋め)
 ```
 
 ### Query
 
 | 用途 | 条件 |
 | --- | --- |
-| 請求内の商品一覧 | `PK = USER#{user_id}#BILLING#{billing_id}` |
-| 指定月の購入明細を金額降順で取得 | `GSI1PK = USER#{user_id}#MONTH#{yyyy-MM}` |
+| 支出内の支出明細一覧 | `PK = USER#{user_id}#EXPENSE#{expense_id}` |
+| 指定月の支出明細を金額降順で取得 | `GSI1PK = USER#{user_id}#MONTH#{yyyy-MM}` |
 
 ### Item
 
 ```jsonc
 {
-  "PK": "USER#01JUSERXXX#BILLING#01JBILLXXX", // 請求単位で購入明細をまとめるパーティションキー
-  "SK": "DETAIL#01JITEMXXX", // 購入明細1件を識別するソートキー
+  "PK": "USER#01JUSERXXX#EXPENSE#01JEXPENSEXXX", // 支出単位で支出明細をまとめるパーティションキー
+  "SK": "DETAIL#01JITEMXXX", // 支出明細1件を識別するソートキー
 
-  "GSI1PK": "USER#01JUSERXXX#MONTH#2026-09", // 月別購入明細一覧用のGSIパーティションキー
-  "GSI1SK": "DETAIL_AMOUNT#9999999718#2026-09-15#01JITEMXXX", // 金額降順で並べるためのGSIソートキー
+  "GSI1PK": "USER#01JUSERXXX#MONTH#2026-09", // 月別支出明細一覧用のGSIパーティションキー
+  "GSI1SK": "DETAIL_AMOUNT#2147483366#2026-09-15#01JITEMXXX", // 金額降順で並べるためのGSIソートキー
 
-  "type": "BILLING_DETAIL", // レコード種別
+  "type": "EXPENSE_DETAIL", // レコード種別
 
-  "detail_id": "01JITEMXXX", // 購入明細1件を識別するID
-  "billing_id": "01JBILLXXX", // 紐づく請求ID
-  "upload_id": "01JUPLOADXXX", // 元になったアップロード画像ID
+  "detail_id": "01JITEMXXX", // 支出明細1件を識別するID
+  "expense_id": "01JEXPENSEXXX", // 紐づく支出ID
+  "analysis_request_id": "01JREQUESTXXX", // 元になった解析依頼ID
 
   "name": "牛乳", // 商品名
-  "category": "food", // 支出カテゴリ
-  "category_source": "AI", // カテゴリの作成元。AI / USER / UNKNOWN
-  "ai_category_confidence": "high", // AI分類の確信度。high / medium / low。USERやUNKNOWNでは未設定でもよい
-  "amount": 281, // 商品単位の金額
+  "category": "food", // 支出カテゴリ(social を含む定義済みの語彙)
+  "category_source": "AI", // カテゴリの決定元。AI / USER
+  "amount": 281, // 明細金額(数量を反映した1行の金額)
   "quantity": 1, // 数量
   "source": "AI", // データの作成元。AIまたはMANUAL
   "is_edited": false, // ユーザーが後から編集したかどうか
 
-  "store_name": "スーパー", // 購入店舗名。月別一覧で請求を再取得せず表示するために持つ
-  "purchased_at": "2026-09-15", // 購入日。月別一覧で使う
+  "store_name": "スーパー", // 購入店舗名。月別一覧で支出を再取得せず表示するために持つ
+  "purchase_date": "2026-09-15", // 購入日。月別一覧で使う
   "year_month": "2026-09", // 月別一覧とGSIキー生成で使う年月
 
-  "created_at": "2026-09-15T12:01:00Z", // 購入明細を作成した日時
-  "updated_at": "2026-09-15T12:01:00Z" // 購入明細を最後に更新した日時
+  "created_at": "2026-09-15T12:01:00Z", // 支出明細を作成した日時
+  "updated_at": "2026-09-15T12:01:00Z" // 支出明細を最後に更新した日時
 }
 ```
 
@@ -558,14 +563,14 @@ amount_desc_key = 9999999999 - amount
 
 | GSI | テーブル | 目的 | 必要な理由 |
 | --- | --- | --- | --- |
-| upload_month_index | upload_histories | 月ごとの画像アップロード履歴一覧 | 主キーは `user_id + upload_id` の直接更新を優先するため |
-| detail_month_amount_index | billing_details | 月ごとの購入明細を金額降順で表示 | 主キーは `billing_id` 配下の商品編集を優先するため |
+| analysis_request_month_index | analysis_requests | 月ごとの解析依頼一覧 | 主キーは `user_id + analysis_request_id` の直接更新を優先するため |
+| detail_month_amount_index | expense_details | 月ごとの支出明細を金額降順で表示 | 主キーは `expense_id` 配下の明細編集を優先するため |
 
 初期構成で作るGSIはこの2つまでにする。
 
-`billings` の月別一覧GSIは作らない。月ごとの画面は `monthly_summaries` と `billing_details` で成立する。
+`expenses` の月別一覧GSIは作らない。月ごとの画面は `monthly_summaries` と `expense_details` で成立する。
 
-解析ジョブID用のGSIも作らない。SQSメッセージはS3キーか `user_id + upload_id` を持つので、主キーで直接引ける。
+解析ジョブID用のGSIも作らない。SQSメッセージはS3キーか `user_id + analysis_request_id` を持つので、主キーで直接引ける。
 
 ---
 
@@ -575,28 +580,28 @@ amount_desc_key = 9999999999 - amount
 
 | 集計対象 | 粒度 | 保存先 | 反映元 | 備考 |
 | --- | --- | --- | --- | --- |
-| 月合計 | 1ユーザー + 1月で1値 | `monthly_summaries.total_amount` | `billings.final_amount` | ダッシュボードの月合計で使う |
-| 請求件数 | 1ユーザー + 1月で1値 | `monthly_summaries.billing_count` | `billings` | 画像解析成功後に作成された請求数 |
-| 商品件数 | 1ユーザー + 1月で1値 | `monthly_summaries.detail_count` | `billing_details` | AIで読み取れた明細数 |
-| カテゴリ別金額 | 1ユーザー + 1月 + 1カテゴリで1値 | `monthly_summaries.category_total_{category}` | `billing_details.category` + `billing_details.amount` | 円グラフと積み上げ棒グラフの内訳。API は map にして返す |
+| 計上額合計 | 1ユーザー + 1月で1値 | `monthly_summaries.total_recorded_amount` | `expenses.recorded_amount` | ダッシュボードの月合計で使う |
+| 支出件数 | 1ユーザー + 1月で1値 | `monthly_summaries.expense_count` | `expenses` | 画像解析成功後に作成された支出数 |
+| 明細件数 | 1ユーザー + 1月で1値 | `monthly_summaries.detail_count` | `expense_details` | AIで読み取れた明細数 |
+| カテゴリ別金額 | 1ユーザー + 1月 + 1カテゴリで1値 | `monthly_summaries.category_total_{category}` | `expense_details.category` + `expense_details.amount` | 円グラフと積み上げ棒グラフの内訳。API は map にして返す |
 
 月合計はカテゴリ別金額の合計から作らない。
 
-理由は、AIの読み取りでは請求合計より商品明細のほうが欠落・誤読・分割ミスが起きやすいため。
+理由は、AIの読み取りでは支払合計より商品明細のほうが欠落・誤読・分割ミスが起きやすいため。
 
 ```text
 OK:
-monthly_summaries.total_amount = SUM(billings.final_amount)
+monthly_summaries.total_recorded_amount = SUM(expenses.recorded_amount)
 
 NG:
-monthly_summaries.total_amount = SUM(billing_details.amount)
+monthly_summaries.total_recorded_amount = SUM(expense_details.amount)
 ```
 
 カテゴリ別集計は画面表示用の補助集計とする。
 
 カテゴリが推定できない場合は `unknown` に寄せる。
 
-ユーザーがカテゴリを修正した場合は、月次再計算で `category_total_*` を作り直す。
+ユーザーがカテゴリを修正した場合は、月次再構築で `category_total_*` を作り直す。
 
 ---
 
@@ -607,23 +612,23 @@ monthly_summaries.total_amount = SUM(billing_details.amount)
 `Analyze Lambda` はOpenAIの読み取り結果の検証後、以下を `TransactWriteItems` で処理する。
 
 ```text
-1. upload_histories
+1. analysis_requests
    status = SUCCEEDED
-   billing_id = 01JBILLXXX
-   raw_result_s3_key = analysis-results/{user_id}/{upload_id}/{attempt}/{response_id}.json
+   expense_id = 01JEXPENSEXXX
+   raw_result_s3_key = analysis-results/{user_id}/{analysis_request_id}/{attempt}/{response_id}.json
    Condition: status = ANALYZING AND attempt = :attempt
 
-2. billings
-   Put
+2. expenses
+   Put(read_amount = 合計金額、adjustment_amount = 0、recorded_amount = read_amount)
 
-3. billing_details (最大50件)
+3. expense_details (最大50件)
    Put
    category / category_source を含める
 
 4. monthly_summaries
    SET type / user_id / year_month if_not_exists
-   ADD total_amount
-   ADD billing_count
+   ADD total_recorded_amount
+   ADD expense_count
    ADD detail_count
    ADD category_total_{category}(登場したカテゴリのみ)
    ADD version
@@ -631,14 +636,14 @@ monthly_summaries.total_amount = SUM(billing_details.amount)
 
 月次集計は `ADD` だけで更新し、読んだ値を元にした `SET` はしない。同じ月のレシートを並行処理してもカテゴリ別金額が後勝ちで消えないため。
 
-二重処理と停滞していた前回処理の遅延登録を防ぐため、upload_histories側に条件を置く。
+二重処理と停滞していた前回処理の遅延登録を防ぐため、analysis_requests側に条件を置く。
 
 ```text
 Condition:
 status = ANALYZING AND attempt = :attempt
 ```
 
-TransactWriteItemsは100 itemまでのため、明細は50件を上限とする。これは初期構成のプロダクト仕様とし、超過した場合は請求を作成せず失敗として扱う。
+TransactWriteItemsは100 itemまでのため、明細は50件を上限とする。これは初期構成のプロダクト仕様とし、超過した場合は支出を作成せず失敗として扱う。
 
 AIがカテゴリを決められなかった明細は `category = unknown`、`category_source = AI` として登録する。
 
@@ -646,7 +651,7 @@ AIがカテゴリを決められなかった明細は `category = unknown`、`ca
 
 ### 解析失敗時
 
-以下のいずれかに該当する場合、`billings` / `billing_details` は作成せず、`upload_histories` のみ更新する。
+以下のいずれかに該当する場合、`expenses` / `expense_details` は作成せず、`analysis_requests` のみ更新する。
 
 ```text
 OpenAI APIの恒久エラー / JSON Schema不一致
@@ -657,22 +662,22 @@ OpenAI APIの恒久エラー / JSON Schema不一致
 ```
 
 ```text
-upload_histories
+analysis_requests
   Condition: status = ANALYZING AND attempt = :attempt
   status = FAILED
   error_code = 理由
   error_message = 詳細
   failed_at = 現在時刻
-  raw_result_s3_key = analysis-results/{user_id}/{upload_id}/{attempt}/{response_id}.json(レスポンスを保存できた場合のみ)
+  raw_result_s3_key = analysis-results/{user_id}/{analysis_request_id}/{attempt}/{response_id}.json(レスポンスを保存できた場合のみ)
 ```
 
 明細0件の場合は失敗ではなく、解析完了だが登録対象なしとして扱う。
 
 ```text
-upload_histories
+analysis_requests
   Condition: status = ANALYZING AND attempt = :attempt
   status = NO_DATA
-  raw_result_s3_key = analysis-results/{user_id}/{upload_id}/{attempt}/{response_id}.json
+  raw_result_s3_key = analysis-results/{user_id}/{analysis_request_id}/{attempt}/{response_id}.json
   error_code / error_message / failed_at は未設定
 ```
 
@@ -682,10 +687,10 @@ upload_histories
 
 ---
 
-### 再実行時
+### 再解析時
 
 ```text
-upload_histories
+analysis_requests
   Condition: status IN (FAILED, NO_DATA, ANALYZING)
   status = ANALYZING
   attempt = attempt + 1
@@ -694,52 +699,52 @@ upload_histories
 
 ---
 
-### 月次再計算時
+### 月次再構築時
 
-`monthly_summaries` を元データから作り直す。集計がズレたときの復旧と、請求編集時の反映に使う。
+`monthly_summaries` を支出と支出明細から作り直す。集計がズレたときの復旧と、支出編集時の反映に使う。
 
 ```text
 1. monthly_summariesを取得し、versionを控える
    レコードが存在しない場合は version = 0 とみなす
 
-2. billingsを取得
-   PK = USER#{user_id} and SK begins_with BILLING#
+2. expensesを取得
+   PK = USER#{user_id} and SK begins_with EXPENSE#
    year_monthでフィルタ
 
-3. billing_detailsを取得
+3. expense_detailsを取得
    detail_month_amount_index
    GSI1PK = USER#{user_id}#MONTH#{yyyy-MM}
 
 4. monthly_summaries更新
    Condition: attribute_not_exists(PK) OR version = :v
-   SET total_amount    = SUM(billings.final_amount)
-   SET billing_count   = COUNT(billings)
-   SET detail_count    = COUNT(billing_details)
-   SET category_total_{category} = SUM(billing_details.amount) GROUP BY category(全カテゴリ、無ければ 0)
+   SET total_recorded_amount = SUM(expenses.recorded_amount)
+   SET expense_count         = COUNT(expenses)
+   SET detail_count          = COUNT(expense_details)
+   SET category_total_{category} = SUM(expense_details.amount) GROUP BY category(全カテゴリ、無ければ 0)
    SET type / user_id / year_month
-   SET version         = if_not_exists(version, 0) + 1
+   SET version               = if_not_exists(version, 0) + 1
 ```
 
-条件失敗した場合(再計算中にAnalyze Lambdaが `ADD` した場合)は 1 からやり直す。
+条件失敗した場合(再構築中にAnalyze Lambdaが `ADD` した場合)は 1 からやり直す。
 
-billingsに月別GSIは作らない。月あたりの請求数は数十件のため、user_id配下を全件取得してフィルタすれば十分。
+expensesに月別GSIは作らない。月あたりの支出数は数十件のため、user_id配下を全件取得してフィルタすれば十分。
 
 ---
 
-### 請求編集時
+### 支出編集時
 
-請求詳細画面で `discount_amount` や商品金額・カテゴリを変更した場合、`billings` / `billing_details` を更新した後、月次再計算を実行する。
+支出詳細画面で `adjustment_amount` や明細金額・カテゴリを変更した場合、`expenses` / `expense_details` を更新した後、月次再構築を実行する。
 
 ```text
-1. billings / billing_details更新
-   final_amount = original_amount - discount_amount
+1. expenses / expense_details更新
+   recorded_amount = read_amount + adjustment_amount
    is_edited = true
    カテゴリを変更した明細は category_source = USER
-   billing_detailsのGSI1SKも更新
+   expense_detailsのGSI1SKも更新
 
-2. 月次再計算
+2. 月次再構築
    同じ月なら当月のみ
-   purchased_atの月が変わる場合は旧月と新月
+   purchase_dateの月が変わる場合は旧月と新月
 ```
 
 差分更新は行わない。差分計算の競合や月またぎ・カテゴリ変更の複雑さを避ける。
@@ -755,5 +760,5 @@ billingsに月別GSIは作らない。月あたりの請求数は数十件のた
 ```text
 AIの読み取り時に自動分類する
 
-ユーザーが請求詳細・編集画面で手動修正する
+ユーザーが支出詳細・編集画面で手動修正する
 ```

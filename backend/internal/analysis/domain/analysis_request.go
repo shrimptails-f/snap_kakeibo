@@ -328,25 +328,25 @@ func (d AnalyzedDetail) Category() Category { return d.category }
 
 // AnalysisResult は外部レスポンスから変換された検証済み解析結果。
 type AnalysisResult struct {
-	storeName   string
-	purchasedAt PurchaseDate
-	readAmount  ReadAmount
-	details     []AnalyzedDetail
+	storeName    string
+	purchaseDate PurchaseDate
+	readAmount   ReadAmount
+	details      []AnalyzedDetail
 }
 
 // NewAnalysisResult は支出へ変換可能な解析結果を生成する。明細0件はNO_DATA判定のため許容する。
-func NewAnalysisResult(storeName string, purchasedAt PurchaseDate, readAmount ReadAmount, details []AnalyzedDetail) (AnalysisResult, error) {
-	if !purchasedAt.Valid() || !readAmount.Valid() || len(details) > 50 {
+func NewAnalysisResult(storeName string, purchaseDate PurchaseDate, readAmount ReadAmount, details []AnalyzedDetail) (AnalysisResult, error) {
+	if !purchaseDate.Valid() || !readAmount.Valid() || len(details) > 50 {
 		return AnalysisResult{}, ErrInvalidAnalysisResult
 	}
-	return AnalysisResult{storeName: strings.TrimSpace(storeName), purchasedAt: purchasedAt, readAmount: readAmount, details: append([]AnalyzedDetail(nil), details...)}, nil
+	return AnalysisResult{storeName: strings.TrimSpace(storeName), purchaseDate: purchaseDate, readAmount: readAmount, details: append([]AnalyzedDetail(nil), details...)}, nil
 }
 
 // StoreName は店名を返す。
 func (r AnalysisResult) StoreName() string { return r.storeName }
 
-// PurchasedAt は購入日を返す。
-func (r AnalysisResult) PurchasedAt() PurchaseDate { return r.purchasedAt }
+// PurchaseDate は購入日を返す。
+func (r AnalysisResult) PurchaseDate() PurchaseDate { return r.purchaseDate }
 
 // ReadAmount は読取金額を返す。
 func (r AnalysisResult) ReadAmount() ReadAmount { return r.readAmount }

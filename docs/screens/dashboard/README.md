@@ -25,7 +25,7 @@
 
 積み上げの内訳は、月次集計の `category_totals` を使う。
 
-ただし月合計は `billings.final_amount` の合計を正とし、カテゴリ別内訳は購入明細ベースの補助情報として扱う。
+ただし月合計は `expenses.recorded_amount`(計上額)の合計を正とし、カテゴリ別内訳は支出明細ベースの補助情報として扱う。
 
 自動解析のままのデータと、ユーザーが修正したデータを区別できるようにする。
 
@@ -54,13 +54,14 @@ Response:
   "monthly_summaries": [
     {
       "year_month": "2026-09",
-      "total_amount": 128500,
-      "billing_count": 25,
+      "total_recorded_amount": 128500,
+      "expense_count": 25,
       "detail_count": 120,
       "category_totals": {
         "food": 86000,
         "daily_goods": 22500,
-        "other": 20000,
+        "social": 15000,
+        "other": 5000,
         "unknown": 12000
       },
       "updated_at": "2026-09-15T12:01:00Z"

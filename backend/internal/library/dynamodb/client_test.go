@@ -49,7 +49,7 @@ func TestOperationsEmitSpans(t *testing.T) {
 	log := logger.New(logger.Options{Level: "debug", Service: "test", Environment: "test", Writer: &buf})
 	client := NewWithAPI(api, log)
 	table := client.Table("scenario-uploads-1")
-	ctx := logger.ContextWith(context.Background(), logger.UploadID("up1"))
+	ctx := logger.ContextWith(context.Background(), logger.AnalysisRequestID("up1"))
 	key := map[string]types.AttributeValue{"PK": &types.AttributeValueMemberS{Value: "USER#secret-user"}}
 
 	if _, err := table.UpdateItem(ctx, &awssdk.UpdateItemInput{Key: key, UpdateExpression: aws.String("SET a=:a")}); err != nil {
@@ -70,7 +70,7 @@ func TestOperationsEmitSpans(t *testing.T) {
 	assertField(t, update, "span_name", SpanUpdateItem)
 	assertField(t, update, "table_name", "scenario-uploads-1")
 	assertField(t, update, "status", logger.StatusOK)
-	assertField(t, update, "upload_id", "up1")
+	assertField(t, update, "analysis_request_id", "up1")
 	assertField(t, query, "span_name", SpanQuery)
 	assertField(t, query, "index_name", "gsi")
 	assertField(t, query, "item_count", float64(1))

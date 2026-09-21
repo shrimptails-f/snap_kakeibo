@@ -13,9 +13,9 @@ import (
 
 func analyzeReceiptConfig(parameter string) settings.Config {
 	return settings.Config{
-		UploadHistoriesTable:  "upload-histories",
-		BillingsTable:         "billings",
-		BillingDetailsTable:   "billing-details",
+		AnalysisRequestsTable: "analysis-requests",
+		ExpensesTable:         "expenses",
+		ExpenseDetailsTable:   "expense-details",
 		MonthlySummariesTable: "monthly-summaries",
 		ReceiptBucket:         "receipts",
 		OpenAIAPIKeyParameter: parameter,

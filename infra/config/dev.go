@@ -37,9 +37,9 @@ func Dev() Config {
 			Users:            common.UsersTableName.Dev(),
 			RefreshTokens:    common.RefreshTokensTableName.Dev(),
 			MonthlySummaries: common.MonthlySummariesTableName.Dev(),
-			UploadHistories:  common.UploadHistoriesTableName.Dev(),
-			Billings:         common.BillingsTableName.Dev(),
-			BillingDetails:   common.BillingDetailsTableName.Dev(),
+			AnalysisRequests: common.AnalysisRequestsTableName.Dev(),
+			Expenses:         common.ExpensesTableName.Dev(),
+			ExpenseDetails:   common.ExpenseDetailsTableName.Dev(),
 		},
 		Queues: Queues{
 			Analyze:    common.AnalyzeQueueName.Dev(),

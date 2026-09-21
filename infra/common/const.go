@@ -53,7 +53,7 @@ const (
 
 // FunctionNames は Lambda の一覧。backend/cmd/{name} と 1:1 で、関数ごとに ECR リポジトリと
 // デプロイ中のイメージタグを持つ SSM パラメータができる。関数を足すときはここにも追加する
-var FunctionNames = []string{"hello", "auth-login", "auth-refresh", "auth-logout", "auth-check", "upload", "analyze-receipt", "retry-upload", "list-uploads", "get-billing"}
+var FunctionNames = []string{"hello", "auth-login", "auth-refresh", "auth-logout", "auth-check", "upload", "analyze-receipt", "retry-analysis", "list-analysis-requests", "get-expense"}
 
 // ImageTagParameterName は関数のデプロイ中イメージタグを持つ SSM パラメータ名(stage 抜き)。
 // image:push が更新し、App スタックが deploy 時に解決する
@@ -73,9 +73,9 @@ const (
 	UsersTableName            ResourceName = "users"
 	RefreshTokensTableName    ResourceName = "refresh-tokens"
 	MonthlySummariesTableName ResourceName = "monthly-summaries"
-	UploadHistoriesTableName  ResourceName = "upload-histories"
-	BillingsTableName         ResourceName = "billings"
-	BillingDetailsTableName   ResourceName = "billing-details"
+	AnalysisRequestsTableName ResourceName = "analysis-requests"
+	ExpensesTableName         ResourceName = "expenses"
+	ExpenseDetailsTableName   ResourceName = "expense-details"
 )
 
 // S3
@@ -86,9 +86,9 @@ const (
 
 // GSI
 const (
-	RefreshTokenUserIndex  = "refresh_token_user_index"
-	UploadMonthIndex       = "upload_month_index"
-	DetailMonthAmountIndex = "detail_month_amount_index"
+	RefreshTokenUserIndex     = "refresh_token_user_index"
+	AnalysisRequestMonthIndex = "analysis_request_month_index"
+	DetailMonthAmountIndex    = "detail_month_amount_index"
 )
 
 // S3 プレフィックス
@@ -130,9 +130,9 @@ const (
 	EnvUsersTable            = "USERS_TABLE"
 	EnvRefreshTokensTable    = "REFRESH_TOKENS_TABLE"
 	EnvMonthlySummariesTable = "MONTHLY_SUMMARIES_TABLE"
-	EnvUploadHistoriesTable  = "UPLOAD_HISTORIES_TABLE"
-	EnvBillingsTable         = "BILLINGS_TABLE"
-	EnvBillingDetailsTable   = "BILLING_DETAILS_TABLE"
+	EnvAnalysisRequestsTable = "ANALYSIS_REQUESTS_TABLE"
+	EnvExpensesTable         = "EXPENSES_TABLE"
+	EnvExpenseDetailsTable   = "EXPENSE_DETAILS_TABLE"
 	EnvReceiptBucket         = "RECEIPT_BUCKET"
 	EnvAnalyzeQueueURL       = "ANALYZE_QUEUE_URL"
 	EnvImageMaxEdge          = "IMAGE_MAX_EDGE"

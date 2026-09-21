@@ -5,8 +5,8 @@
 // キーや属性値はログに出さない。
 //
 //	client := libdynamodb.New(cfg, log)
-//	histories := client.Table(cfg.UploadHistoriesTable)
-//	_, err := histories.UpdateItem(ctx, &awssdk.UpdateItemInput{...})   // dynamodb_update_item span
+//	requests := client.Table(cfg.AnalysisRequestsTable)
+//	_, err := requests.UpdateItem(ctx, &awssdk.UpdateItemInput{...})   // dynamodb_update_item span
 //	_, err = client.TransactWriteItems(ctx, &awssdk.TransactWriteItemsInput{...}) // dynamodb_transact_write span
 package dynamodb
 

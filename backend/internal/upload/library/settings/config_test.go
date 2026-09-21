@@ -8,10 +8,10 @@ import (
 
 func validEnv() map[string]string {
 	return map[string]string{
-		"UPLOAD_HISTORIES_TABLE": "upload-histories",
-		"RECEIPT_BUCKET":         "receipts",
-		"SSM_JWT_SECRET":         "/dev/jwt",
-		"STAGE":                  "dev",
+		"ANALYSIS_REQUESTS_TABLE": "analysis-requests",
+		"RECEIPT_BUCKET":          "receipts",
+		"SSM_JWT_SECRET":          "/dev/jwt",
+		"STAGE":                   "dev",
 	}
 }
 
@@ -23,7 +23,7 @@ func TestLoadReadsRequiredAndOptionalValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	want := Config{UploadHistoriesTable: "upload-histories", ReceiptBucket: "receipts", JWTSecretParameter: "/dev/jwt", Stage: "dev", LogLevel: "debug"}
+	want := Config{AnalysisRequestsTable: "analysis-requests", ReceiptBucket: "receipts", JWTSecretParameter: "/dev/jwt", Stage: "dev", LogLevel: "debug"}
 	if cfg != want {
 		t.Errorf("cfg = %+v, want %+v", cfg, want)
 	}
@@ -35,7 +35,7 @@ func TestLoadRejectsMissingValues(t *testing.T) {
 		name    string
 		arrange func(env map[string]string)
 	}{
-		{"missing table", func(env map[string]string) { delete(env, "UPLOAD_HISTORIES_TABLE") }},
+		{"missing table", func(env map[string]string) { delete(env, "ANALYSIS_REQUESTS_TABLE") }},
 		{"missing bucket", func(env map[string]string) { delete(env, "RECEIPT_BUCKET") }},
 		{"missing jwt secret parameter", func(env map[string]string) { delete(env, "SSM_JWT_SECRET") }},
 		{"missing stage", func(env map[string]string) { delete(env, "STAGE") }},

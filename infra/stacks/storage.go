@@ -47,9 +47,9 @@ type StorageStack struct {
 	UsersTable            awsdynamodb.Table
 	RefreshTokensTable    awsdynamodb.Table
 	MonthlySummariesTable awsdynamodb.Table
-	UploadHistoriesTable  awsdynamodb.Table
-	BillingsTable         awsdynamodb.Table
-	BillingDetailsTable   awsdynamodb.Table
+	AnalysisRequestsTable awsdynamodb.Table
+	ExpensesTable         awsdynamodb.Table
+	ExpenseDetailsTable   awsdynamodb.Table
 
 	AnalyzeQueue awssqs.Queue
 
@@ -74,11 +74,11 @@ func NewStorageStack(scope constructs.Construct, id string, props *StorageStackP
 	s.RefreshTokensTable = newTable(stack, "RefreshTokensTable", cfg, cfg.Tables.RefreshTokens, false, jsii.String("expires_at"))
 	addGSI1(s.RefreshTokensTable, common.RefreshTokenUserIndex)
 	s.MonthlySummariesTable = newTable(stack, "MonthlySummariesTable", cfg, cfg.Tables.MonthlySummaries, true, nil)
-	s.UploadHistoriesTable = newTable(stack, "UploadHistoriesTable", cfg, cfg.Tables.UploadHistories, true, nil)
-	s.BillingsTable = newTable(stack, "BillingsTable", cfg, cfg.Tables.Billings, true, nil)
-	s.BillingDetailsTable = newTable(stack, "BillingDetailsTable", cfg, cfg.Tables.BillingDetails, true, nil)
-	addGSI1(s.UploadHistoriesTable, common.UploadMonthIndex)
-	addGSI1(s.BillingDetailsTable, common.DetailMonthAmountIndex)
+	s.AnalysisRequestsTable = newTable(stack, "AnalysisRequestsTable", cfg, cfg.Tables.AnalysisRequests, true, nil)
+	s.ExpensesTable = newTable(stack, "ExpensesTable", cfg, cfg.Tables.Expenses, true, nil)
+	s.ExpenseDetailsTable = newTable(stack, "ExpenseDetailsTable", cfg, cfg.Tables.ExpenseDetails, true, nil)
+	addGSI1(s.AnalysisRequestsTable, common.AnalysisRequestMonthIndex)
+	addGSI1(s.ExpenseDetailsTable, common.DetailMonthAmountIndex)
 
 	s.AlertTopic = awssns.NewTopic(stack, jsii.String("AlertTopic"), &awssns.TopicProps{
 		TopicName:   jsii.String(cfg.Topics.Alert),

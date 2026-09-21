@@ -88,9 +88,9 @@ type Tables struct {
 	Users            string
 	RefreshTokens    string
 	MonthlySummaries string
-	UploadHistories  string
-	Billings         string
-	BillingDetails   string
+	AnalysisRequests string
+	Expenses         string
+	ExpenseDetails   string
 }
 
 // Queues は SQS キュー名。

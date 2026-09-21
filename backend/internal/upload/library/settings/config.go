@@ -5,7 +5,7 @@ import "snap_kakeibo/backend/internal/library/oswrapper"
 
 // Config は upload に必要な設定値。
 type Config struct {
-	UploadHistoriesTable string
+	AnalysisRequestsTable string
 	// ReceiptBucket は元画像を PUT するバケット。
 	ReceiptBucket string
 	// JWTSecretParameter は access token の検証鍵を持つ SSM SecureString パラメータ名。署名鍵自体は環境変数で受け取らない。
@@ -22,7 +22,7 @@ func Load(osw oswrapper.Interface) (Config, error) {
 		key string
 		dst *string
 	}{
-		{"UPLOAD_HISTORIES_TABLE", &cfg.UploadHistoriesTable},
+		{"ANALYSIS_REQUESTS_TABLE", &cfg.AnalysisRequestsTable},
 		{"RECEIPT_BUCKET", &cfg.ReceiptBucket},
 		{"SSM_JWT_SECRET", &cfg.JWTSecretParameter},
 		{"STAGE", &cfg.Stage},

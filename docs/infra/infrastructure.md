@@ -37,17 +37,17 @@ API Gateway
   |
   +--> Upload Lambda
   |      |
-  |      +--> upload_histories
+  |      +--> analysis_requests
   |      |
   |      +--> Presigned URL
   |
-  +--> Retry Lambda
+  +--> Retry Analysis Lambda
   |      |
-  |      +--> upload_histories Update
+  |      +--> analysis_requests Update
   |      |
   |      +--> Analyze Queue へ送信
   |
-  +--> Recalculate Lambda
+  +--> Rebuild Lambda
   |      |
   |      +--> monthly_summaries Update
   |
@@ -66,11 +66,11 @@ Analyze Lambda
   |      |
   |      +--> 店名 / 購入日 / 合計 / 明細 / カテゴリを1回で読み取る
   |
-  +--> upload_histories Update
+  +--> analysis_requests Update
   |
-  +--> billings Create
+  +--> expenses Create
   |
-  +--> billing_details Create
+  +--> expense_details Create
   |
   +--> monthly_summaries Update
 
@@ -176,8 +176,8 @@ S3          数円
 ### Object Key
 
 ```text
-receipts/{user_id}/{upload_id}/original.jpg
-analysis-results/{user_id}/{upload_id}/{attempt}/{response_id}.json
+receipts/{user_id}/{analysis_request_id}/original.jpg
+analysis-results/{user_id}/{analysis_request_id}/{attempt}/{response_id}.json
 ```
 
 例:
@@ -226,7 +226,7 @@ Analyze Queue (SQS)
  v
 Analyze Lambda
  |
- | 1. upload_histories を ANALYZING に更新
+ | 1. analysis_requests を ANALYZING に更新
  | 2. S3 から画像取得、長辺 2048px に縮小、JPEG で Base64
  | 3. Responses API
  |      input_image(Base64) + 指示文
@@ -317,13 +317,13 @@ SNS (alert トピック)
 
 | キュー | 起動元 | 起動先 | DLQ |
 | --- | --- | --- | --- |
-| Analyze Queue | S3 ObjectCreated、再実行 API | Analyze Lambda | Analyze DLQ |
+| Analyze Queue | S3 ObjectCreated、再解析 API | Analyze Lambda | Analyze DLQ |
 
-メッセージは2種類あり、Analyze Lambda はどちらも `user_id + upload_id` に解決してから同じ処理を呼ぶ。
+メッセージは2種類あり、Analyze Lambda はどちらも `user_id + analysis_request_id` に解決してから同じ処理を呼ぶ。
 
 ```text
-S3 イベント通知     S3 のキーから user_id / upload_id を取り出す。attempt = 1
-再実行 API          {"user_id": "...", "upload_id": "...", "attempt": 2, "trigger": "RETRY"}
+S3 イベント通知     S3 のキーから user_id / analysis_request_id を取り出す。attempt = 1
+再解析 API          {"user_id": "...", "analysis_request_id": "...", "attempt": 2, "trigger": "RETRY"}
 ```
 
 `attempt` はメッセージ側で固定する。DynamoDB の現在値を使うと、遅れて届いた古いメッセージが新しい試行として処理される。
@@ -363,7 +363,7 @@ SQS起動のLambdaでは「正常終了 = メッセージ削除」「エラー =
 正常終了(メッセージ削除)
   処理成功
   冪等スキップ
-  永久失敗を upload_histories に FAILED として記録済み
+  永久失敗を analysis_requests に FAILED として記録済み
 
 エラー(SQSリトライ)
   一時失敗(Throttling、TransactionConflict、ネットワークエラー)

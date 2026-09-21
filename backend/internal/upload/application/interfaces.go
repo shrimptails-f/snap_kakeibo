@@ -7,10 +7,10 @@ import (
 	"snap_kakeibo/backend/internal/upload/domain"
 )
 
-// UploadHistoryRepository は upload_histories に新しい履歴を登録する。
-type UploadHistoryRepository interface {
-	// Save は履歴を新規登録する。同じ利用者・upload_id の履歴が既にあれば ErrUploadAlreadyExists を返す。
-	Save(ctx context.Context, history domain.UploadHistory) error
+// AnalysisRequestRepository は analysis_requests に新しい解析依頼を登録する。
+type AnalysisRequestRepository interface {
+	// Save は解析依頼を新規登録する。同じ利用者・analysis_request_id の解析依頼が既にあれば ErrAnalysisRequestAlreadyExists を返す。
+	Save(ctx context.Context, request domain.AnalysisRequest) error
 }
 
 // UploadURLPresigner はクライアントが元画像を直接 PUT するための署名付き URL を発行する。
@@ -19,26 +19,26 @@ type UploadURLPresigner interface {
 	PresignPut(ctx context.Context, key, contentType string, expires time.Duration) (string, error)
 }
 
-// IDGenerator は upload_id を採番する。
+// IDGenerator は analysis_request_id を採番する。
 type IDGenerator interface {
 	NewID() (string, error)
 }
 
-// UploadRetryMarker は再実行できる履歴を ANALYZING に戻して attempt を進める。
-type UploadRetryMarker interface {
+// RetryAnalysisMarker は再解析できる解析依頼を ANALYZING に戻して attempt を進める。
+type RetryAnalysisMarker interface {
 	// MarkRetrying は status が domain.RetryableStatuses のいずれかであるときだけ ANALYZING にし、attempt を 1 進めて
 	// 前回の失敗情報(error_code / error_message / failed_at)を消す。進めた後の attempt を返す。
-	// 履歴が無い、または再実行できない status なら ErrUploadNotRetryable を返す。
-	MarkRetrying(ctx context.Context, userID, uploadID string, now time.Time) (attempt int, err error)
+	// 解析依頼が無い、または再解析できない status なら ErrAnalysisRequestNotRetryable を返す。
+	MarkRetrying(ctx context.Context, userID, requestID string, now time.Time) (attempt int, err error)
 }
 
-// AnalyzeJobEnqueuer は解析のやり直しを analyze キューへ送る。
-type AnalyzeJobEnqueuer interface {
-	EnqueueRetry(ctx context.Context, job domain.RetryJob) error
+// RetryAnalysisEnqueuer は再解析のジョブを analyze キューへ送る。
+type RetryAnalysisEnqueuer interface {
+	EnqueueRetryAnalysis(ctx context.Context, job domain.RetryAnalysisJob) error
 }
 
-// UploadHistoryLister は利用者の履歴を月ごとに引く。
-type UploadHistoryLister interface {
-	// ListByMonth は yearMonth(YYYY-MM)の履歴を作成日時の降順で返す。該当が無ければ空のスライス。
-	ListByMonth(ctx context.Context, userID, yearMonth string) ([]domain.UploadHistory, error)
+// AnalysisRequestLister は利用者の解析依頼を月ごとに引く。
+type AnalysisRequestLister interface {
+	// ListByMonth は yearMonth(YYYY-MM)の解析依頼を作成日時の降順で返す。該当が無ければ空のスライス。
+	ListByMonth(ctx context.Context, userID, yearMonth string) ([]domain.AnalysisRequest, error)
 }

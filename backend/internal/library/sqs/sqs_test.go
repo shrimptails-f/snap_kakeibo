@@ -42,7 +42,7 @@ func TestSendJSONInjectsTraceparentAndLogsSpan(t *testing.T) {
 	log, buf := newTestLogger()
 	ctx, sender := trace.Start(context.Background())
 
-	id, err := NewWithAPI(api, log).SendJSON(ctx, "http://q/1", map[string]any{"upload_id": "u1"})
+	id, err := NewWithAPI(api, log).SendJSON(ctx, "http://q/1", map[string]any{"analysis_request_id": "u1"})
 	if err != nil || id != "msg-1" {
 		t.Fatalf("id=%q err=%v", id, err)
 	}
@@ -51,7 +51,7 @@ func TestSendJSONInjectsTraceparentAndLogsSpan(t *testing.T) {
 		t.Fatalf("queue_url=%q", got)
 	}
 	var body map[string]any
-	if err := json.Unmarshal([]byte(aws.ToString(api.in.MessageBody)), &body); err != nil || body["upload_id"] != "u1" {
+	if err := json.Unmarshal([]byte(aws.ToString(api.in.MessageBody)), &body); err != nil || body["analysis_request_id"] != "u1" {
 		t.Fatalf("body=%q err=%v", aws.ToString(api.in.MessageBody), err)
 	}
 
@@ -291,10 +291,10 @@ func TestFlociRoundTrip(t *testing.T) {
 
 	// 送信: ctx に trace を積んで SendJSON
 	log, buf := newTestLogger()
-	sendCtx, sender := trace.Start(logger.ContextWith(ctx, logger.UploadID("upload-1")))
+	sendCtx, sender := trace.Start(logger.ContextWith(ctx, logger.AnalysisRequestID("upload-1")))
 	// 業務コードに渡す形: ランダムな名前で作ったキューに束縛した Queue
 	queue := NewWithAPI(api, log).Queue(queueURL)
-	msgID, err := queue.SendJSON(sendCtx, map[string]any{"upload_id": "upload-1", "trigger": "RETRY"})
+	msgID, err := queue.SendJSON(sendCtx, map[string]any{"analysis_request_id": "upload-1", "trigger": "RETRY"})
 	if err != nil {
 		t.Fatalf("SendJSON: %v", err)
 	}
@@ -323,7 +323,7 @@ func TestFlociRoundTrip(t *testing.T) {
 		t.Fatalf("message id mismatch: sent %s received %s", msgID, aws.ToString(msg.MessageId))
 	}
 	var body map[string]any
-	if err := json.Unmarshal([]byte(aws.ToString(msg.Body)), &body); err != nil || body["upload_id"] != "upload-1" {
+	if err := json.Unmarshal([]byte(aws.ToString(msg.Body)), &body); err != nil || body["analysis_request_id"] != "upload-1" {
 		t.Fatalf("body=%q err=%v", aws.ToString(msg.Body), err)
 	}
 	sent, ok := trace.ParseTraceparent(aws.ToString(msg.MessageAttributes[trace.TraceparentHeader].StringValue))
@@ -342,7 +342,7 @@ func TestFlociRoundTrip(t *testing.T) {
 		t.Fatalf("fields=%v", fields)
 	}
 
-	// 送信ログ: sqs_send span に queue_url / message_id / upload_id が載る
+	// 送信ログ: sqs_send span に queue_url / message_id / analysis_request_id が載る
 	entries := allEntries(t, buf)
 	finished := entries[len(entries)-1]
 	assertField(t, finished, "event", logger.EventSpanFinished)
@@ -350,7 +350,7 @@ func TestFlociRoundTrip(t *testing.T) {
 	assertField(t, finished, "status", logger.StatusOK)
 	assertField(t, finished, "queue_url", queueURL)
 	assertField(t, finished, "message_id", msgID)
-	assertField(t, finished, "upload_id", "upload-1")
+	assertField(t, finished, "analysis_request_id", "upload-1")
 	assertField(t, finished, "trace_id", sender.TraceID)
 	t.Logf("sqs_send: %s", buf.String())
 }

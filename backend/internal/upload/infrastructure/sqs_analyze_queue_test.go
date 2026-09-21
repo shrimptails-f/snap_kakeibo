@@ -27,13 +27,13 @@ func (f *fakeSQS) SendMessage(_ context.Context, in *awssqs.SendMessageInput, _ 
 	return &awssqs.SendMessageOutput{MessageId: aws.String("msg-1")}, nil
 }
 
-func TestEnqueueRetrySendsRetryMessageToTheBoundQueue(t *testing.T) {
+func TestEnqueueRetryAnalysisSendsRetryMessageToTheBoundQueue(t *testing.T) {
 	t.Parallel()
 	api := &fakeSQS{}
 	queue := SQSAnalyzeQueue{Queue: libsqs.NewWithAPI(api, nil).Queue("http://q/analyze")}
 
-	if err := queue.EnqueueRetry(context.Background(), domain.RetryJob{UserID: "u1", UploadID: "up1", Attempt: 2}); err != nil {
-		t.Fatalf("EnqueueRetry() error = %v", err)
+	if err := queue.EnqueueRetryAnalysis(context.Background(), domain.RetryAnalysisJob{UserID: "u1", AnalysisRequestID: "req1", Attempt: 2}); err != nil {
+		t.Fatalf("EnqueueRetryAnalysis() error = %v", err)
 	}
 	if got := aws.ToString(api.in.QueueUrl); got != "http://q/analyze" {
 		t.Errorf("queue_url = %q", got)
@@ -43,7 +43,7 @@ func TestEnqueueRetrySendsRetryMessageToTheBoundQueue(t *testing.T) {
 	if err := json.Unmarshal([]byte(aws.ToString(api.in.MessageBody)), &body); err != nil {
 		t.Fatalf("body = %q: %v", aws.ToString(api.in.MessageBody), err)
 	}
-	want := map[string]any{"user_id": "u1", "upload_id": "up1", "attempt": float64(2), "trigger": "RETRY"}
+	want := map[string]any{"user_id": "u1", "analysis_request_id": "req1", "attempt": float64(2), "trigger": "RETRY"}
 	if len(body) != len(want) {
 		t.Errorf("body has %d fields, want %d: %+v", len(body), len(want), body)
 	}
@@ -54,11 +54,11 @@ func TestEnqueueRetrySendsRetryMessageToTheBoundQueue(t *testing.T) {
 	}
 }
 
-func TestEnqueueRetryReturnsSendFailure(t *testing.T) {
+func TestEnqueueRetryAnalysisReturnsSendFailure(t *testing.T) {
 	t.Parallel()
 	api := &fakeSQS{err: errors.New("boom")}
 	queue := SQSAnalyzeQueue{Queue: libsqs.NewWithAPI(api, nil).Queue("http://q/analyze")}
-	if err := queue.EnqueueRetry(context.Background(), domain.RetryJob{UserID: "u1", UploadID: "up1", Attempt: 2}); err == nil {
-		t.Fatal("EnqueueRetry() error = nil, want send failure")
+	if err := queue.EnqueueRetryAnalysis(context.Background(), domain.RetryAnalysisJob{UserID: "u1", AnalysisRequestID: "req1", Attempt: 2}); err == nil {
+		t.Fatal("EnqueueRetryAnalysis() error = nil, want send failure")
 	}
 }

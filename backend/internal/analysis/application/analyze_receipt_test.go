@@ -12,87 +12,89 @@ import (
 
 	"snap_kakeibo/backend/internal/analysis/application"
 	"snap_kakeibo/backend/internal/analysis/domain"
+	ledgerdomain "snap_kakeibo/backend/internal/ledger/domain"
 	"snap_kakeibo/backend/internal/library/logger"
 	"snap_kakeibo/backend/internal/library/timewrapper"
 )
 
 var (
 	now     = time.Date(2026, 9, 18, 12, 0, 0, 0, time.UTC)
-	testJob = domain.Job{UserID: "u1", UploadID: "up1", Attempt: 2, Trigger: domain.TriggerRetry, Bucket: "receipts", Key: "receipts/u1/up1/original.jpg"}
+	testJob = domain.AnalysisJob{UserID: "u1", AnalysisRequestID: "req1", Attempt: 2, Trigger: domain.TriggerRetry, Bucket: "receipts", Key: "receipts/u1/req1/original.jpg"}
 )
 
 func ptr[T any](v T) *T { return &v }
 
-func validReceipt() domain.Receipt {
-	return domain.Receipt{
-		StoreName:   ptr("店"),
-		PurchasedAt: ptr("2026-09-18"),
-		TotalAmount: ptr(int64(150)),
-		Details: []domain.Detail{
+func validReading() domain.ReceiptReading {
+	return domain.ReceiptReading{
+		StoreName:    ptr("店"),
+		PurchaseDate: ptr("2026-09-18"),
+		ReadAmount:   ptr(int64(150)),
+		Details: []domain.ReadDetail{
 			{Name: "牛乳", Amount: 100, Quantity: 1, Category: "food"},
-			{Name: "パン", Amount: 50, Quantity: 2, Category: "food"},
+			{Name: "会食", Amount: 50, Quantity: 2, Category: "social"},
 		},
 	}
 }
 
 // fixture は差し替え可能な依存一式。各テストはこれを変えてから build する。
 type fixture struct {
-	images    *images
-	resizer   *resizer
-	analyzer  *analyzer
-	raw       *rawResults
-	histories *histories
-	billings  *billings
-	buf       *bytes.Buffer
+	images   *images
+	resizer  *resizer
+	analyzer *analyzer
+	raw      *rawResults
+	requests *requests
+	expenses *expenses
+	buf      *bytes.Buffer
 }
 
 func newFixture() *fixture {
 	return &fixture{
-		images:    &images{data: []byte("image-bytes")},
-		resizer:   &resizer{},
-		analyzer:  &analyzer{result: application.AnalysisResult{ResponseID: "resp_1", Raw: []byte(`{"id":"resp_1"}`), Usage: application.TokenUsage{InputTokens: 10, OutputTokens: 5, ReasoningTokens: 2}, Receipt: validReceipt()}},
-		raw:       &rawResults{},
-		histories: &histories{started: true},
-		billings:  &billings{},
-		buf:       &bytes.Buffer{},
+		images:   &images{data: []byte("image-bytes")},
+		resizer:  &resizer{},
+		analyzer: &analyzer{response: application.AnalyzerResponse{ResponseID: "resp_1", Raw: []byte(`{"id":"resp_1"}`), Usage: application.TokenUsage{InputTokens: 10, OutputTokens: 5, ReasoningTokens: 2}, Reading: validReading()}},
+		raw:      &rawResults{},
+		requests: &requests{started: true},
+		expenses: &expenses{},
+		buf:      &bytes.Buffer{},
 	}
 }
 
 func (f *fixture) build() application.AnalyzeReceiptUsecaseInterface {
 	log := logger.New(logger.Options{Level: "debug", Service: "test", Environment: "test", Writer: f.buf})
-	return application.NewAnalyzeReceiptUsecase(f.images, f.resizer, f.analyzer, f.raw, f.histories, f.billings, &ids{}, timewrapper.NewFixed(now), log)
+	return application.NewAnalyzeReceiptUsecase(f.images, f.resizer, f.analyzer, f.raw, f.requests, f.expenses, &ids{}, timewrapper.NewFixed(now), log)
 }
 
-func TestAnalyzeRegistersBillingOnSuccess(t *testing.T) {
+func TestAnalyzeRegistersExpenseOnSuccess(t *testing.T) {
 	t.Parallel()
 	f := newFixture()
 	out, err := f.build().Analyze(context.Background(), application.AnalyzeReceiptInput{Job: testJob})
 	if err != nil {
 		t.Fatalf("Analyze() error = %v", err)
 	}
-	if out.Status != domain.StatusSucceeded || out.BillingID != "id-1" || out.RawResultKey != "raw/resp_1" {
+	if out.Outcome != domain.OutcomeSucceeded || out.ExpenseID != "id-1" || out.RawResultKey != "raw/resp_1" {
 		t.Fatalf("output = %+v", out)
 	}
-	if f.histories.analyzing != 1 || f.histories.failed != nil || f.histories.noData {
-		t.Errorf("histories = %+v", f.histories)
+	if f.requests.analyzing != 1 || f.requests.failed != nil || f.requests.noData {
+		t.Errorf("requests = %+v", f.requests)
 	}
 	if f.raw.responseID != "resp_1" || string(f.raw.raw) != `{"id":"resp_1"}` {
 		t.Errorf("raw result = %+v", f.raw)
 	}
-	b := f.billings.registered
-	if b.ID != "id-1" || b.UserID != "u1" || b.UploadID != "up1" || b.StoreName != "店" || b.PurchasedAt != "2026-09-18" || b.TotalAmount != 150 || !b.CreatedAt.Equal(now) {
-		t.Errorf("billing = %+v", b)
+	e := f.expenses.registered
+	if e.ID() != "id-1" || e.UserID() != "u1" || e.SourceRequestID() != "req1" || e.StoreName() != "店" || e.PurchaseDate().String() != "2026-09-18" || e.ReadAmount().Yen() != 150 || e.RecordedAmount().Yen() != 150 || e.AdjustmentAmount().Yen() != 0 || e.Edited() {
+		t.Errorf("expense = %+v", e)
 	}
-	if len(b.Details) != 2 || b.Details[0].ID != "id-2" || b.Details[1].ID != "id-3" || b.Details[1].Quantity != 2 {
-		t.Errorf("details = %+v", b.Details)
+	details := e.Details()
+	if len(details) != 2 || details[0].ID() != "id-2" || details[1].ID() != "id-3" || details[1].Quantity().Int64() != 2 || details[1].Category() != "social" || details[0].CategorySource() != ledgerdomain.CategorySourceAI {
+		t.Errorf("details = %+v", details)
 	}
-	if f.billings.rawKey != "raw/resp_1" || !f.billings.now.Equal(now) {
-		t.Errorf("register args: rawKey=%q now=%v", f.billings.rawKey, f.billings.now)
+	if f.expenses.rawKey != "raw/resp_1" || !f.expenses.now.Equal(now) {
+		t.Errorf("register args: rawKey=%q now=%v", f.expenses.rawKey, f.expenses.now)
 	}
 	span := analysisSpan(t, f.buf)
 	assertField(t, span, "analysis_status", "SUCCEEDED")
 	assertField(t, span, "status", logger.StatusOK)
-	assertField(t, span, "upload_id", "up1")
+	assertField(t, span, "analysis_request_id", "req1")
 	assertField(t, span, "user_id", "u1")
 	assertField(t, span, "attempt", float64(2))
 	assertField(t, span, "trigger", "RETRY")
@@ -104,22 +106,22 @@ func TestAnalyzeRegistersBillingOnSuccess(t *testing.T) {
 	assertField(t, span, "output_tokens", float64(5))
 	assertField(t, span, "reasoning_tokens", float64(2))
 	assertField(t, span, "detail_count", float64(2))
-	assertField(t, span, "billing_id", "id-1")
+	assertField(t, span, "expense_id", "id-1")
 	if _, ok := span["error_code"]; ok {
 		t.Errorf("error_code must not be set on success: %v", span)
 	}
 }
 
-func TestAnalyzeSkipsWhenUploadIsNotAnalyzable(t *testing.T) {
+func TestAnalyzeSkipsWhenRequestIsNotAnalyzable(t *testing.T) {
 	t.Parallel()
 	f := newFixture()
-	f.histories.started = false
+	f.requests.started = false
 	out, err := f.build().Analyze(context.Background(), application.AnalyzeReceiptInput{Job: testJob})
-	if err != nil || out.Status != domain.StatusSkipped {
+	if err != nil || out.Outcome != domain.OutcomeSkipped {
 		t.Fatalf("output = %+v err = %v", out, err)
 	}
-	if f.images.calls != 0 || f.analyzer.calls != 0 || f.billings.calls != 0 {
-		t.Errorf("skipped job must not touch S3 / OpenAI / billing: images=%d analyzer=%d billings=%d", f.images.calls, f.analyzer.calls, f.billings.calls)
+	if f.images.calls != 0 || f.analyzer.calls != 0 || f.expenses.calls != 0 {
+		t.Errorf("skipped job must not touch S3 / OpenAI / expense: images=%d analyzer=%d expenses=%d", f.images.calls, f.analyzer.calls, f.expenses.calls)
 	}
 	span := analysisSpan(t, f.buf)
 	assertField(t, span, "analysis_status", "SKIPPED")
@@ -129,15 +131,15 @@ func TestAnalyzeSkipsWhenUploadIsNotAnalyzable(t *testing.T) {
 func TestAnalyzeMarksNoDataWhenReceiptHasNoDetails(t *testing.T) {
 	t.Parallel()
 	f := newFixture()
-	receipt := validReceipt()
-	receipt.Details = nil
-	f.analyzer.result.Receipt = receipt
+	reading := validReading()
+	reading.Details = nil
+	f.analyzer.response.Reading = reading
 	out, err := f.build().Analyze(context.Background(), application.AnalyzeReceiptInput{Job: testJob})
-	if err != nil || out.Status != domain.StatusNoData || out.RawResultKey != "raw/resp_1" {
+	if err != nil || out.Outcome != domain.OutcomeNoData || out.RawResultKey != "raw/resp_1" {
 		t.Fatalf("output = %+v err = %v", out, err)
 	}
-	if !f.histories.noData || f.histories.noDataRawKey != "raw/resp_1" || f.billings.calls != 0 {
-		t.Errorf("histories = %+v billings = %d", f.histories, f.billings.calls)
+	if !f.requests.noData || f.requests.noDataRawKey != "raw/resp_1" || f.expenses.calls != 0 {
+		t.Errorf("requests = %+v expenses = %d", f.requests, f.expenses.calls)
 	}
 	span := analysisSpan(t, f.buf)
 	assertField(t, span, "analysis_status", "NO_DATA")
@@ -164,7 +166,7 @@ func TestAnalyzeMarksFailed(t *testing.T) {
 		{
 			name: "openai rejected the response with raw body",
 			arrange: func(f *fixture) {
-				f.analyzer.result = application.AnalysisResult{ResponseID: "resp_x", Raw: []byte(`{"status":"incomplete"}`), Failure: &domain.Failure{Code: domain.FailureAnalysisFailed, Message: "未完了"}}
+				f.analyzer.response = application.AnalyzerResponse{ResponseID: "resp_x", Raw: []byte(`{"status":"incomplete"}`), Failure: failurePtr(domain.AnalysisFailed("未完了"))}
 			},
 			code:   domain.FailureAnalysisFailed,
 			rawKey: "raw/resp_x",
@@ -173,7 +175,7 @@ func TestAnalyzeMarksFailed(t *testing.T) {
 		{
 			name: "openai 4xx without raw body",
 			arrange: func(f *fixture) {
-				f.analyzer.result = application.AnalysisResult{Failure: &domain.Failure{Code: domain.FailureAnalysisFailed, Message: "HTTP 400"}}
+				f.analyzer.response = application.AnalyzerResponse{Failure: failurePtr(domain.AnalysisFailed("HTTP 400"))}
 			},
 			code:   domain.FailureAnalysisFailed,
 			rawKey: "",
@@ -182,9 +184,9 @@ func TestAnalyzeMarksFailed(t *testing.T) {
 		{
 			name: "validation failed without date",
 			arrange: func(f *fixture) {
-				receipt := validReceipt()
-				receipt.PurchasedAt = nil
-				f.analyzer.result.Receipt = receipt
+				reading := validReading()
+				reading.PurchaseDate = nil
+				f.analyzer.response.Reading = reading
 			},
 			code:   domain.FailureNoDate,
 			rawKey: "raw/resp_1",
@@ -193,20 +195,20 @@ func TestAnalyzeMarksFailed(t *testing.T) {
 		{
 			name: "validation failed with invalid amount",
 			arrange: func(f *fixture) {
-				receipt := validReceipt()
-				receipt.TotalAmount = ptr(int64(0))
-				f.analyzer.result.Receipt = receipt
+				reading := validReading()
+				reading.ReadAmount = ptr(int64(0))
+				f.analyzer.response.Reading = reading
 			},
 			code:   domain.FailureInvalidAmount,
 			rawKey: "raw/resp_1",
 			event:  application.EventAnalysisValidationFailed,
 		},
 		{
-			name:       "billing rejected by the store",
-			arrange:    func(f *fixture) { f.billings.err = application.ErrBillingRejected },
+			name:       "expense rejected by the store",
+			arrange:    func(f *fixture) { f.expenses.err = application.ErrExpenseRejected },
 			code:       domain.FailureInternal,
 			rawKey:     "raw/resp_1",
-			event:      application.EventBillingRegistrationRejected,
+			event:      application.EventExpenseRegistrationRejected,
 			registered: true,
 		},
 	}
@@ -219,14 +221,14 @@ func TestAnalyzeMarksFailed(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Analyze() error = %v", err)
 			}
-			if out.Status != domain.StatusFailed || out.ErrorCode != tt.code || out.RawResultKey != tt.rawKey {
+			if out.Outcome != domain.OutcomeFailed || out.ErrorCode != tt.code || out.RawResultKey != tt.rawKey {
 				t.Fatalf("output = %+v", out)
 			}
-			if f.histories.failed == nil || f.histories.failed.Code != tt.code || f.histories.failedRawKey != tt.rawKey {
-				t.Errorf("MarkFailed = %+v rawKey=%q", f.histories.failed, f.histories.failedRawKey)
+			if f.requests.failed == nil || f.requests.failed.Code() != tt.code || f.requests.failedRawKey != tt.rawKey {
+				t.Errorf("MarkFailed = %+v rawKey=%q", f.requests.failed, f.requests.failedRawKey)
 			}
-			if !tt.registered && f.billings.calls != 0 {
-				t.Errorf("billing must not be registered on failure")
+			if !tt.registered && f.expenses.calls != 0 {
+				t.Errorf("expense must not be registered on failure")
 			}
 			span := analysisSpan(t, f.buf)
 			assertField(t, span, "analysis_status", "FAILED")
@@ -249,12 +251,12 @@ func TestAnalyzeReturnsTemporaryErrors(t *testing.T) {
 		// markingFailed は業務上の失敗を記録する途中で落ちたケース。analysis_status は FAILED のまま status=error になる
 		markingFailed bool
 	}{
-		{name: "mark analyzing failed", arrange: func(f *fixture) { f.histories.analyzingErr = boom }},
+		{name: "mark analyzing failed", arrange: func(f *fixture) { f.requests.analyzingErr = boom }},
 		{name: "image read failed", arrange: func(f *fixture) { f.images.err = boom }},
 		{name: "openai temporary failure", arrange: func(f *fixture) { f.analyzer.err = boom }},
 		{name: "raw result save failed", arrange: func(f *fixture) { f.raw.err = boom }},
-		{name: "billing register failed", arrange: func(f *fixture) { f.billings.err = boom }},
-		{name: "mark failed failed", arrange: func(f *fixture) { f.resizer.err = errors.New("bad"); f.histories.failedErr = boom }, markingFailed: true},
+		{name: "expense register failed", arrange: func(f *fixture) { f.expenses.err = boom }},
+		{name: "mark failed failed", arrange: func(f *fixture) { f.resizer.err = errors.New("bad"); f.requests.failedErr = boom }, markingFailed: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -277,7 +279,7 @@ func TestAnalyzeReturnsTemporaryErrors(t *testing.T) {
 func TestAnalyzeGeneratesResponseIDWhenMissing(t *testing.T) {
 	t.Parallel()
 	f := newFixture()
-	f.analyzer.result.ResponseID = ""
+	f.analyzer.response.ResponseID = ""
 	if _, err := f.build().Analyze(context.Background(), application.AnalyzeReceiptInput{Job: testJob}); err != nil {
 		t.Fatal(err)
 	}
@@ -290,7 +292,7 @@ func TestAnalyzeGeneratesResponseIDWhenMissing(t *testing.T) {
 func TestAnalyzeSkipsRawResultWithoutBody(t *testing.T) {
 	t.Parallel()
 	f := newFixture()
-	f.analyzer.result.Raw = nil
+	f.analyzer.response.Raw = nil
 	out, err := f.build().Analyze(context.Background(), application.AnalyzeReceiptInput{Job: testJob})
 	if err != nil || out.RawResultKey != "" || f.raw.calls != 0 {
 		t.Fatalf("output = %+v err = %v raw calls = %d", out, err, f.raw.calls)
@@ -322,18 +324,20 @@ func (r *resizer) ResizeJPEG(data []byte) ([]byte, error) {
 }
 
 type analyzer struct {
-	result application.AnalysisResult
-	err    error
-	calls  int
+	response application.AnalyzerResponse
+	err      error
+	calls    int
 }
 
-func (a *analyzer) Analyze(_ context.Context, jpeg []byte) (application.AnalysisResult, error) {
+func (a *analyzer) Analyze(_ context.Context, jpeg []byte) (application.AnalyzerResponse, error) {
 	a.calls++
 	if !bytes.HasPrefix(jpeg, []byte("jpeg:")) {
-		return application.AnalysisResult{}, errors.New("analyzer received an image that was not resized")
+		return application.AnalyzerResponse{}, errors.New("analyzer received an image that was not resized")
 	}
-	return a.result, a.err
+	return a.response, a.err
 }
+
+func failurePtr(reason domain.FailureReason) *domain.FailureReason { return &reason }
 
 type rawResults struct {
 	responseID string
@@ -342,7 +346,7 @@ type rawResults struct {
 	calls      int
 }
 
-func (s *rawResults) SaveRawResult(_ context.Context, _ domain.Job, responseID string, raw []byte) (string, error) {
+func (s *rawResults) SaveRawResult(_ context.Context, _ domain.AnalysisJob, responseID string, raw []byte) (string, error) {
 	s.calls++
 	s.responseID, s.raw = responseID, raw
 	if s.err != nil {
@@ -351,44 +355,44 @@ func (s *rawResults) SaveRawResult(_ context.Context, _ domain.Job, responseID s
 	return "raw/" + responseID, nil
 }
 
-type histories struct {
+type requests struct {
 	started      bool
 	analyzingErr error
 	analyzing    int
-	failed       *domain.Failure
+	failed       *domain.FailureReason
 	failedRawKey string
 	failedErr    error
 	noData       bool
 	noDataRawKey string
 }
 
-func (h *histories) MarkAnalyzing(_ context.Context, _ domain.Job, _ time.Time) (bool, error) {
+func (h *requests) MarkAnalyzing(_ context.Context, _ domain.AnalysisJob, _ time.Time) (bool, error) {
 	h.analyzing++
 	return h.started, h.analyzingErr
 }
 
-func (h *histories) MarkFailed(_ context.Context, _ domain.Job, failure domain.Failure, rawKey string, _ time.Time) error {
-	h.failed, h.failedRawKey = &failure, rawKey
+func (h *requests) MarkFailed(_ context.Context, _ domain.AnalysisJob, reason domain.FailureReason, rawKey string, _ time.Time) error {
+	h.failed, h.failedRawKey = &reason, rawKey
 	return h.failedErr
 }
 
-func (h *histories) MarkNoData(_ context.Context, _ domain.Job, rawKey string, _ time.Time) error {
+func (h *requests) MarkNoData(_ context.Context, _ domain.AnalysisJob, rawKey string, _ time.Time) error {
 	h.noData, h.noDataRawKey = true, rawKey
 	return nil
 }
 
-type billings struct {
-	registered domain.Billing
+type expenses struct {
+	registered ledgerdomain.Expense
 	rawKey     string
 	now        time.Time
 	err        error
 	calls      int
 }
 
-func (b *billings) Register(_ context.Context, _ domain.Job, billing domain.Billing, rawKey string, now time.Time) error {
-	b.calls++
-	b.registered, b.rawKey, b.now = billing, rawKey, now
-	return b.err
+func (e *expenses) Register(_ context.Context, _ domain.AnalysisJob, expense ledgerdomain.Expense, rawKey string, now time.Time) error {
+	e.calls++
+	e.registered, e.rawKey, e.now = expense, rawKey, now
+	return e.err
 }
 
 // ids は id-1, id-2, ... を順に返す。
