@@ -58,37 +58,46 @@ original_amount - discount_amount = final_amount
 
 ### GET /billings/{billing_id}
 
-請求単位の詳細と購入明細を取得する。
+請求単位の詳細と購入明細を取得する。利用者の請求に `billing_id` が無ければ `404`(他人の請求も同じ)。
 
 Response:
 
 ```json
 {
-  "bill": {
+  "billing": {
     "billing_id": "01JBILLXXX",
     "upload_id": "01JUPLOADXXX",
     "store_name": "スーパー",
     "purchased_at": "2026-09-15",
+    "year_month": "2026-09",
     "original_amount": 3280,
     "discount_amount": 500,
-    "final_amount": 2780,
-    "source": "AI",
-    "is_edited": false,
-    "image_url": "https://example.com/presigned-get-url",
-    "updated_at": "2026-09-15T12:01:00Z"
+    "final_amount": 2780
   },
-  "items": [
+  "details": [
     {
       "detail_id": "01JITEMXXX",
       "name": "牛乳",
+      "category": "food",
+      "category_source": "AI",
       "amount": 281,
-      "quantity": 1,
-      "source": "AI",
-      "is_edited": false
+      "quantity": 1
     }
   ]
 }
 ```
+
+`details` は `detail_id`(ULID)の昇順 = 採番順。明細が無ければ `[]`。
+
+#### 画面設計に対して未対応の項目
+
+以下は画面設計にあるが API が返していない。対応するときは backend / frontend / 本書を合わせて変える。
+
+| 項目 | 用途 | 未対応の理由 |
+| --- | --- | --- |
+| `billing.image_url` | 画像プレビュー(AI の読み取り結果と見比べて修正する) | 元画像の署名付き GET URL の発行を実装していない |
+| `billing.source` / `billing.is_edited` / `billing.updated_at` | 手動編集済みかどうかの表示 | `billings` にはあるが返していない(請求編集 API と合わせて対応) |
+| `details[].source` / `details[].is_edited` | 明細ごとの手動編集済み表示 | 同上 |
 
 ### PATCH /billings/{billing_id}
 
