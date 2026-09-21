@@ -36,3 +36,9 @@ type UploadRetryMarker interface {
 type AnalyzeJobEnqueuer interface {
 	EnqueueRetry(ctx context.Context, job domain.RetryJob) error
 }
+
+// UploadHistoryLister は利用者の履歴を月ごとに引く。
+type UploadHistoryLister interface {
+	// ListByMonth は yearMonth(YYYY-MM)の履歴を作成日時の降順で返す。該当が無ければ空のスライス。
+	ListByMonth(ctx context.Context, userID, yearMonth string) ([]domain.UploadHistory, error)
+}

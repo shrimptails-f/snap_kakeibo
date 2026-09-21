@@ -141,6 +141,107 @@ func TestMarkRetryingAgainstDynamoDB(t *testing.T) {
 	}
 }
 
+// TestListByMonthAgainstDynamoDB は月ごとの一覧が upload_month_index から作成日時の降順で返り、
+// 別の月・別の利用者の履歴が混ざらず、analyze-receipt が書く billing_id / error_code / error_message が読めることを Floci で確認する。
+func TestListByMonthAgainstDynamoDB(t *testing.T) {
+	t.Parallel()
+	env := dynamodbtest.Connect(t)
+	table := env.CreateTable(t, libdynamodb.UploadHistoriesSchema)
+	repo := infrastructure.DynamoDBUploadHistoryRepository{Table: table}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	// 同じ月に 3 件(作成順 upload-1 → upload-2 → upload-3)、前の月に 1 件、別の利用者に 1 件
+	for _, h := range []struct {
+		userID, uploadID string
+		createdAt        time.Time
+	}{
+		{"user-1", "upload-1", integrationNow},
+		{"user-1", "upload-2", integrationNow.Add(time.Hour)},
+		{"user-1", "upload-3", integrationNow.Add(2 * time.Hour)},
+		{"user-1", "upload-0", integrationNow.AddDate(0, -1, 0)},
+		{"user-2", "upload-1", integrationNow},
+	} {
+		history, err := domain.NewUploadHistory(h.userID, h.uploadID, "a.png", "image/png", h.createdAt, 15*time.Minute)
+		if err != nil {
+			t.Fatalf("NewUploadHistory(%s) error = %v", h.uploadID, err)
+		}
+		if err := repo.Save(ctx, history); err != nil {
+			t.Fatalf("Save(%s) error = %v", h.uploadID, err)
+		}
+	}
+	// analyze-receipt の遷移を模す: upload-1 は FAILED、upload-2 は SUCCEEDED
+	setStatus(ctx, t, table, "user-1", "upload-1", "FAILED", true)
+	setSucceeded(ctx, t, table, "user-1", "upload-2", "billing-1")
+
+	got, err := repo.ListByMonth(ctx, "user-1", "2026-09")
+	if err != nil {
+		t.Fatalf("ListByMonth() error = %v", err)
+	}
+	want := []domain.UploadHistory{
+		{
+			UserID: "user-1", UploadID: "upload-3", Status: domain.StatusUploading, Attempt: 1,
+			S3Key: "receipts/user-1/upload-3/original.jpg", FileName: "a.png", ContentType: "image/png", YearMonth: "2026-09",
+			ExpiresAt: integrationNow.Add(2*time.Hour + 15*time.Minute), CreatedAt: integrationNow.Add(2 * time.Hour), UpdatedAt: integrationNow.Add(2 * time.Hour),
+		},
+		{
+			UserID: "user-1", UploadID: "upload-2", Status: domain.StatusSucceeded, Attempt: 1,
+			S3Key: "receipts/user-1/upload-2/original.jpg", FileName: "a.png", ContentType: "image/png", YearMonth: "2026-09",
+			ExpiresAt: integrationNow.Add(time.Hour + 15*time.Minute), CreatedAt: integrationNow.Add(time.Hour), UpdatedAt: integrationNow.Add(time.Hour),
+			BillingID: "billing-1",
+		},
+		{
+			UserID: "user-1", UploadID: "upload-1", Status: domain.StatusFailed, Attempt: 1,
+			S3Key: "receipts/user-1/upload-1/original.jpg", FileName: "a.png", ContentType: "image/png", YearMonth: "2026-09",
+			ExpiresAt: integrationNow.Add(15 * time.Minute), CreatedAt: integrationNow, UpdatedAt: integrationNow,
+			ErrorCode: "INTERNAL", ErrorMessage: "boom",
+		},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("ListByMonth() returned %d histories, want %d: %+v", len(got), len(want), got)
+	}
+	for i := range want {
+		if !sameHistory(got[i], want[i]) {
+			t.Errorf("ListByMonth()[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+
+	// 前の月には upload-0 だけ
+	if got, err := repo.ListByMonth(ctx, "user-1", "2026-08"); err != nil || len(got) != 1 || got[0].UploadID != "upload-0" {
+		t.Errorf("ListByMonth(2026-08) = %+v, %v, want only upload-0", got, err)
+	}
+	// 履歴の無い月と利用者は空のスライス(nil ではない)
+	for _, in := range [][2]string{{"user-1", "2026-07"}, {"user-3", "2026-09"}} {
+		if got, err := repo.ListByMonth(ctx, in[0], in[1]); err != nil || got == nil || len(got) != 0 {
+			t.Errorf("ListByMonth(%s, %s) = %+v, %v, want empty", in[0], in[1], got, err)
+		}
+	}
+}
+
+// sameHistory は time.Time を Equal で比べる(Floci から読み戻した時刻は UTC だが Location の内部表現が違うことがある)。
+func sameHistory(a, b domain.UploadHistory) bool {
+	if !a.ExpiresAt.Equal(b.ExpiresAt) || !a.CreatedAt.Equal(b.CreatedAt) || !a.UpdatedAt.Equal(b.UpdatedAt) {
+		return false
+	}
+	a.ExpiresAt, a.CreatedAt, a.UpdatedAt = b.ExpiresAt, b.CreatedAt, b.UpdatedAt
+	return a == b
+}
+
+// setSucceeded は analyze-receipt の登録を模して SUCCEEDED と billing_id を書く。
+func setSucceeded(ctx context.Context, t *testing.T, table *libdynamodb.Table, userID, uploadID, billingID string) {
+	t.Helper()
+	if _, err := table.UpdateItem(ctx, &awssdk.UpdateItemInput{
+		Key:                      uploadKey(userID, uploadID),
+		UpdateExpression:         aws.String("SET #status=:status, billing_id=:billing_id"),
+		ExpressionAttributeNames: map[string]string{"#status": "status"},
+		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
+			":status": &ddbtypes.AttributeValueMemberS{Value: "SUCCEEDED"}, ":billing_id": &ddbtypes.AttributeValueMemberS{Value: billingID},
+		},
+	}); err != nil {
+		t.Fatalf("set succeeded: %v", err)
+	}
+}
+
 // setStatus は analyze-receipt の遷移を模して status を書き換える。withFailure なら失敗情報も付ける。
 func setStatus(ctx context.Context, t *testing.T, table *libdynamodb.Table, userID, uploadID, status string, withFailure bool) {
 	t.Helper()

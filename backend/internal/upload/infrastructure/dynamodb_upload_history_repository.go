@@ -20,7 +20,8 @@ import (
 // itemType は upload_histories.type の値。
 const itemType = "UPLOAD_HISTORY"
 
-// uploadHistoryItem は upload_histories の項目。list-uploads / analyze-receipt が読む属性名と揃える。
+// uploadHistoryItem は upload_histories の項目。analyze-receipt が書く属性名と揃える。
+// BillingID / ErrorCode / ErrorMessage は analyze-receipt が遷移時に書くので、upload の登録では omitempty で書かない。
 type uploadHistoryItem struct {
 	PK          string `dynamodbav:"PK"`
 	SK          string `dynamodbav:"SK"`
@@ -37,9 +38,13 @@ type uploadHistoryItem struct {
 	ExpiresAt   string `dynamodbav:"expires_at"`
 	CreatedAt   string `dynamodbav:"created_at"`
 	UpdatedAt   string `dynamodbav:"updated_at"`
+	BillingID   string `dynamodbav:"billing_id,omitempty"`
+	ErrorCode   string `dynamodbav:"error_code,omitempty"`
+	ErrorMsg    string `dynamodbav:"error_message,omitempty"`
 }
 
-// DynamoDBUploadHistoryRepository は upload_histories への履歴の新規登録(upload)と再実行の状態遷移(retry-upload)を行う。
+// DynamoDBUploadHistoryRepository は upload_histories への履歴の新規登録(upload)、再実行の状態遷移(retry-upload)、
+// 月ごとの一覧(list-uploads)を行う。
 type DynamoDBUploadHistoryRepository struct {
 	Table *libdynamodb.Table
 }
@@ -47,6 +52,7 @@ type DynamoDBUploadHistoryRepository struct {
 var (
 	_ application.UploadHistoryRepository = DynamoDBUploadHistoryRepository{}
 	_ application.UploadRetryMarker       = DynamoDBUploadHistoryRepository{}
+	_ application.UploadHistoryLister     = DynamoDBUploadHistoryRepository{}
 )
 
 // Save は条件付き PutItem で履歴を登録する。同じキーが既にあれば ErrUploadAlreadyExists。
@@ -98,6 +104,33 @@ func (r DynamoDBUploadHistoryRepository) MarkRetrying(ctx context.Context, userI
 	return updated.Attempt, nil
 }
 
+// ListByMonth は upload_month_index を GSI1PK(利用者 + 月)で引き、作成日時の降順で返す。
+// 1 回の Query の範囲(1MB)だけを返し、ページネーションはしない。個人利用で 1 月分がそれを超えない前提。
+func (r DynamoDBUploadHistoryRepository) ListByMonth(ctx context.Context, userID, yearMonth string) ([]domain.UploadHistory, error) {
+	out, err := r.Table.Query(ctx, &awssdk.QueryInput{
+		IndexName:                 aws.String(libdynamodb.UploadMonthIndex),
+		KeyConditionExpression:    aws.String("GSI1PK = :pk"),
+		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{":pk": stringValue(UploadMonthPK(userID, yearMonth))},
+		ScanIndexForward:          aws.Bool(false),
+	})
+	if err != nil {
+		return nil, err
+	}
+	var items []uploadHistoryItem
+	if err := attributevalue.UnmarshalListOfMaps(out.Items, &items); err != nil {
+		return nil, fmt.Errorf("unmarshal upload histories: %w", err)
+	}
+	histories := make([]domain.UploadHistory, 0, len(items))
+	for _, item := range items {
+		history, err := item.toDomain(userID)
+		if err != nil {
+			return nil, err
+		}
+		histories = append(histories, history)
+	}
+	return histories, nil
+}
+
 // retryableCondition は domain.RetryableStatuses(FAILED / NO_DATA / ANALYZING)に対応する条件式。
 // 値は MarkRetrying の ExpressionAttributeValues と対にする。
 func retryableCondition() string { return "#status IN (:failed, :no_data, :analyzing)" }
@@ -133,4 +166,48 @@ func newUploadHistoryItem(h domain.UploadHistory) uploadHistoryItem {
 	}
 }
 
+// toDomain は項目を entity にする。userID は PK から復元せず Query の条件をそのまま使う。
+func (i uploadHistoryItem) toDomain(userID string) (domain.UploadHistory, error) {
+	expiresAt, err := parseTime("expires_at", i.ExpiresAt)
+	if err != nil {
+		return domain.UploadHistory{}, err
+	}
+	createdAt, err := parseTime("created_at", i.CreatedAt)
+	if err != nil {
+		return domain.UploadHistory{}, err
+	}
+	updatedAt, err := parseTime("updated_at", i.UpdatedAt)
+	if err != nil {
+		return domain.UploadHistory{}, err
+	}
+	return domain.UploadHistory{
+		UserID:       userID,
+		UploadID:     i.UploadID,
+		Status:       domain.Status(i.Status),
+		Attempt:      i.Attempt,
+		S3Key:        i.S3Key,
+		FileName:     i.FileName,
+		ContentType:  i.ContentType,
+		YearMonth:    i.YearMonth,
+		ExpiresAt:    expiresAt,
+		CreatedAt:    createdAt,
+		UpdatedAt:    updatedAt,
+		BillingID:    i.BillingID,
+		ErrorCode:    i.ErrorCode,
+		ErrorMessage: i.ErrorMsg,
+	}, nil
+}
+
 func formatTime(t time.Time) string { return t.UTC().Format(time.RFC3339) }
+
+// parseTime は formatTime の逆変換。属性が無い(空)ならゼロ値にし、形式が違うときだけ属性名を付けてエラーにする。
+func parseTime(attribute, value string) (time.Time, error) {
+	if value == "" {
+		return time.Time{}, nil
+	}
+	t, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("parse %s: %w", attribute, err)
+	}
+	return t, nil
+}
