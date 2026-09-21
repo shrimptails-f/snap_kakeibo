@@ -12,9 +12,9 @@ snap_kakeibo は「レシートを取り込み、確認し、必要な箇所だ�
 
 ## 2. ビジュアル方針
 
-白を背景に、落ち着いた橙色を主要色として使う。橙色は主要操作、登録完了、選択状態など「進める・できた」ことに限定し、装飾目的で多用しない。注意(warning)と失敗(danger)も暖色のため、主要色はテキストとの組み合わせで役割が伝わる場所にだけ使い、色だけで状態を区別しない。
+白を背景に、落ち着いた緑を主要色として使う。緑は主要操作、登録完了、選択状態など「進める・できた」ことに限定し、装飾目的で多用しない。注意(warning)は橙色、失敗(danger)は赤で、いずれも一般的な意味に合わせる。
 
-通常テキストと白背景の組み合わせは WCAG AA(4.5:1)を満たす値にする。`--color-primary` の白文字は 5.2:1、`--color-text-muted` は白と `--color-surface-subtle` のどちらでも 4.5:1 以上。
+通常テキストと白背景の組み合わせは WCAG AA(4.5:1)を満たす値にする。`--color-primary` の白文字は 6.4:1、`--color-warning` の白文字は 5.2:1、`--color-text-muted` は白と `--color-surface-subtle` のどちらでも 4.5:1 以上。
 
 ### デザイントークン
 
@@ -24,18 +24,18 @@ snap_kakeibo は「レシートを取り込み、確認し、必要な箇所だ�
 
   --color-bg: #ffffff;
   --color-surface: #ffffff;
-  --color-surface-subtle: #faf8f5;
+  --color-surface-subtle: #f6f9f7;
   --color-text: #1b1f24;
   --color-text-muted: #667085;
   --color-border: #e2e8f0;
 
-  --color-primary: #c2410c;
-  --color-primary-hover: #9a3412;
-  --color-primary-subtle: #fff1e6;
+  --color-primary: #246b4b;
+  --color-primary-hover: #1c573c;
+  --color-primary-subtle: #e3f0e8;
   --color-danger: #a3161a;
   --color-danger-subtle: #fee2e2;
-  --color-warning: #8a6500;
-  --color-warning-subtle: #fff2c2;
+  --color-warning: #c2410c;
+  --color-warning-subtle: #fff1e6;
   --color-info: #285f9e;
   --color-info-subtle: #e7f0fa;
 

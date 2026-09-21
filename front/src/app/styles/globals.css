@@ -5,18 +5,18 @@
 
   --color-bg: #ffffff;
   --color-surface: #ffffff;
-  --color-surface-subtle: #faf8f5;
+  --color-surface-subtle: #f6f9f7;
   --color-text: #1b1f24;
   --color-text-muted: #667085;
   --color-border: #e2e8f0;
 
-  --color-primary: #c2410c;
-  --color-primary-hover: #9a3412;
-  --color-primary-subtle: #fff1e6;
+  --color-primary: #246b4b;
+  --color-primary-hover: #1c573c;
+  --color-primary-subtle: #e3f0e8;
   --color-danger: #a3161a;
   --color-danger-subtle: #fee2e2;
-  --color-warning: #8a6500;
-  --color-warning-subtle: #fff2c2;
+  --color-warning: #c2410c;
+  --color-warning-subtle: #fff1e6;
   --color-info: #285f9e;
   --color-info-subtle: #e7f0fa;
 
