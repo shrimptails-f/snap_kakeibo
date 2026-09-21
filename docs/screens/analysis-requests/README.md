@@ -68,7 +68,7 @@
 
 ### GET /months/{yyyy-MM}/analysis-requests
 
-指定月の解析依頼を取得する。
+指定月の解析依頼を作成日時の降順で取得する。`{yyyy-MM}` が `YYYY-MM` の形式でなければ `400`。
 
 Response:
 
@@ -115,7 +115,24 @@ Response:
 }
 ```
 
-`expense_id` は `SUCCEEDED` のときだけ、`error_code` / `error_message` は `FAILED` のときだけ含まれる。
+| 項目 | 備考 |
+| --- | --- |
+| `expense_id` | `SUCCEEDED` のときだけ。支出詳細・編集画面への遷移に使う |
+| `error_code` / `error_message` | `FAILED` のときだけ |
+| `upload_expires_at` | 「期限切れ」表示(`UPLOADING` かつ `now > upload_expires_at`)に使う |
+| `attempt` | 現在の解析試行番号。再解析のたびに増える |
+| `items` | 該当が無ければ `[]` |
+
+値が無い項目は `null` ではなく省略する。ページネーションは持たない(1 回の Query の範囲を返す)。
+
+#### 画面設計に対して未対応の項目
+
+以下は画面設計にあるが API が返していない。対応するときは backend / frontend / 本書を合わせて変える。
+
+| 項目 | 用途 | 未対応の理由 |
+| --- | --- | --- |
+| `failed_at` | 失敗日時の表示 | `analysis_requests` にはあるが返していない |
+| `store_name` / `recorded_amount` | 一覧の「店舗名」「計上額」列 | `expenses` にしか無く、一覧で支出を結合していない |
 
 ### POST /analysis-requests/{analysis_request_id}/retry
 

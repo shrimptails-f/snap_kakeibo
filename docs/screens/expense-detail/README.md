@@ -65,7 +65,7 @@ read_amount + adjustment_amount = recorded_amount
 
 ### GET /expenses/{expense_id}
 
-支出単位の詳細と支出明細を取得する。
+支出単位の詳細と支出明細を取得する。利用者の支出に `expense_id` が無ければ `404`(他人の支出も同じ)。
 
 Response:
 
@@ -95,9 +95,21 @@ Response:
 }
 ```
 
+`details` は `detail_id`(ULID)の昇順 = 採番順。
+
+#### 画面設計に対して未対応の項目
+
+以下は画面設計にあるが API が返していない。対応するときは backend / frontend / 本書を合わせて変える。
+
+| 項目 | 用途 | 未対応の理由 |
+| --- | --- | --- |
+| `expense.image_url` | 画像プレビュー(AI の読み取り結果と見比べて修正する) | 元画像の署名付き GET URL の発行を実装していない |
+| `expense.source` / `expense.updated_at` | データの作成元・更新日時の表示 | `expenses` にはあるが返していない(支出編集 API と合わせて対応) |
+| `details[].source` / `details[].is_edited` | 明細ごとの手動編集済み表示 | 同上 |
+
 ### PATCH /expenses/{expense_id}
 
-支出単位の情報と支出明細を更新する。
+支出単位の情報と支出明細を更新する(未実装)。
 
 Request:
 
