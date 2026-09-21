@@ -4,6 +4,7 @@ package infrastructure
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	libdynamodb "snap_kakeibo/backend/internal/library/dynamodb"
@@ -13,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	awssdk "github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
 // itemType は upload_histories.type の値。
@@ -37,12 +39,15 @@ type uploadHistoryItem struct {
 	UpdatedAt   string `dynamodbav:"updated_at"`
 }
 
-// DynamoDBUploadHistoryRepository は upload_histories に履歴を新規登録する。
+// DynamoDBUploadHistoryRepository は upload_histories への履歴の新規登録(upload)と再実行の状態遷移(retry-upload)を行う。
 type DynamoDBUploadHistoryRepository struct {
 	Table *libdynamodb.Table
 }
 
-var _ application.UploadHistoryRepository = DynamoDBUploadHistoryRepository{}
+var (
+	_ application.UploadHistoryRepository = DynamoDBUploadHistoryRepository{}
+	_ application.UploadRetryMarker       = DynamoDBUploadHistoryRepository{}
+)
 
 // Save は条件付き PutItem で履歴を登録する。同じキーが既にあれば ErrUploadAlreadyExists。
 func (r DynamoDBUploadHistoryRepository) Save(ctx context.Context, history domain.UploadHistory) error {
@@ -58,6 +63,53 @@ func (r DynamoDBUploadHistoryRepository) Save(ctx context.Context, history domai
 		return application.ErrUploadAlreadyExists
 	}
 	return err
+}
+
+// MarkRetrying は status が再実行できるときだけ ANALYZING にして attempt を 1 進め、前回の失敗情報を消す。
+// 条件式で status を見るので、履歴が無い場合も条件不一致になり ErrUploadNotRetryable を返す。
+// 進めた後の attempt は ReturnValues: UPDATED_NEW で受け取り、呼び出し側が analyze キューへ載せる。
+func (r DynamoDBUploadHistoryRepository) MarkRetrying(ctx context.Context, userID, uploadID string, now time.Time) (int, error) {
+	out, err := r.Table.UpdateItem(ctx, &awssdk.UpdateItemInput{
+		Key:                      uploadHistoryKey(userID, uploadID),
+		UpdateExpression:         aws.String("SET #status=:analyzing, attempt=attempt+:one, updated_at=:now REMOVE error_code, error_message, failed_at"),
+		ConditionExpression:      aws.String(retryableCondition()),
+		ExpressionAttributeNames: map[string]string{"#status": "status"},
+		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{
+			":analyzing": stringValue(string(domain.StatusAnalyzing)),
+			":failed":    stringValue(string(domain.StatusFailed)),
+			":no_data":   stringValue(string(domain.StatusNoData)),
+			":one":       numberValue(1),
+			":now":       stringValue(formatTime(now)),
+		},
+		ReturnValues: ddbtypes.ReturnValueUpdatedNew,
+	})
+	if libdynamodb.IsConditionalCheckFailed(err) {
+		return 0, application.ErrUploadNotRetryable
+	}
+	if err != nil {
+		return 0, err
+	}
+	var updated struct {
+		Attempt int `dynamodbav:"attempt"`
+	}
+	if err := attributevalue.UnmarshalMap(out.Attributes, &updated); err != nil {
+		return 0, fmt.Errorf("unmarshal updated attempt: %w", err)
+	}
+	return updated.Attempt, nil
+}
+
+// retryableCondition は domain.RetryableStatuses(FAILED / NO_DATA / ANALYZING)に対応する条件式。
+// 値は MarkRetrying の ExpressionAttributeValues と対にする。
+func retryableCondition() string { return "#status IN (:failed, :no_data, :analyzing)" }
+
+func uploadHistoryKey(userID, uploadID string) map[string]ddbtypes.AttributeValue {
+	return map[string]ddbtypes.AttributeValue{"PK": stringValue(UserPK(userID)), "SK": stringValue(UploadSK(uploadID))}
+}
+
+func stringValue(v string) ddbtypes.AttributeValue { return &ddbtypes.AttributeValueMemberS{Value: v} }
+
+func numberValue(v int64) ddbtypes.AttributeValue {
+	return &ddbtypes.AttributeValueMemberN{Value: strconv.FormatInt(v, 10)}
 }
 
 func newUploadHistoryItem(h domain.UploadHistory) uploadHistoryItem {

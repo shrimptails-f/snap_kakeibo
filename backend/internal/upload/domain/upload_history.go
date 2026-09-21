@@ -10,8 +10,33 @@ import (
 // Status は upload_histories.status の値。upload が書くのは UPLOADING だけで、以降は analyze-receipt / retry-upload が遷移させる。
 type Status string
 
-// StatusUploading はクライアントが署名付き URL へ PUT する前の初期状態。
-const StatusUploading Status = "UPLOADING"
+const (
+	// StatusUploading はクライアントが署名付き URL へ PUT する前の初期状態。
+	StatusUploading Status = "UPLOADING"
+	// StatusAnalyzing は analyze-receipt が処理中(または retry-upload が再投入した直後)の状態。
+	StatusAnalyzing Status = "ANALYZING"
+	// StatusSucceeded は解析が完了し billings を登録した終端状態。再実行できない。
+	StatusSucceeded Status = "SUCCEEDED"
+	// StatusFailed は解析が失敗した終端状態。error_code / error_message / failed_at を持つ。
+	StatusFailed Status = "FAILED"
+	// StatusNoData はレシートとして読めず billings を作らなかった終端状態。
+	StatusNoData Status = "NO_DATA"
+)
+
+// RetryableStatuses は retry-upload が解析をやり直せる status。
+// ANALYZING を含むのは、前回の処理が停滞したまま終端に至らない場合にも利用者がやり直せるようにするため。
+// UPLOADING は PUT が終わっていないので対象外。
+var RetryableStatuses = []Status{StatusFailed, StatusNoData, StatusAnalyzing}
+
+// Retryable は s が再実行できる status なら true。
+func (s Status) Retryable() bool {
+	for _, status := range RetryableStatuses {
+		if s == status {
+			return true
+		}
+	}
+	return false
+}
 
 // 未指定のときに使う既定値。フロントエンドは file_name / content_type を省略できる。
 const (
