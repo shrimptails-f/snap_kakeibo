@@ -16,6 +16,23 @@ Floci を同じ Compose 構成で起動し、開発コンテナ内の標準の A
 
 実 AWS を使うコマンドでは、`AWS_ENDPOINT_URL` を外してホストのプロファイルを使います。例: `env -u AWS_ENDPOINT_URL aws sts get-caller-identity`。Floci のデータは `floci-data` ボリュームに保存するため、コンテナを再作成しても保持します。
 
+## ローカルで画面を動かす
+
+API Gateway と Lambda の代わりに `backend/tools/localapi` が HTTP を受け、`backend/cmd/*` の各 Lambda を子プロセス(aws-lambda-go のローカル RPC モード)として呼び出します。DynamoDB / S3 / SQS / SSM は Floci を使うので、実 AWS には繋ぎません。
+
+```bash
+task local:seed   # 初回のみ。Floci にテーブル・バケット・キュー・JWT 署名鍵と利用者(dev@example.com / password)を作る
+task local:api    # :8080 で API を待ち受ける(Ctrl+C で停止)
+task web:dev      # 別の端末で。front/.env の VITE_DEV_API_PROXY=http://localhost:8080 で /api を転送する
+```
+
+`front/.env` が無ければ `front/.env.example` をコピーしてください。ブラウザで `http://localhost:5173` を開き、seed した利用者でログインします。利用者を変えるときは `task local:seed EMAIL=... PASSWORD=...` で上書きできます。
+
+- Lambda のログは `[auth-login]` のように関数名を付けて `task local:api` の端末に出ます。`LOG_LEVEL=debug task local:api` で詳細を出せます。
+- 画像のアップロード(presigned URL への PUT)は `http://localhost:8080/s3/...` を経由して Floci に入ります。解析 Lambda(`analyze-receipt`)は動かさないため、アップロードしたものは `UPLOADING` のまま残ります。
+- `cmd/` のコードを変えたら `task local:api` を起動し直します(起動時に `go build` します)。
+- Floci のデータを消してやり直すときは `floci-data` ボリュームを削除してから `task local:seed` を再実行します。
+
 ワークスペースはホストとのバインドマウントです。Codex と Claude の設定、Go モジュールキャッシュは名前付きボリュームでコンテナを作り直しても保持します。ホストに `${HOME}/.aws` が存在することを起動前に確認してください。
 
 Alpine では Claude Code に `libgcc`、`libstdc++`、`ripgrep` と `USE_BUILTIN_RIPGREP=0` が必要です。Codex/Claude はコンテナで `codex` / `claude` として起動し、初回は各サービスへのログインが必要です。`task doctor` でツールと実行ユーザーを確認できます。アプリのポート 5173 と 8080 は VS Code Dev Containers で転送します。
