@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -63,8 +63,11 @@ describe('routes', () => {
 
     const router = renderAt('/')
 
-    expect(screen.getByRole('status')).toHaveTextContent('ログイン状態を確認しています')
-    expect(await screen.findByRole('heading', { name: 'ログイン' })).toBeInTheDocument()
+    // 確認中もヘッダーは表示したまま、本文だけを差し替える。ログアウトは未確定なので出さない
+    expect(screen.getByRole('status', { name: 'ログイン状態を確認しています' })).toBeInTheDocument()
+    expect(screen.getByRole('banner')).toHaveTextContent('snap_kakeibo')
+    expect(screen.queryByRole('button', { name: 'ログアウト' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: 'ログイン' })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/login')
     expect(screen.queryByRole('button', { name: 'ログアウト' })).not.toBeInTheDocument()
   })
@@ -74,8 +77,10 @@ describe('routes', () => {
 
     renderAt('/')
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'snap_kakeibo' })).toBeInTheDocument()
-    expect(screen.getByText('user@example.com')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: /のレシート取り込み$/ })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'snap_kakeibo' })).toHaveAttribute('href', '/')
+    expect(screen.queryByText('user@example.com')).not.toBeInTheDocument()
+    expect(screen.getByRole('contentinfo')).toHaveTextContent('snap_kakeibo')
     expect(await screen.findByText('まだ解析依頼がありません。')).toBeInTheDocument()
     // メモリに token が無いので refresh → check の 2 リクエストで復元する
     expect(calls.slice(0, 2).map((call) => call.url)).toEqual(['/api/auth/refresh', '/api/auth/check'])
@@ -87,10 +92,9 @@ describe('routes', () => {
     await screen.findByText('まだ解析依頼がありません。')
 
     backend.revokeSession()
-    // 5 秒ごとの一覧再取得が 401 → refresh も 401 になる
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5000)
-    })
+    // 一覧の再読み込みが 401 → refresh も 401 になる
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    await user.click(screen.getByRole('button', { name: '再読み込み' }))
 
     expect(await screen.findByRole('heading', { name: 'ログイン' })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/login')

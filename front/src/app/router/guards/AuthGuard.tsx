@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router'
 import { useAuthSession } from '@/features/auth'
+import { SessionCheckingNotice } from './SessionCheckingNotice'
 
 export const LOGIN_PATH = '/login'
 
@@ -9,7 +10,7 @@ export function AuthGuard() {
   const { isChecking, isUnauthorized } = useAuthSession()
 
   if (isChecking) {
-    return <p role="status">ログイン状態を確認しています...</p>
+    return <SessionCheckingNotice />
   }
   if (isUnauthorized) {
     return <Navigate to={LOGIN_PATH} replace state={{ from: `${location.pathname}${location.search}` }} />

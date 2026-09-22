@@ -1,18 +1,22 @@
-// GET /api/months/{yyyy-MM}/analysis-requests の通信 DTO。フィールド名は API の snake_case に合わせる
+import type { z } from 'zod'
+import type {
+  analysisRequestItemSchema,
+  analysisRequestStatusSchema,
+  createUploadResponseSchema,
+  listAnalysisRequestsResponseSchema,
+} from './analysis-request.schema'
 
-export type AnalysisRequestStatus = 'UPLOADING' | 'ANALYZING' | 'SUCCEEDED' | 'NO_DATA' | 'FAILED'
+// receipt-analysis の通信 DTO。形の定義は analysis-request.schema.ts
 
-export type AnalysisRequestItem = {
-  analysis_request_id: string
-  expense_id?: string
-  status: AnalysisRequestStatus
-  attempt: number
+export type AnalysisRequestStatus = z.infer<typeof analysisRequestStatusSchema>
+
+export type AnalysisRequestItem = z.infer<typeof analysisRequestItemSchema>
+
+export type ListAnalysisRequestsResponse = z.infer<typeof listAnalysisRequestsResponseSchema>
+
+export type CreateUploadRequest = {
   file_name: string
-  year_month: string
-  upload_expires_at: string
-  error_code?: string
-  error_message?: string
-  failed_at?: string
-  created_at: string
-  updated_at: string
+  content_type: string
 }
+
+export type CreateUploadResponse = z.infer<typeof createUploadResponseSchema>

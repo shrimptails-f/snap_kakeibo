@@ -1,22 +1,22 @@
+import { Suspense } from 'react'
 import { Outlet } from 'react-router'
-import { useAuthSession } from '@/features/auth'
+import { SpinnerBlock } from '@/shared/ui/Spinner'
+import { AppFooter } from './AppFooter'
+import { AppHeader } from './AppHeader'
+import styles from './AppLayout.module.css'
 
-// ログイン後の全画面に共通するヘッダー(アプリ名、ログイン中の利用者、ログアウト)
+// ログイン後の画面共通の枠。各画面は本文だけを描く。
+// 画面の初回 loading(useSuspenseQuery)はここの Suspense が受け、画面側でスピナーを書かない
 export function AppLayout() {
-  const { user, logout } = useAuthSession()
-
   return (
-    <main className="page-shell">
-      <header className="appHeader">
-        <h1>snap_kakeibo</h1>
-        <div className="sessionBar">
-          <span>{user?.email}</span>
-          <button type="button" onClick={() => void logout()}>
-            ログアウト
-          </button>
-        </div>
-      </header>
-      <Outlet />
-    </main>
+    <div className={styles.layout}>
+      <AppHeader />
+      <main className={`page-shell ${styles.main}`}>
+        <Suspense fallback={<SpinnerBlock label="画面を読み込んでいます" />}>
+          <Outlet />
+        </Suspense>
+      </main>
+      <AppFooter />
+    </div>
   )
 }

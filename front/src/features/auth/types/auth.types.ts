@@ -1,9 +1,7 @@
-import type { AuthSessionResponse } from '@/shared/auth/token'
+import type { z } from 'zod'
+import type { authUserSchema, checkAuthResponseSchema, loginResponseSchema } from './auth.schema'
 
-export type AuthUser = {
-  user_id: string
-  email: string
-}
+export type AuthUser = z.infer<typeof authUserSchema>
 
 // POST /api/auth/login
 export type LoginRequest = {
@@ -11,11 +9,7 @@ export type LoginRequest = {
   password: string
 }
 
-export type LoginResponse = AuthSessionResponse & {
-  user: AuthUser
-}
+export type LoginResponse = z.infer<typeof loginResponseSchema>
 
 // GET /api/auth/check
-export type CheckAuthResponse = {
-  user: AuthUser
-}
+export type CheckAuthResponse = z.infer<typeof checkAuthResponseSchema>
