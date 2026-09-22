@@ -207,8 +207,8 @@ func freePort() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port, nil
+	port := l.Addr().(*net.TCPAddr).Port
+	return port, l.Close()
 }
 
 // prefixLines は子プロセスの出力を [name] 付きでそのまま流す。Lambda の logger は JSON を出すので加工しない。
@@ -216,7 +216,7 @@ func prefixLines(name string, r io.Reader) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
-		fmt.Fprintf(os.Stdout, "[%s] %s\n", name, scanner.Text())
+		_, _ = fmt.Fprintf(os.Stdout, "[%s] %s\n", name, scanner.Text())
 	}
 }
 
