@@ -731,7 +731,7 @@ expense_details.category
    カテゴリを変更した明細は category_source = USER
    expense_detailsのGSIキーも更新
 
-   支出1件と既存の全明細をDynamoDB transactionで一括更新する
+   支出1件と保存後の全明細（既存更新・新規追加）および削除対象をDynamoDB transactionで一括更新する
 
 2. 月次再構築を実行
    purchase_dateの月が変わる場合は旧月と新月の両方

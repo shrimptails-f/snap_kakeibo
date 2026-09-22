@@ -138,6 +138,8 @@ classDiagram
         +renameDetail(detailID, name)
         +changeDetailAmount(detailID, amount, quantity)
         +changeDetailCategory(detailID, category)
+        +addDetail(detail)
+        +removeDetail(detailID)
     }
 
     class ExpenseDetail {

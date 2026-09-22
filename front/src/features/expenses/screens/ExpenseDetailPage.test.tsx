@@ -124,6 +124,34 @@ describe('ExpenseDetailPage', () => {
     expect(screen.getByRole('button', { name: '変更を保存' })).toBeEnabled()
   })
 
+  it('明細を追加・削除し、保存後の明細に反映する', async () => {
+    const replaced = { ...original, details: [original.details[1], { ...original.details[1], detail_id: 'd3', name: '新しい品', source: 'USER', category_source: 'USER', is_edited: true }] }
+    let getCount = 0
+    const { calls } = mockFetch({ '/api/expenses/e1': ({ init }) => init.method === 'PATCH'
+      ? jsonResponse({ expense: { expense_id: 'e1', read_amount: 3280, adjustment_amount: -500, recorded_amount: 2780, updated_at: '2026-09-22T01:00:00Z' } })
+      : jsonResponse(++getCount === 1 ? original : replaced) })
+    renderPage(); const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: '編集する' }))
+    await user.click(screen.getByRole('button', { name: '1件目の明細を削除' }))
+    await user.click(screen.getByRole('button', { name: '明細を追加' }))
+    const names = screen.getAllByLabelText('商品名（必須）')
+    await user.type(names[1], '新しい品')
+    await user.click(screen.getByRole('button', { name: '変更を保存' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('変更を保存しました。')
+    const body = JSON.parse(String(calls.find((call) => call.init.method === 'PATCH')?.init.body))
+    expect(body.details).toHaveLength(2)
+    expect(body.details[0].detail_id).toBe('d2')
+    expect(body.details[1]).toMatchObject({ name: '新しい品', amount: 0, quantity: 1, category: 'unknown' })
+    expect(body.details[1].detail_id).toBeUndefined()
+    expect(screen.getByText('新しい品')).toBeInTheDocument()
+  })
+
+  it('最後の明細を削除できない', async () => {
+    mockFetch({ '/api/expenses/e1': { ...original, details: [original.details[0]] } })
+    renderPage(); await userEvent.click(await screen.findByRole('button', { name: '編集する' }))
+    expect(screen.getByRole('button', { name: '1件目の明細を削除' })).toBeDisabled()
+  })
+
   it('未保存のキャンセルでは破棄確認を表示する', async () => {
     mockFetch({ '/api/expenses/e1': original }); renderPage(); const user = userEvent.setup(); await user.click(await screen.findByRole('button', { name: '編集する' }))
     await user.type(screen.getByLabelText('店舗名（必須）'), '追記')
