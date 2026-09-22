@@ -39,7 +39,7 @@ const expenseResponse = {
 
 describe('ReceiptIntakePage', () => {
   beforeEach(() => {
-    // 5 秒ごとの再取得タイマーがテスト終了後に走らないようにする
+    // 再読み込みのクールタイム(5 秒)を進めるために fake timers を使う
     vi.useFakeTimers({ shouldAdvanceTime: true })
     setAuthSession({ access_token: 'test-token', token_type: 'Bearer', expires_in: 900 })
   })
@@ -93,7 +93,7 @@ describe('ReceiptIntakePage', () => {
     expect(screen.getByText('試行 2 回目')).toBeInTheDocument()
   })
 
-  it('5 秒ごとに一覧を再取得し、その間も前回の一覧を表示したままにする', async () => {
+  it('再読み込みで一覧を再取得し、そのあと 5 秒間は再度押せない', async () => {
     let listCount = 0
     mockFetch({
       [listPath]: () => {
@@ -104,14 +104,27 @@ describe('ReceiptIntakePage', () => {
 
     renderWithQuery(<ReceiptIntakePage />)
     await screen.findByRole('button', { name: /receipt-1\.jpg/ })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5000)
-    })
+    await user.click(screen.getByRole('button', { name: '再読み込み' }))
 
-    expect(await screen.findByRole('button', { name: /receipt-2\.jpg/ })).toBeInTheDocument()
+    // 再取得中も前回の一覧は表示したまま
     expect(screen.getByRole('button', { name: /receipt-1\.jpg/ })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /receipt-2\.jpg/ })).toBeInTheDocument()
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(listCount).toBe(2)
+
+    // クールタイム中は押しても API を呼ばない
+    const reload = screen.getByRole('button', { name: '再読み込み' })
+    expect(reload).toBeDisabled()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4000)
+    })
+    expect(reload).toBeDisabled()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000)
+    })
+    expect(reload).toBeEnabled()
     expect(listCount).toBe(2)
   })
 

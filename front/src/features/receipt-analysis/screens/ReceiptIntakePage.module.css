@@ -12,6 +12,26 @@
   font-size: 22px;
 }
 
+.actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.reloadButton {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.reloadButton:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .uploadButton {
   display: inline-flex;
   align-items: center;
@@ -179,7 +199,8 @@
     grid-template-columns: 1fr;
   }
 
-  .uploadButton {
-    width: 100%;
+  .actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 }

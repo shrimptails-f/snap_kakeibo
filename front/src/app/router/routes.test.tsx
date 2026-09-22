@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -92,10 +92,9 @@ describe('routes', () => {
     await screen.findByText('まだ解析依頼がありません。')
 
     backend.revokeSession()
-    // 5 秒ごとの一覧再取得が 401 → refresh も 401 になる
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5000)
-    })
+    // 一覧の再読み込みが 401 → refresh も 401 になる
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    await user.click(screen.getByRole('button', { name: '再読み込み' }))
 
     expect(await screen.findByRole('heading', { name: 'ログイン' })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/login')

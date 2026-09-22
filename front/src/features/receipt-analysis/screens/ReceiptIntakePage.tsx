@@ -6,6 +6,7 @@ import { toFriendlyMessage } from '@/shared/api/errors'
 import { ErrorBoundary } from '@/shared/ui/ErrorBoundary'
 import { SpinnerBlock } from '@/shared/ui/Spinner'
 import { useAnalysisRequests } from '../hooks/useAnalysisRequests'
+import { useReloadAnalysisRequests } from '../hooks/useReloadAnalysisRequests'
 import { useUploadReceipt } from '../hooks/useUploadReceipt'
 import { analysisRequestStatus } from '../lib/analysisRequestStatus'
 import type { StatusTone } from '../lib/analysisRequestStatus'
@@ -30,8 +31,9 @@ function currentMonth(): string {
 export function ReceiptIntakePage() {
   const [month] = useState(currentMonth)
   const [selectedExpenseId, setSelectedExpenseId] = useState<string | null>(null)
-  // 初回は AppLayout の Suspense が待つ。5 秒ごとの再取得中は前回の一覧を保ち、失敗しても次回に任せる
+  // 初回は AppLayout の Suspense が待つ。再読み込み中は前回の一覧を保ち、失敗しても次回に任せる
   const { data: requests } = useAnalysisRequests(month)
+  const reloadRequests = useReloadAnalysisRequests(month)
   const upload = useUploadReceipt()
   const queryErrorReset = useQueryErrorResetBoundary()
 
@@ -45,10 +47,21 @@ export function ReceiptIntakePage() {
     <>
       <div className={styles.pageHeader}>
         <h1 className={styles.title}>{month} のレシート取り込み</h1>
-        <label className={styles.uploadButton}>
-          <input type="file" accept="image/*,.pdf" onChange={handleFileChange} disabled={upload.isPending} />
-          {upload.isPending ? 'アップロード中...' : 'ファイルを選択'}
-        </label>
+        <div className={styles.actions}>
+          {/* 解析は非同期に進むので、利用者が再読み込みで確かめる(定期取得はしない) */}
+          <button
+            className={styles.reloadButton}
+            type="button"
+            onClick={reloadRequests.reload}
+            disabled={reloadRequests.isDisabled}
+          >
+            {reloadRequests.isFetching ? '再読み込み中...' : '再読み込み'}
+          </button>
+          <label className={styles.uploadButton}>
+            <input type="file" accept="image/*,.pdf" onChange={handleFileChange} disabled={upload.isPending} />
+            {upload.isPending ? 'アップロード中...' : 'ファイルを選択'}
+          </label>
+        </div>
       </div>
 
       {upload.isSuccess && (
