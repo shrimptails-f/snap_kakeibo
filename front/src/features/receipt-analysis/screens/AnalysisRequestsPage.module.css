@@ -28,7 +28,7 @@
 .table th:nth-child(5) { width: 22%; }
 .table td { overflow-wrap: anywhere; }
 .table td:nth-child(3), .table td:nth-child(4), .actions { display: grid; justify-items: start; gap: var(--space-1); }
-.table tr:focus { outline: 3px solid var(--color-primary); outline-offset: -3px; }
+.table tr:focus-visible { outline: 3px solid var(--color-primary); outline-offset: -3px; }
 .actions { padding: var(--space-3); }
 .statusNeutral, .statusInfo, .statusPrimary, .statusWarning, .statusDanger { display: inline-flex; padding: 2px 8px; border-radius: 999px; font-size: 14px; font-weight: 700; }
 .statusNeutral { background: var(--color-surface-subtle); }
