@@ -11,14 +11,10 @@
 
 フロントエンドは、ユーザーが画像をアップロードし、登録済みの支出と月次集計を確認するための画面を提供する。
 
-バックエンドへの通信はAPI Gateway経由で行う。
+バックエンドへの通信は同一 origin の CloudFront `/api/*` から API Gateway 経由で行う。
 
 ```text
-React
-  |
-  | HTTPS
-  v
-API Gateway
+React → CloudFront `/api/*` → API Gateway
 ```
 
 ---
@@ -34,8 +30,10 @@ pnpm build
 task front:push   S3 sync + CloudFront キャッシュ無効化
   |
   v
-https://{distribution}.cloudfront.net
+https://dev.snap-kakeibo.shrimptail.net
 ```
+
+dev の本番ビルドでは `VITE_API_BASE_URL` を設定せず、同一 origin の `/api/*` を呼ぶ。旧 `*.cloudfront.net` URL は S3 の CORS 許可対象から外すため、画像アップロードの動作確認には使用しない。
 
 SPA のルーティングは CloudFront のエラー応答(403 / 404 → `/index.html`)で吸収する。
 

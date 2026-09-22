@@ -5,6 +5,7 @@ import (
 
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsapigatewayv2"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awscertificatemanager"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudfront"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awscodedeploy"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
@@ -21,8 +22,9 @@ import (
 // AppStackProps は App スタックの入力。
 type AppStackProps struct {
 	awscdk.StackProps
-	Config  config.Config
-	Storage *StorageStack
+	Config              config.Config
+	Storage             *StorageStack
+	FrontendCertificate awscertificatemanager.ICertificate
 }
 
 // AppStack は destroy して作り直せるリソースをまとめる。
@@ -51,9 +53,9 @@ func NewAppStack(scope constructs.Construct, id string, props *AppStackProps) *A
 		storage: props.Storage,
 	}
 
-	s.Distribution = newFrontendDistribution(stack, props.Config)
+	s.Distribution = newFrontendDistribution(stack, props.Config, props.FrontendCertificate)
 	s.API = newHTTPAPI(stack, props.Config)
-	attachAPIToDistribution(s.Distribution, s.API)
+	attachAPIToDistribution(s.Distribution, s.API, props.Config)
 	s.codeDeployApplication = awscodedeploy.NewLambdaApplication(stack, jsii.String("LambdaCodeDeployApplication"), &awscodedeploy.LambdaApplicationProps{
 		ApplicationName: jsii.String(props.Config.ResourceName("lambda")),
 	})

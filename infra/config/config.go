@@ -19,6 +19,8 @@ type Config struct {
 	AlertEmail string
 	// CORSAllowedOrigins は S3 Presigned PUT を許可するオリジン
 	CORSAllowedOrigins []string
+	// Domains は既存の共有 Hosted Zone と、この stage で使う名前。
+	Domains DomainConfig
 	// RemovalPolicy は stateful リソース(DynamoDB / S3 / ECR)をスタック削除時に残すか。
 	// RETAIN なら削除保護も付ける。DESTROY なら中身ごと消せるようにする
 	RemovalPolicy awscdk.RemovalPolicy
@@ -39,6 +41,21 @@ type Config struct {
 	// MaxReceiveCount は一時エラーの再試行回数。超過したメッセージは DLQ へ移る
 	MaxReceiveCount float64
 }
+
+// DomainConfig は共有 DNS ゾーンに作る、この stage のアプリ用レコード名。
+type DomainConfig struct {
+	HostedZoneID        string
+	ZoneName            string
+	FrontendRecordName  string
+	APIOriginRecordName string
+	// DisableExecuteAPIEndpoint は CloudFront のオリジン切替確認後に有効化する。
+	DisableExecuteAPIEndpoint bool
+	// UseLegacyAPIOrigin は初回切替時だけ CloudFront の既存オリジンを維持する。
+	UseLegacyAPIOrigin bool
+}
+
+func (d DomainConfig) FrontendFQDN() string  { return d.FrontendRecordName + "." + d.ZoneName }
+func (d DomainConfig) APIOriginFQDN() string { return d.APIOriginRecordName + "." + d.ZoneName }
 
 // Function は Lambda 1つ分のデプロイ設定。関数ごとに ECR リポジトリを持ち、デプロイタイミングを分けられる。
 type Function struct {

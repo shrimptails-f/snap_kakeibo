@@ -62,7 +62,7 @@ tasks:
       - '{{.AWS}} cdk synth --quiet -c stage={{.STAGE}} {{.CLI_ARGS}}'
 
   infra:diff:
-    desc: Diff both stacks against the deployed state
+    desc: Diff all stacks against the deployed state
     dir: infra
     cmds:
       - '{{.AWS}} cdk diff --all -c stage={{.STAGE}} {{.CLI_ARGS}}'
@@ -79,6 +79,18 @@ tasks:
     cmds:
       - task: infra:parameters
       - '{{.AWS}} cdk deploy {{.STAGE}}-{{.PROJECT}}-storage --exclusively -c stage={{.STAGE}} {{.CLI_ARGS}}'
+
+  infra:bootstrap:certificate:
+    desc: Bootstrap us-east-1 for the CloudFront certificate stack (once per account)
+    dir: infra
+    cmds:
+      - '{{.AWS}} cdk bootstrap aws://654654388040/us-east-1 {{.CLI_ARGS}}'
+
+  infra:deploy:certificate:
+    desc: Deploy the us-east-1 CloudFront certificate stack
+    dir: infra
+    cmds:
+      - '{{.AWS}} cdk deploy {{.STAGE}}-{{.PROJECT}}-certificate --exclusively -c stage={{.STAGE}} {{.CLI_ARGS}}'
 
   image:push:
     desc: "Step 2a: build each Lambda image (linux/arm64), push it to the function's ECR and set its image-tag SSM parameter. FUNCTIONS='hello upload' limits the targets (default: all of backend/cmd). Needs Docker: run from the host or CI"
