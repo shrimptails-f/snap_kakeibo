@@ -52,7 +52,7 @@ export function ExpenseDetailContent({ expenseId }: Props) {
 
   const form = useForm<UpdateExpenseRequest>({ resolver: zodResolver(updateExpenseRequestSchema), defaultValues: defaultValues(data), mode: 'onBlur' })
   const { handleSubmit } = form
-  const fields = useFieldArray({ control: form.control, name: 'details' }).fields
+  const { fields, append, remove } = useFieldArray({ control: form.control, name: 'details' })
   const adjustment = useWatch({ control: form.control, name: 'adjustment_amount' })
   const detailValues = useWatch({ control: form.control, name: 'details' })
   const recordedAmount = Number.isSafeInteger(adjustment) ? data.expense.read_amount + adjustment : null
@@ -134,20 +134,22 @@ export function ExpenseDetailContent({ expenseId }: Props) {
                 <section className={styles.editDetails}><h2>支出明細 <span>{fields.length}件</span></h2>
                   {fields.map((field, index) => {
                     const error = form.formState.errors.details?.[index]
-                    const saved = data.details[index]
+                    const saved = data.details.find((detail) => detail.detail_id === field.detail_id)
                     const prefix = `expense-detail-${index}`
                     return <fieldset className={styles.detailFields} key={field.id}>
-                      <legend>{index + 1}. <SourceBadge source={saved?.source} isEdited={saved?.is_edited ?? false} /></legend>
-                      <input type="hidden" {...form.register(`details.${index}.detail_id`)} />
+                      <legend>{index + 1}. {saved ? <SourceBadge source={saved.source} isEdited={saved.is_edited} /> : '追加予定'}</legend>
+                      {saved && <input type="hidden" {...form.register(`details.${index}.detail_id`)} />}
                       <label>商品名（必須）<input id={`${prefix}-name`} className="field-control" {...form.register(`details.${index}.name`)} aria-invalid={!!error?.name} aria-describedby={error?.name ? `${prefix}-name-error` : undefined} />{error?.name && <span id={`${prefix}-name-error`}>{error.name.message}</span>}</label>
                       <div className={styles.fieldRow}>
                         <label>明細金額（必須）<span className={styles.inputUnit}><input id={`${prefix}-amount`} className="field-control" type="number" inputMode="numeric" {...form.register(`details.${index}.amount`, { valueAsNumber: true })} aria-invalid={!!error?.amount} aria-describedby={error?.amount ? `${prefix}-amount-error` : undefined} /><span>円</span></span>{error?.amount && <span id={`${prefix}-amount-error`}>{error.amount.message}</span>}</label>
                         <label>数量（必須）<input id={`${prefix}-quantity`} className="field-control" type="number" inputMode="numeric" {...form.register(`details.${index}.quantity`, { valueAsNumber: true })} aria-invalid={!!error?.quantity} aria-describedby={error?.quantity ? `${prefix}-quantity-error` : undefined} />{error?.quantity && <span id={`${prefix}-quantity-error`}>{error.quantity.message}</span>}</label>
                       </div>
                       <label>カテゴリ（必須）<select id={`${prefix}-category`} className="field-control" {...form.register(`details.${index}.category`)} aria-invalid={!!error?.category} aria-describedby={error?.category ? `${prefix}-category-error` : undefined}>{CATEGORIES.map((category) => <option key={category} value={category}>{categoryLabel(category)}</option>)}</select>{error?.category && <span id={`${prefix}-category-error`}>{error.category.message}</span>}</label>
-                      <SourceBadge label="カテゴリ" source={saved?.category_source} isEdited={saved?.category_source === 'USER'} />
+                      {saved && <SourceBadge label="カテゴリ" source={saved.category_source} isEdited={saved.category_source === 'USER'} />}
+                      <Button variant="secondary" disabled={fields.length <= 1} onClick={() => remove(index)} aria-label={`${index + 1}件目の明細を削除`}>この明細を削除</Button>
                     </fieldset>
                   })}
+                  <Button variant="secondary" disabled={fields.length >= 50} onClick={() => append({ detail_id: undefined, name: '', amount: 0, quantity: 1, category: 'unknown' })}>明細を追加</Button>
                 </section>
               </fieldset>
               <div className={styles.detailTotal}><span>明細合計</span><strong className="amount">{formatYen(detailTotal)}</strong></div>

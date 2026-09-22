@@ -41,7 +41,7 @@ const integerInput = (minimum: number, maximum: number, message: string) =>
   z.number({ error: message }).int(message).min(minimum, message).max(maximum, message)
 
 export const updateExpenseDetailSchema = z.object({
-  detail_id: z.string(),
+  detail_id: z.string().optional(),
   name: z.string().trim().min(1, '商品名を入力してください。'),
   amount: integerInput(0, 10_000_000, '明細金額は0〜10,000,000の整数で入力してください。'),
   quantity: integerInput(1, 999, '数量は1〜999の整数で入力してください。'),
@@ -56,7 +56,7 @@ export const updateExpenseRequestSchema = z.object({
     return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
   }, '実在する購入日を入力してください。'),
   adjustment_amount: z.number({ error: '調整額を整数で入力してください。' }).int('調整額を整数で入力してください。').safe(),
-  details: z.array(updateExpenseDetailSchema).min(1),
+  details: z.array(updateExpenseDetailSchema).min(1, '明細は1件以上必要です。').max(50, '明細は50件までです。'),
 })
 
 export const updateExpenseResponseSchema = z.object({

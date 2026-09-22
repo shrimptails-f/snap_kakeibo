@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -42,10 +43,11 @@ type UpdateExpenseUsecase struct {
 	Expenses ExpenseRepository
 	Rebuild  RebuildMonthlySummaryUsecaseInterface
 	Clock    timewrapper.Interface
+	IDs      IDGenerator
 }
 
-func NewUpdateExpenseUsecase(expenses ExpenseRepository, rebuild RebuildMonthlySummaryUsecaseInterface, clock timewrapper.Interface) UpdateExpenseUsecaseInterface {
-	return &UpdateExpenseUsecase{Expenses: expenses, Rebuild: rebuild, Clock: clock}
+func NewUpdateExpenseUsecase(expenses ExpenseRepository, rebuild RebuildMonthlySummaryUsecaseInterface, clock timewrapper.Interface, ids IDGenerator) UpdateExpenseUsecaseInterface {
+	return &UpdateExpenseUsecase{Expenses: expenses, Rebuild: rebuild, Clock: clock, IDs: ids}
 }
 
 func (u *UpdateExpenseUsecase) Update(ctx context.Context, in UpdateExpenseInput) (UpdateExpenseOutput, error) {
@@ -66,13 +68,26 @@ func (u *UpdateExpenseUsecase) Update(ctx context.Context, in UpdateExpenseInput
 	if err != nil {
 		return UpdateExpenseOutput{}, err
 	}
-	if len(in.Details) != len(expense.Details()) {
+	if len(in.Details) < 1 || len(in.Details) > 50 {
 		return UpdateExpenseOutput{}, ErrInvalidInput
 	}
+	previousDetails := expense.Details()
+	existingIDs := make(map[domain.ExpenseDetailID]struct{}, len(previousDetails))
+	for _, detail := range previousDetails {
+		existingIDs[detail.ID()] = struct{}{}
+	}
 	requested := make(map[domain.ExpenseDetailID]UpdateExpenseDetailInput, len(in.Details))
+	var additions []UpdateExpenseDetailInput
 	for _, raw := range in.Details {
+		if raw.DetailID == "" {
+			additions = append(additions, raw)
+			continue
+		}
 		id, ok := domain.NewExpenseDetailID(raw.DetailID)
 		if !ok {
+			return UpdateExpenseOutput{}, ErrInvalidInput
+		}
+		if _, exists := existingIDs[id]; !exists {
 			return UpdateExpenseOutput{}, ErrInvalidInput
 		}
 		if _, exists := requested[id]; exists {
@@ -97,7 +112,10 @@ func (u *UpdateExpenseUsecase) Update(ctx context.Context, in UpdateExpenseInput
 	for _, existing := range expense.Details() {
 		raw, exists := requested[existing.ID()]
 		if !exists {
-			return UpdateExpenseOutput{}, ErrInvalidInput
+			if err := expense.RemoveDetail(existing.ID()); err != nil {
+				return UpdateExpenseOutput{}, ErrInvalidInput
+			}
+			continue
 		}
 		amount, err := common.NewDetailAmount(raw.Amount)
 		if err != nil {
@@ -127,8 +145,37 @@ func (u *UpdateExpenseUsecase) Update(ctx context.Context, in UpdateExpenseInput
 			}
 		}
 	}
+	for _, raw := range additions {
+		amount, err := common.NewDetailAmount(raw.Amount)
+		if err != nil {
+			return UpdateExpenseOutput{}, ErrInvalidInput
+		}
+		quantity, err := common.NewQuantity(raw.Quantity)
+		if err != nil {
+			return UpdateExpenseOutput{}, ErrInvalidInput
+		}
+		category, err := common.NewCategory(raw.Category)
+		if err != nil {
+			return UpdateExpenseOutput{}, ErrInvalidInput
+		}
+		id, err := u.IDs.NewID()
+		if err != nil {
+			return UpdateExpenseOutput{}, fmt.Errorf("generate detail id: %w", err)
+		}
+		detailID, ok := domain.NewExpenseDetailID(id)
+		if !ok {
+			return UpdateExpenseOutput{}, ErrInvalidInput
+		}
+		detail, err := domain.NewExpenseDetail(detailID, raw.Name, amount, quantity, category, domain.CategorySourceUser)
+		if err != nil || expense.AddDetail(detail) != nil {
+			return UpdateExpenseOutput{}, ErrInvalidInput
+		}
+	}
+	if len(expense.Details()) != len(in.Details) {
+		return UpdateExpenseOutput{}, ErrInvalidInput
+	}
 	updatedAt := u.Clock.Now()
-	if err := u.Expenses.Save(ctx, expense, updatedAt); err != nil {
+	if err := u.Expenses.Save(ctx, expense, previousDetails, updatedAt); err != nil {
 		if errors.Is(err, ErrExpenseNotFound) {
 			return UpdateExpenseOutput{}, ErrExpenseNotFound
 		}

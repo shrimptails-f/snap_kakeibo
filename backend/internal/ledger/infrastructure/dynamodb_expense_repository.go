@@ -208,7 +208,7 @@ func (r DynamoDBExpenseRepository) FindByMonth(ctx context.Context, userID commo
 }
 
 // Save は支出と全明細を一つの DynamoDB transaction で更新する。
-func (r DynamoDBExpenseRepository) Save(ctx context.Context, expense domain.Expense, updatedAt time.Time) error {
+func (r DynamoDBExpenseRepository) Save(ctx context.Context, expense domain.Expense, previousDetails []domain.ExpenseDetail, updatedAt time.Time) error {
 	if r.Client == nil {
 		return fmt.Errorf("save expense: dynamodb client is nil")
 	}
@@ -225,7 +225,13 @@ func (r DynamoDBExpenseRepository) Save(ctx context.Context, expense domain.Expe
 		UpdateExpression:    aws.String("SET store_name=:store,purchase_date=:date,year_month=:month,adjustment_amount=:adjustment,recorded_amount=:recorded,#source=:source,is_edited=:edited,updated_at=:updated"),
 		ConditionExpression: aws.String("attribute_exists(PK)"), ExpressionAttributeNames: map[string]string{"#source": "source"}, ExpressionAttributeValues: values,
 	}}}
+	previous := make(map[domain.ExpenseDetailID]struct{}, len(previousDetails))
+	current := make(map[domain.ExpenseDetailID]struct{}, len(expense.Details()))
+	for _, detail := range previousDetails {
+		previous[detail.ID()] = struct{}{}
+	}
 	for _, detail := range expense.Details() {
+		current[detail.ID()] = struct{}{}
 		values := map[string]ddbtypes.AttributeValue{
 			":gpk": stringValue(UserMonthPK(userID, expense.PurchaseDate().YearMonth().String())), ":gsk": stringValue(DetailMonthSK(detail.Amount().Yen(), expense.PurchaseDate().String(), detail.ID().String())),
 			":name": stringValue(detail.Name()), ":category": stringValue(detail.Category().String()), ":categorySource": stringValue(detail.CategorySource().String()),
@@ -233,11 +239,46 @@ func (r DynamoDBExpenseRepository) Save(ctx context.Context, expense domain.Expe
 			":store": stringValue(expense.StoreName()), ":date": stringValue(expense.PurchaseDate().String()), ":month": stringValue(expense.PurchaseDate().YearMonth().String()),
 			":edited": boolValue(detail.Edited()), ":updated": stringValue(timestamp),
 		}
+		if _, exists := previous[detail.ID()]; !exists {
+			item, err := attributevalue.MarshalMap(map[string]any{
+				"PK": DetailPK(userID, expenseID), "SK": DetailSK(detail.ID().String()),
+				"GSI1PK": UserMonthPK(userID, expense.PurchaseDate().YearMonth().String()),
+				"GSI1SK": DetailMonthSK(detail.Amount().Yen(), expense.PurchaseDate().String(), detail.ID().String()),
+				"type":   "EXPENSE_DETAIL", "detail_id": detail.ID().String(), "expense_id": expenseID,
+				"analysis_request_id": expense.SourceRequestID().String(), "name": detail.Name(),
+				"category": detail.Category().String(), "category_source": detail.CategorySource().String(),
+				"amount": detail.Amount().Yen(), "quantity": detail.Quantity().Int64(),
+				"source": detail.Source().String(), "store_name": expense.StoreName(),
+				"purchase_date": expense.PurchaseDate().String(), "year_month": expense.PurchaseDate().YearMonth().String(),
+				"is_edited": detail.Edited(), "created_at": timestamp, "updated_at": timestamp,
+			})
+			if err != nil {
+				return fmt.Errorf("marshal new expense detail: %w", err)
+			}
+			items = append(items, ddbtypes.TransactWriteItem{Put: &ddbtypes.Put{
+				TableName: aws.String(r.ExpenseDetails.Name()), Item: item,
+				ConditionExpression: aws.String("attribute_not_exists(PK)"),
+			}})
+			continue
+		}
 		items = append(items, ddbtypes.TransactWriteItem{Update: &ddbtypes.Update{
 			TableName: aws.String(r.ExpenseDetails.Name()), Key: map[string]ddbtypes.AttributeValue{"PK": stringValue(DetailPK(userID, expenseID)), "SK": stringValue(DetailSK(detail.ID().String()))},
 			UpdateExpression:    aws.String("SET GSI1PK=:gpk,GSI1SK=:gsk,#name=:name,category=:category,category_source=:categorySource,amount=:amount,quantity=:quantity,#source=:source,store_name=:store,purchase_date=:date,year_month=:month,is_edited=:edited,updated_at=:updated"),
 			ConditionExpression: aws.String("attribute_exists(PK)"), ExpressionAttributeNames: map[string]string{"#name": "name", "#source": "source"}, ExpressionAttributeValues: values,
 		}})
+	}
+	for _, detail := range previousDetails {
+		if _, exists := current[detail.ID()]; exists {
+			continue
+		}
+		items = append(items, ddbtypes.TransactWriteItem{Delete: &ddbtypes.Delete{
+			TableName:           aws.String(r.ExpenseDetails.Name()),
+			Key:                 map[string]ddbtypes.AttributeValue{"PK": stringValue(DetailPK(userID, expenseID)), "SK": stringValue(DetailSK(detail.ID().String()))},
+			ConditionExpression: aws.String("attribute_exists(PK)"),
+		}})
+	}
+	if len(items) > 100 {
+		return application.ErrInvalidInput
 	}
 	_, err := r.Client.TransactWriteItems(ctx, &awssdk.TransactWriteItemsInput{TransactItems: items})
 	if libdynamodb.IsConditionalCheckFailed(err) {

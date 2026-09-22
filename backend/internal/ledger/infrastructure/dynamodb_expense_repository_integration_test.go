@@ -73,6 +73,7 @@ func TestSaveAndFindByMonthAgainstDynamoDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindByID() error = %v", err)
 	}
+	previousDetails := expense.Details()
 	date, _ := common.NewPurchaseDate("2026-10-01")
 	amount, _ := common.NewDetailAmount(900)
 	quantity, _ := common.NewQuantity(2)
@@ -93,7 +94,7 @@ func TestSaveAndFindByMonthAgainstDynamoDB(t *testing.T) {
 	if err := expense.ChangeDetailCategory("detail-1", category); err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.Save(ctx, expense, time.Date(2026, 9, 22, 1, 0, 0, 0, time.UTC)); err != nil {
+	if err := repo.Save(ctx, expense, previousDetails, time.Date(2026, 9, 22, 1, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatalf("Save() error = %v", err)
 	}
 	userID, _ := common.NewUserID("user-1")
@@ -110,6 +111,52 @@ func TestSaveAndFindByMonthAgainstDynamoDB(t *testing.T) {
 	got := newExpenses[0]
 	if got.StoreName() != "別の店" || got.RecordedAmount().Yen() != 900 || got.Details()[0].CategorySource() != domain.CategorySourceUser {
 		t.Errorf("updated expense = %+v / %+v", got, got.Details())
+	}
+}
+
+func TestSaveAddsAndDeletesDetailsAgainstDynamoDB(t *testing.T) {
+	t.Parallel()
+	repo := newRepository(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	putRecord(ctx, t, repo.Expenses, expenseRecord("user-1", "expense-1", "request-1", 1200, 0, false))
+	putRecord(ctx, t, repo.ExpenseDetails, detailRecord("user-1", "expense-1", "detail-1", "旧商品", "food", "AI", 1200, 1))
+	expense, err := find(ctx, repo, "user-1", "expense-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := expense.Details()
+	if err := expense.RemoveDetail("detail-1"); err != nil {
+		t.Fatal(err)
+	}
+	amount, _ := common.NewDetailAmount(500)
+	quantity, _ := common.NewQuantity(1)
+	category, _ := common.NewCategory("daily_goods")
+	newDetail, err := domain.NewExpenseDetail("detail-2", "新商品", amount, quantity, category, domain.CategorySourceUser)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := expense.AddDetail(newDetail); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Save(ctx, expense, previous, time.Date(2026, 9, 22, 1, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+	got, err := find(ctx, repo, "user-1", "expense-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Details()) != 1 || got.Details()[0].ID() != "detail-2" || got.Details()[0].Source() != domain.RecordSourceUser {
+		t.Errorf("saved details = %+v", got.Details())
+	}
+	userID, _ := common.NewUserID("user-1")
+	month, _ := common.NewYearMonth("2026-09")
+	rows, err := repo.ListByMonth(ctx, userID, month)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].DetailID != "detail-2" || rows[0].Amount != 500 {
+		t.Errorf("monthly details = %+v", rows)
 	}
 }
 

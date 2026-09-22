@@ -23,8 +23,11 @@ type ReceiptImageURLPresigner interface {
 type ExpenseRepository interface {
 	ExpenseFinder
 	FindByMonth(ctx context.Context, userID common.UserID, month domain.YearMonth) ([]domain.Expense, error)
-	Save(ctx context.Context, expense domain.Expense, updatedAt time.Time) error
+	Save(ctx context.Context, expense domain.Expense, previousDetails []domain.ExpenseDetail, updatedAt time.Time) error
 }
+
+// IDGenerator は追加した支出明細の識別子を採番する。
+type IDGenerator interface{ NewID() (string, error) }
 
 // MonthlyExpenseItem は月別支出画面へ返す、支出明細に複製された読み取りモデル。
 type MonthlyExpenseItem struct {

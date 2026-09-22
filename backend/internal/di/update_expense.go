@@ -9,6 +9,8 @@ import (
 	libdynamodb "snap_kakeibo/backend/internal/library/dynamodb"
 	"snap_kakeibo/backend/internal/library/logger"
 	"snap_kakeibo/backend/internal/library/oswrapper"
+	"snap_kakeibo/backend/internal/library/timewrapper"
+	"snap_kakeibo/backend/internal/library/ulid"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"go.uber.org/dig"
@@ -31,6 +33,7 @@ func NewLedgerWriteContainer(cfg settings.Config, awsCfg aws.Config, osw oswrapp
 			return infrastructure.DynamoDBMonthlySummaryRepository{Table: client.Table(cfg.MonthlySummariesTable)}
 		},
 		application.NewRebuildMonthlySummaryUsecase,
+		func(clock timewrapper.Interface) application.IDGenerator { return ulid.New(clock) },
 		application.NewUpdateExpenseUsecase,
 	); err != nil {
 		return nil, err

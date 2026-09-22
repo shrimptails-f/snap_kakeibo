@@ -254,6 +254,32 @@ func (e *Expense) ChangeDetailCategory(id ExpenseDetailID, category Category) er
 	return nil
 }
 
+// AddDetail は利用者が入力した明細を支出へ追加する。
+func (e *Expense) AddDetail(detail ExpenseDetail) error {
+	if len(e.details) >= 50 || detail.ID() == "" {
+		return ErrInvalidExpenseDetail
+	}
+	if _, err := e.detail(detail.ID()); err == nil {
+		return ErrDuplicateExpenseDetail
+	}
+	detail.source, detail.categorySource, detail.edited = RecordSourceUser, CategorySourceUser, true
+	e.details = append(e.details, detail)
+	e.source, e.edited = RecordSourceUser, true
+	return nil
+}
+
+// RemoveDetail は指定した明細を削除する。操作後の件数は集約を保存する前に検証する。
+func (e *Expense) RemoveDetail(id ExpenseDetailID) error {
+	for index, detail := range e.details {
+		if detail.ID() == id {
+			e.details = append(e.details[:index:index], e.details[index+1:]...)
+			e.source, e.edited = RecordSourceUser, true
+			return nil
+		}
+	}
+	return ErrExpenseDetailNotFound
+}
+
 func (e *Expense) detail(id ExpenseDetailID) (*ExpenseDetail, error) {
 	for index := range e.details {
 		if e.details[index].id == id {

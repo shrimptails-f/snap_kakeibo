@@ -10,6 +10,7 @@ import (
 	"snap_kakeibo/backend/internal/ledger/application"
 	"snap_kakeibo/backend/internal/ledger/domain"
 	"snap_kakeibo/backend/internal/library/timewrapper"
+	"snap_kakeibo/backend/internal/library/ulid"
 )
 
 type expenseRepository struct {
@@ -25,7 +26,7 @@ func (r *expenseRepository) FindByID(context.Context, common.UserID, domain.Expe
 func (r *expenseRepository) FindByMonth(context.Context, common.UserID, domain.YearMonth) ([]domain.Expense, error) {
 	return r.monthExpenses, nil
 }
-func (r *expenseRepository) Save(_ context.Context, expense domain.Expense, at time.Time) error {
+func (r *expenseRepository) Save(_ context.Context, expense domain.Expense, _ []domain.ExpenseDetail, at time.Time) error {
 	r.saved, r.savedAt = expense, at
 	return nil
 }
@@ -42,7 +43,7 @@ func TestUpdateExpenseChangesEditableFieldsAndRebuildsBothMonths(t *testing.T) {
 	now := time.Date(2026, 9, 22, 1, 2, 3, 0, time.UTC)
 	repository := &expenseRepository{expense: sampleExpense(t)}
 	rebuild := &rebuildRecorder{}
-	usecase := application.NewUpdateExpenseUsecase(repository, rebuild, timewrapper.NewFixed(now))
+	usecase := application.NewUpdateExpenseUsecase(repository, rebuild, timewrapper.NewFixed(now), ulid.New(timewrapper.NewFixed(now)))
 	out, err := usecase.Update(context.Background(), application.UpdateExpenseInput{
 		UserID: "u1", ExpenseID: "e1", StoreName: "new store", PurchaseDate: "2026-10-01", AdjustmentAmount: -500,
 		Details: []application.UpdateExpenseDetailInput{{DetailID: "d1", Name: "oat milk", Amount: 300, Quantity: 2, Category: "daily_goods"}},
@@ -65,17 +66,38 @@ func TestUpdateExpenseChangesEditableFieldsAndRebuildsBothMonths(t *testing.T) {
 	}
 }
 
-func TestUpdateExpenseRejectsMissingOrAdditionalDetails(t *testing.T) {
+func TestUpdateExpenseRejectsInvalidDetails(t *testing.T) {
 	t.Parallel()
-	for name, details := range map[string][]application.UpdateExpenseDetailInput{"missing": {}, "different": {{DetailID: "d2", Name: "x", Amount: 1, Quantity: 1, Category: "food"}}} {
+	for name, details := range map[string][]application.UpdateExpenseDetailInput{"empty": {}, "unknown ID": {{DetailID: "d2", Name: "x", Amount: 1, Quantity: 1, Category: "food"}}} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			repository := &expenseRepository{expense: sampleExpense(t)}
-			_, err := application.NewUpdateExpenseUsecase(repository, &rebuildRecorder{}, timewrapper.NewFixed(time.Time{})).Update(context.Background(), application.UpdateExpenseInput{UserID: "u1", ExpenseID: "e1", StoreName: "store", PurchaseDate: "2026-09-18", Details: details})
+			_, err := application.NewUpdateExpenseUsecase(repository, &rebuildRecorder{}, timewrapper.NewFixed(time.Time{}), ulid.New(nil)).Update(context.Background(), application.UpdateExpenseInput{UserID: "u1", ExpenseID: "e1", StoreName: "store", PurchaseDate: "2026-09-18", Details: details})
 			if !errors.Is(err, application.ErrInvalidInput) {
 				t.Fatalf("Update() error = %v, want ErrInvalidInput", err)
 			}
 		})
+	}
+}
+
+func TestUpdateExpenseReplacesDetailAndRebuildsSummary(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 9, 22, 1, 2, 3, 0, time.UTC)
+	repository := &expenseRepository{expense: sampleExpense(t)}
+	rebuild := &rebuildRecorder{}
+	_, err := application.NewUpdateExpenseUsecase(repository, rebuild, timewrapper.NewFixed(now), ulid.New(timewrapper.NewFixed(now))).Update(context.Background(), application.UpdateExpenseInput{
+		UserID: "u1", ExpenseID: "e1", StoreName: "store", PurchaseDate: "2026-09-18",
+		Details: []application.UpdateExpenseDetailInput{{Name: "新しい品", Amount: 250, Quantity: 1, Category: "food"}},
+	})
+	if err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	details := repository.saved.Details()
+	if len(details) != 1 || details[0].ID() == "d1" || details[0].Name() != "新しい品" || details[0].Source() != domain.RecordSourceUser || details[0].CategorySource() != domain.CategorySourceUser {
+		t.Errorf("saved details = %+v", details)
+	}
+	if len(rebuild.months) != 1 || rebuild.months[0] != "2026-09" {
+		t.Errorf("rebuilt months = %v", rebuild.months)
 	}
 }
 
