@@ -12,7 +12,9 @@ snap_kakeibo は「レシートを取り込み、確認し、必要な箇所だ�
 
 ## 2. ビジュアル方針
 
-白から温かいニュートラル色を背景に、落ち着いた緑を主要色として使う。家計の注意喚起に必要な色を確保するため、緑を装飾目的で多用しない。
+白を背景に、落ち着いた緑を主要色として使う。緑は主要操作、登録完了、選択状態など「進める・できた」ことに限定し、装飾目的で多用しない。注意(warning)は橙色、失敗(danger)は赤で、いずれも一般的な意味に合わせる。
+
+通常テキストと白背景の組み合わせは WCAG AA(4.5:1)を満たす値にする。`--color-primary` の白文字は 6.4:1、`--color-warning` の白文字は 5.2:1、`--color-text-muted` は白と `--color-surface-subtle` のどちらでも 4.5:1 以上。
 
 ### デザイントークン
 
@@ -20,20 +22,20 @@ snap_kakeibo は「レシートを取り込み、確認し、必要な箇所だ�
 :root {
   color-scheme: light;
 
-  --color-bg: #f7f6f2;
+  --color-bg: #ffffff;
   --color-surface: #ffffff;
-  --color-surface-subtle: #f1f4f0;
-  --color-text: #18211b;
-  --color-text-muted: #657068;
-  --color-border: #dce2dc;
+  --color-surface-subtle: #f6f9f7;
+  --color-text: #1b1f24;
+  --color-text-muted: #667085;
+  --color-border: #e2e8f0;
 
   --color-primary: #246b4b;
   --color-primary-hover: #1c573c;
   --color-primary-subtle: #e3f0e8;
-  --color-danger: #b42318;
-  --color-danger-subtle: #fbe9e7;
-  --color-warning: #8a6500;
-  --color-warning-subtle: #fff2c2;
+  --color-danger: #a3161a;
+  --color-danger-subtle: #fee2e2;
+  --color-warning: #c2410c;
+  --color-warning-subtle: #fff1e6;
   --color-info: #285f9e;
   --color-info-subtle: #e7f0fa;
 
@@ -48,7 +50,7 @@ snap_kakeibo は「レシートを取り込み、確認し、必要な箇所だ�
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
-  --shadow-card: 0 8px 24px rgb(24 33 27 / 8%);
+  --shadow-card: 0 8px 24px rgb(27 31 36 / 8%);
 
   --page-max-width: 1120px;
   --page-padding: 16px;
@@ -118,6 +120,14 @@ snap_kakeibo は「レシートを取り込み、確認し、必要な箇所だ�
 - 一覧の行全体が遷移する場合は、遷移先と分かる表現にする
 - モバイルでは表を無理に横スクロールさせず、ラベル付きの縦配置へ切り替える
 - 空の一覧には「データがない」だけでなく、作成方法または次の操作を示す
+
+### 読み込み表示
+
+- 画面の初回 loading はレイアウトの `Suspense` が `Spinner` で受ける。画面ごとにスピナーを書かない
+- 一覧を残したまま一部だけ待つ場合(支出パネルなど)は、その領域に `Suspense` と `ErrorBoundary` を置き、失敗時は領域の中で再試行できるようにする
+- 定期取得(polling)はしない。非同期に進む状態は利用者が「再読み込み」で確かめる。再取得中は現在の内容を維持してスピナーで置き換えず、ボタンのラベルで伝える。連打を防ぐため再読み込みのあと 5 秒はボタンを無効にする
+- 操作(アップロード、保存)の進行中はボタンのラベルで伝え、連打を防ぐ
+- `Spinner` には何を待っているかが分かる `aria-label` を付ける。`prefers-reduced-motion` では静止した表示になる
 
 ### 状態表示
 

@@ -1,0 +1,46 @@
+/* ヘッダー(AppHeader、GuestLayout の簡易ヘッダー) */
+
+.header {
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.inner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  min-height: 56px;
+}
+
+.brand {
+  color: var(--color-primary);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.brand:hover {
+  color: var(--color-primary-hover);
+}
+
+.sessionBar {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+.logoutButton {
+  min-width: 104px;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-primary);
+  background: var(--color-primary-subtle);
+  cursor: pointer;
+}
+
+.logoutButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

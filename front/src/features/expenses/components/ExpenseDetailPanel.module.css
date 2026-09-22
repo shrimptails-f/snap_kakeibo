@@ -1,0 +1,36 @@
+.summary {
+  display: grid;
+  gap: var(--space-1);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.summary strong {
+  font-size: 26px;
+}
+
+.summary small {
+  color: var(--color-text-muted);
+}
+
+.details {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.details th,
+.details td {
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.details th:last-child,
+.details td:last-child {
+  text-align: right;
+}
+
+.details td small {
+  color: var(--color-text-muted);
+}

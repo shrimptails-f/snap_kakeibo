@@ -25,47 +25,26 @@
 | UI test | React Testing Library | 利用者視点の component test |
 | DOM test | jsdom | test 用ブラウザ環境 |
 | HTTP | Fetch API | バックエンドおよび Presigned URL への通信 |
-| styling | CSS | global style と responsive design |
+| routing | React Router | 画面と URL の分離、認証ガード(`src/app/router`) |
+| server state | TanStack Query | API 由来のデータの取得、cache、再取得、mutation。初回 loading は Suspense で扱う |
+| form | React Hook Form | 入力状態、送信中、validation lifecycle(`features/*/components` のフォーム) |
+| validation | Zod | フォーム入力と API レスポンスの境界検証(`*.schema.ts`、`shared/api/parseResponse`) |
+| styling | CSS Modules | component ごとの `*.module.css`。トークン・リセット・全画面共通の class は `app/styles/globals.css` |
 
 Node.js と pnpm の実行環境はリポジトリの Dev Container に合わせる。
 
 ## 3. 採用方針
 
-### React Router
-
-画面と URL を分離し、戻る・再読み込み・直接アクセスを成立させるために導入する。ルート定義は `src/app/router` に集約する。
-
-導入タイミングは、現在の単一画面から最初の画面分割を行う変更とする。
-
-### TanStack Query
-
-API 由来のサーバー状態、cache、再取得、mutation を管理するために導入する。解析依頼の polling、認証後の取得、支出詳細の取得を component 内の `useEffect` から分離する。
-
-導入後も、フォーム入力やダイアログ開閉などの UI 状態には使用しない。
-
-### React Hook Form + Zod
-
-ログイン以外の編集フォームが増える段階で導入する。
-
-- React Hook Form: 入力状態と validation lifecycle
-- Zod: 入力値と外部レスポンスの runtime validation
-
-小さなフォーム一つだけの段階で抽象化を増やすのではなく、支出編集など複数項目のフォーム実装開始を導入目安とする。
+現時点で「採用方針」のままの技術はない。新しい技術は、まずここに用途と導入条件を書いてから実装する。
 
 ## 4. 保留
 
 ### スタイリング方式
 
-現時点では CSS を継続する。CSS Modules、Tailwind CSS、CSS-in-JS の追加導入は決定していない。
+CSS Modules を採用した(§2)。Tailwind CSS や CSS-in-JS は、次のいずれかが具体化するまで再検討しない。
 
-選定時は次を比較する。
-
-- style の適用範囲を feature 内に閉じられるか
-- design token と responsive design を一貫して扱えるか
-- class の可読性と component test を損なわないか
-- build、保守、依存更新の負担
-
-方針決定までは、具体的な class 名と CSS custom properties で衝突を防ぐ。
+- design token を CSS custom properties だけで扱えなくなる(テーマ切替など)
+- 動的な style が増え、class の組み合わせで表現しきれなくなる
 
 ### UI component library
 
@@ -94,7 +73,10 @@ Redux、Zustand 等は導入しない。URL、サーバー状態、フォーム�
 - Presigned URL へのアップロードは認証付き API client と分離する
 - DTO はバックエンドの JSON 契約に合わせる
 - OpenAPI 等による型生成は、API 仕様の機械可読な正本を導入する時点で検討する
-- server state の cache と再取得は TanStack Query 導入後に集約する
+- server state の cache と再取得は TanStack Query に集約し、feature の `hooks` に `useXxx` として置く。フォーム入力やダイアログ開閉などの UI 状態には使わない
+- 取得は `useSuspenseQuery` を基本とし、初回 loading はレイアウト(`AppLayout` / `GuestLayout`)の `Suspense` が受ける。一部だけ先に出したいパネルは画面側で `Suspense` と `ErrorBoundary` を追加する
+- 想定外の失敗は画面ルートの `errorElement` で受ける。ガードより内側に置き、セッション切れは `AuthGuard` がログイン画面へ送る
+- 認証セッションは cache ではなくアプリ状態として `AuthSessionProvider` が持ち、Query には載せない
 
 ## 6. テスト戦略
 

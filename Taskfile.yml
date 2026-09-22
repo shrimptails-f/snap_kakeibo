@@ -135,6 +135,18 @@ tasks:
       - aws dynamodb list-tables
       - aws s3 ls
 
+  local:seed:
+    desc: Create the local tables / bucket / queue / JWT secret on Floci and a login user (EMAIL= PASSWORD= to override)
+    dir: backend
+    cmds:
+      - go run ./tools/localseed -email "{{.EMAIL | default "dev@example.com"}}" -password "{{.PASSWORD | default "password"}}"
+
+  local:api:
+    desc: Serve the API Lambdas locally on :8080 against Floci (run local:seed first; pair with web:dev)
+    dir: backend
+    cmds:
+      - go run ./tools/localapi
+
   doctor:
     desc: Check tool versions and ensure the container is running as dev
     cmds:

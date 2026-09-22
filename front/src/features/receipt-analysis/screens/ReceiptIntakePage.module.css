@@ -1,0 +1,206 @@
+/* 移行途中の検証画面。共通化の実績ができた部品から shared/ui へ移す。色・余白は globals.css のトークンだけを使う */
+
+.pageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.title {
+  font-size: 22px;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.reloadButton {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.reloadButton:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.uploadButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 150px;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  color: #fff;
+  background: var(--color-primary);
+  cursor: pointer;
+}
+
+.uploadButton:hover {
+  background: var(--color-primary-hover);
+}
+
+.uploadButton:has(input:disabled) {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.uploadButton:has(input:focus-visible) {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.uploadButton input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+}
+
+.notice,
+.error {
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  color: var(--color-primary);
+  background: var(--color-primary-subtle);
+}
+
+.error {
+  color: var(--color-danger);
+  background: var(--color-danger-subtle);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(360px, 1.1fr);
+  gap: var(--space-6);
+}
+
+.panel {
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: inherit;
+  background: var(--color-surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.row:disabled {
+  cursor: default;
+}
+
+.row small {
+  color: var(--color-text-muted);
+}
+
+.rowBody {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.rowBody strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 解析依頼の状態バッジ。色の役割は design_guidelines.md §5、必ずテキストを併記する */
+
+.status {
+  align-self: start;
+  padding: var(--space-1) var(--space-2);
+  border-radius: 999px;
+  color: var(--color-text);
+  background: var(--color-surface-subtle);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.statusInfo {
+  color: var(--color-info);
+  background: var(--color-info-subtle);
+}
+
+.statusPrimary {
+  color: var(--color-primary);
+  background: var(--color-primary-subtle);
+}
+
+.statusWarning {
+  color: var(--color-warning);
+  background: var(--color-warning-subtle);
+}
+
+.statusDanger {
+  color: var(--color-danger);
+  background: var(--color-danger-subtle);
+}
+
+/* 支出パネルの取得失敗 */
+
+.panelError {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+
+.panelError p {
+  color: var(--color-danger);
+}
+
+.retryButton {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+@media (max-width: 959px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 599px) {
+  .pageHeader {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}

@@ -27,7 +27,7 @@ description: snap_kakeibo リポジトリの React + TypeScript フロントエ�
 - レイヤーの責務、依存方向、命名、TypeScript / React の書き方、スタイリング、アクセシビリティ、テスト方針は上記文書を正本とし、このスキル内に複製しない。
 - 採用済み・採用方針・保留の技術区分は `front/docs/technology_stack.md` を正とする。保留の技術を独断で導入せず、採用方針の技術は文書に書かれた導入タイミングに達しているか確認してから導入する。
 - 依存を追加する場合は `front/docs/technology_stack.md` の判断基準を満たすことを確認し、`package.json` と同じ変更で同文書の状態を更新する。
-- 現在の `front/src/App.tsx` は移行途中の検証実装である。新しい処理を `App.tsx` の条件分岐へ積み増さず、`front/docs/architecture.md` の移行方針に沿って変更範囲を feature / shared へ分離する。
+- `front/src/features/receipt-analysis/screens/ReceiptIntakePage.tsx` は移行途中の検証実装である。新しい処理をこの画面へ積み増さず、`front/docs/architecture.md` の移行方針に沿って変更範囲を feature / shared へ分離する。
 - 変更対象と同じ feature の `screens`、`components`、`hooks`、`api`、`types`、`lib`、`index.ts` と、それを組み立てる `app` を横断して影響を確認する。
 - API パス、DTO、認証方式、環境変数（`VITE_*`）を変更する場合は、front に加えて backend、infra、tests、docs を検索し、契約の整合を保つ。
 - 利用者から見える振る舞いや画面項目を変える場合は、`docs/screens` の画面仕様を同じ変更で更新する。画面仕様にない操作や項目をデザインだけで追加しない。
