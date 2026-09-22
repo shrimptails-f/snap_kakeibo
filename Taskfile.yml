@@ -65,7 +65,7 @@ tasks:
     desc: Diff all stacks against the deployed state
     dir: infra
     cmds:
-      - '{{.AWS}} cdk diff --all -c stage={{.STAGE}} {{.CLI_ARGS}}'
+      - '{{.AWS}} cdk diff -c stage={{.STAGE}} {{.CLI_ARGS}}'
 
   infra:parameters:
     desc: Create missing SSM parameters for the stage (never overwrites)
