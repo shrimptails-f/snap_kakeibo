@@ -27,6 +27,7 @@ src/
 │   ├── lib/
 │   ├── types/
 │   └── ui/
+│       └── Button/
 ├── test/
 └── main.tsx
 ```

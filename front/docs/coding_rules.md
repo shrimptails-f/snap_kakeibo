@@ -70,6 +70,7 @@ screen はルートと feature の接続に留める。通信、状態判定、�
 - import は外部パッケージ、絶対パス、相対パスの順にまとめる
 - feature 内部は相対 import、feature 外からは公開 `index.ts` を使う
 - `shared/index.ts` のような全体 barrel は作らない
+- `shared/ui` は部品ごとにディレクトリを切り(`shared/ui/Button/`)、component・`*.module.css`・test を同じディレクトリに置く。外からは `@/shared/ui/Button` のようにディレクトリの `index.ts` を経由する
 - 型だけの import は `import type` を使う
 - 深い相対パスを避けるため、`@/` を `src/` に割り当てる
 - 循環依存を避けるため、feature 内部から自身の `index.ts` を経由しない
