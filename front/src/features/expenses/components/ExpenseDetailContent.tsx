@@ -17,7 +17,7 @@ import styles from './ExpenseDetailContent.module.css'
 
 const CATEGORIES = ['food', 'daily_goods', 'medical', 'transport', 'utilities', 'entertainment', 'social', 'clothing', 'education', 'other', 'unknown'] as const
 
-type LocationState = { from?: string; backLabel?: string }
+type LocationState = { from?: string; backLabel?: string; detailId?: string; scrollY?: number }
 type Props = { expenseId: string }
 
 function defaultValues(data: GetExpenseResponse): UpdateExpenseRequest {
@@ -101,7 +101,7 @@ export function ExpenseDetailContent({ expenseId }: Props) {
 
   return (
     <>
-      <Link className={styles.back} to={backPath}>&lt; {backLabel}</Link>
+      <Link className={styles.back} to={backPath} state={state?.detailId ? { restoreDetailId: state.detailId, scrollY: state.scrollY } : undefined}>&lt; {backLabel}</Link>
       <h1>{isEditing ? '支出を編集' : '支出詳細'}</h1>
       {notice && <div className={styles.success} role="status" tabIndex={-1} ref={noticeRef}>{notice}</div>}
       {isRefreshFailed && <div className={styles.warning} role="alert"><p>保存は完了しましたが、最新の表示を取得できませんでした。</p><Button variant="secondary" onClick={reloadLatest}>最新の内容を読み込む</Button></div>}

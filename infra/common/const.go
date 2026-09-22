@@ -53,7 +53,7 @@ const (
 
 // FunctionNames は Lambda の一覧。backend/cmd/{name} と 1:1 で、関数ごとに ECR リポジトリと
 // デプロイ中のイメージタグを持つ SSM パラメータができる。関数を足すときはここにも追加する
-var FunctionNames = []string{"hello", "auth-login", "auth-refresh", "auth-logout", "auth-check", "upload", "analyze-receipt", "retry-analysis", "list-analysis-requests", "get-expense", "update-expense", "rebuild-monthly-summary"}
+var FunctionNames = []string{"hello", "auth-login", "auth-refresh", "auth-logout", "auth-check", "upload", "analyze-receipt", "retry-analysis", "list-analysis-requests", "get-expense", "update-expense", "rebuild-monthly-summary", "get-monthly-summaries", "list-month-expenses"}
 
 // ImageTagParameterName は関数のデプロイ中イメージタグを持つ SSM パラメータ名(stage 抜き)。
 // image:push が更新し、App スタックが deploy 時に解決する

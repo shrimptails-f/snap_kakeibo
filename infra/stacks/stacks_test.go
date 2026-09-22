@@ -198,6 +198,10 @@ func TestStorageStackResources(t *testing.T) {
 	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{"RouteKey": "GET /api/expenses/{expenseId}"})
 	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{"RouteKey": "PATCH /api/expenses/{expenseId}"})
 	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{"RouteKey": "POST /api/monthly-summaries/{month}/rebuild"})
+	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{"RouteKey": "GET /api/monthly-summaries"})
+	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{"RouteKey": "GET /api/months/{month}/expenses"})
+	app.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]any{"FunctionName": "dev-snap-kakeibo-get-monthly-summaries"})
+	app.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]any{"FunctionName": "dev-snap-kakeibo-list-month-expenses"})
 	app.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]any{
 		"FunctionName": "dev-snap-kakeibo-update-expense",
 		"Environment": map[string]any{"Variables": assertions.Match_ObjectLike(&map[string]any{

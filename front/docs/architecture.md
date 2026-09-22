@@ -172,7 +172,7 @@ shared HTTP client
 
 1. 純粋な型・表示変換・HTTP クライアントを分離する(完了: `shared/api`、`shared/auth`、`shared/lib`)
 2. 認証と解析依頼を feature に分離する(完了: 認証は `features/auth`、アップロードは `/upload`、解析履歴は `/analysis-requests`、支出詳細・編集は `features/expenses` の `/expenses/:expenseId`。解析履歴の月・状態絞り込みとページネーションは後続実装)
-3. Router とページ共通レイアウトを導入する(完了: `app/router`、`app/layouts`、`/upload`、`/analysis-requests`、`/expenses/:expenseId`。`/months/:yearMonth` は画面の実装時に追加する)
+3. Router とページ共通レイアウトを導入する(完了: `app/router`、`app/layouts`、`/upload`、`/analysis-requests`、`/expenses/:expenseId`、`/months/:yearMonth`)
 4. API データ取得をサーバー状態管理層へ移す(完了: TanStack Query。取得は feature の `hooks`、初回 loading はレイアウトの `Suspense`)
 5. 共通化の実績ができた UI だけを `shared/ui` へ移す(完了: `Spinner`、`ErrorBoundary`、`Button`。TextField や状態バッジなどは画面仕様の確定後に判断する)
 

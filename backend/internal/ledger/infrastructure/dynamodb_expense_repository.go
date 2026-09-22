@@ -43,6 +43,8 @@ type expenseDetailItem struct {
 	Quantity       int64  `dynamodbav:"quantity"`
 	Source         string `dynamodbav:"source"`
 	IsEdited       bool   `dynamodbav:"is_edited"`
+	StoreName      string `dynamodbav:"store_name"`
+	PurchaseDate   string `dynamodbav:"purchase_date"`
 }
 
 // DynamoDBExpenseRepository は expenses と expense_details から支出集約を復元する。
@@ -54,6 +56,58 @@ type DynamoDBExpenseRepository struct {
 
 var _ application.ExpenseFinder = DynamoDBExpenseRepository{}
 var _ application.ExpenseRepository = DynamoDBExpenseRepository{}
+var _ application.MonthlyExpenseLister = DynamoDBExpenseRepository{}
+
+// ListByMonth は月別 GSI を内部で最後まで読み、GSI1SK の昇順(金額降順)を保って返す。
+func (r DynamoDBExpenseRepository) ListByMonth(ctx context.Context, userID common.UserID, month domain.YearMonth) ([]application.MonthlyExpenseItem, error) {
+	items := make([]application.MonthlyExpenseItem, 0)
+	var cursor map[string]ddbtypes.AttributeValue
+	for {
+		out, err := r.ExpenseDetails.Query(ctx, &awssdk.QueryInput{
+			IndexName: aws.String("detail_month_amount_index"), KeyConditionExpression: aws.String("GSI1PK = :pk"),
+			ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{":pk": stringValue(UserMonthPK(userID.String(), month.String()))},
+			ExclusiveStartKey:         cursor,
+		})
+		if err != nil {
+			return nil, err
+		}
+		var records []expenseDetailItem
+		if err := attributevalue.UnmarshalListOfMaps(out.Items, &records); err != nil {
+			return nil, fmt.Errorf("unmarshal monthly expense details: %w", err)
+		}
+		for _, record := range records {
+			detailID, ok := domain.NewExpenseDetailID(record.DetailID)
+			if !ok {
+				return nil, fmt.Errorf("restore monthly expense detail: invalid detail ID")
+			}
+			expenseID, ok := common.NewExpenseID(record.ExpenseID)
+			if !ok {
+				return nil, fmt.Errorf("restore monthly expense detail: invalid expense ID")
+			}
+			category, err := common.NewCategory(record.Category)
+			if err != nil {
+				return nil, fmt.Errorf("restore monthly expense detail category: %w", err)
+			}
+			source, err := domain.NewRecordSource(record.Source)
+			if err != nil {
+				return nil, fmt.Errorf("restore monthly expense detail source: %w", err)
+			}
+			if _, err := common.NewPurchaseDate(record.PurchaseDate); err != nil {
+				return nil, fmt.Errorf("restore monthly expense purchase date: %w", err)
+			}
+			items = append(items, application.MonthlyExpenseItem{
+				DetailID: detailID, ExpenseID: expenseID, Name: record.Name, Category: category,
+				Amount: record.Amount, Quantity: record.Quantity, Source: source, IsEdited: record.IsEdited,
+				StoreName: record.StoreName, PurchaseDate: record.PurchaseDate,
+			})
+		}
+		if len(out.LastEvaluatedKey) == 0 {
+			break
+		}
+		cursor = out.LastEvaluatedKey
+	}
+	return items, nil
+}
 
 // FindByID は利用者と expense_id のキーで支出を GetItem し、支出のパーティション(USER#{user_id}#EXPENSE#{expense_id})を
 // Query して支出明細を detail_id の昇順(ULID の採番順)で集約へ復元する。
