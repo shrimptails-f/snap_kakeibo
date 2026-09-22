@@ -12,7 +12,7 @@ dev 環境では次を使用する。
 
 | 項目 | 現在値 |
 | --- | --- |
-| モデル名 | `gpt-5.6-luna` |
+| モデル名 | `gpt-5.6-terra` |
 | `reasoning.effort` | `medium` |
 | API | Responses API |
 | 画像 | 長辺2048px以下のJPEG、`detail: high` |
@@ -26,8 +26,8 @@ dev 環境では次を使用する。
 
 | モデル | APIモデル名 | 対応effort | 比較開始時のeffort | 標準料金（入力 / キャッシュ入力 / 出力、100万トークンあたり） | レシート解析精度の期待値 | 備考 |
 | --- | --- | --- | --- | --- | --- | --- |
-| GPT-5.6 Luna | `gpt-5.6-luna` | `none` / `low` / `medium` / `high` / `xhigh` / `max` | `medium` | $0.20 / $0.02 / $1.20 | **基準**。鮮明で単純なレシートの定型抽出には十分と期待する。かすれ、複雑な割引、複数税率、長い明細で上位モデルとの差が出る可能性がある | 現在値。高頻度・コスト重視向け。旧GPT-5系のnano相当という位置付け |
-| GPT-5.6 Terra | `gpt-5.6-terra` | `none` / `low` / `medium` / `high` / `xhigh` / `max` | `medium` | $2.00 / $0.20 / $12.00 | **基準より高い期待**。レイアウト解釈、商品行と小計・税・割引行の区別、カテゴリ分類の改善候補 | 品質とコストの均衡候補。Lunaに対し入力10倍、出力10倍の単価 |
+| GPT-5.6 Luna | `gpt-5.6-luna` | `none` / `low` / `medium` / `high` / `xhigh` / `max` | `medium` | $0.20 / $0.02 / $1.20 | **低コスト側の比較基準**。鮮明で単純なレシートの定型抽出には十分と期待する。かすれ、複雑な割引、複数税率、長い明細で上位モデルとの差が出る可能性がある | 以前の設定。高頻度・コスト重視向け。旧GPT-5系のnano相当という位置付け |
+| GPT-5.6 Terra | `gpt-5.6-terra` | `none` / `low` / `medium` / `high` / `xhigh` / `max` | `medium` | $2.00 / $0.20 / $12.00 | **現在の品質基準**。Lunaよりレイアウト解釈、商品行と小計・税・割引行の区別、カテゴリ分類の改善を期待する | 現在値。品質とコストの均衡候補。Lunaに対し入力10倍、出力10倍の単価 |
 | GPT-5.6 Sol | `gpt-5.6-sol` | `none` / `low` / `medium` / `high` / `xhigh` / `max` | `medium` | $4.00 / $0.40 / $20.00 | **高い期待**。判別しにくい行、曖昧な店舗名、複雑な明細の評価上限を確認する候補 | GPT-5.6のフラッグシップ。`gpt-5.6` はこのモデルへのエイリアス。公式ページ記載の価格は少なくとも2026-11-21までのプロモーション価格 |
 | GPT-6 Astra | `gpt-6-astra` | `low` / `medium` / `high` / `xhigh` / `max` | `low` と `medium` | $10.00 / $1.00 / $50.00 | **最も高い期待**。難読画像や複雑な判断に対する上限モデル。ただし、OCR精度が単価に比例する保証はない | 公式上の最上位モデル。`none` は非対応。通常運用より、失敗例の診断や比較評価の上限として先に試す |
 
@@ -90,12 +90,13 @@ effortを上げても、ぼけ、白飛び、文字の画素不足など入力�
 | コスト | 1枚あたりと成功1件あたりの入力・出力トークンおよびUSD |
 | レイテンシ | API呼び出しのp50 / p95と120秒タイムアウト率 |
 
-現在は `gpt-5.6-luna` / `medium`を基準とする。まずLunaの実測値を取り、品質目標に届かなければTerra、Sol、Astraの順に同じ評価セットで比較する。最終的には、品質目標を満たす中で最も低コストかつ低レイテンシの組み合わせを採用する。
+現在は `gpt-5.6-terra` / `medium`を品質基準とする。同じ評価セットで以前のLunaと比較し、品質目標を満たすか確認する。Terraで品質目標に届かなければSol、Astraの順に比較し、十分な余裕を持って目標を満たす場合はTerraの`low`も試す。最終的には、品質目標を満たす中で最も低コストかつ低レイテンシの組み合わせを採用する。
 
 ## 公式資料
 
 - [モデル比較](https://developers.openai.com/api/docs/models/compare)
 - [GPT-5.6 Luna](https://developers.openai.com/api/docs/models/gpt-5.6-luna)
+- [GPT-5.6 Terra](https://developers.openai.com/api/docs/models/gpt-5.6-terra)
 - [モデル選定](https://developers.openai.com/api/docs/guides/model-selection)
 - [料金](https://developers.openai.com/api/docs/pricing)
 - [画像入力トークン数・コスト計算ツール](https://developers.openai.com/api/docs/guides/image-cost-calculator)

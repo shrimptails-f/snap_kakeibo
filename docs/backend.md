@@ -187,7 +187,7 @@ expenses は作成済みだがカテゴリだけ未反映、という中間状�
 ### 入力
 
 ```text
-model                = 環境変数 OPENAI_MODEL の値(初期値 gpt-5.6-luna)
+model                = 環境変数 OPENAI_MODEL の値(初期値 gpt-5.6-terra)
 reasoning.effort     = 環境変数 OPENAI_REASONING_EFFORT の値(初期値 medium)
 store                = false(レシートを OpenAI 側に保存させない)
 max_output_tokens    = 4096
@@ -293,7 +293,7 @@ unknown
 Analyze Lambda の環境変数として設定する。変更時は app スタックを再デプロイする。
 
 ```text
-OPENAI_MODEL             初期値 gpt-5.6-luna
+OPENAI_MODEL             初期値 gpt-5.6-terra
 OPENAI_REASONING_EFFORT  初期値 medium
 ```
 
