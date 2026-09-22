@@ -187,8 +187,8 @@ expenses は作成済みだがカテゴリだけ未反映、という中間状�
 ### 入力
 
 ```text
-model                = 環境変数 OPENAI_MODEL の値(初期値 gpt-5-mini)
-reasoning.effort     = 環境変数 OPENAI_REASONING_EFFORT の値(初期値 low)
+model                = 環境変数 OPENAI_MODEL の値(初期値 gpt-5.6-luna)
+reasoning.effort     = 環境変数 OPENAI_REASONING_EFFORT の値(初期値 medium)
 store                = false(レシートを OpenAI 側に保存させない)
 max_output_tokens    = 4096
 text.format          = json_schema(strict)
@@ -291,11 +291,11 @@ unknown
 Analyze Lambda の環境変数として設定する。変更時は app スタックを再デプロイする。
 
 ```text
-OPENAI_MODEL             初期値 gpt-5-mini
-OPENAI_REASONING_EFFORT  初期値 low
+OPENAI_MODEL             初期値 gpt-5.6-luna
+OPENAI_REASONING_EFFORT  初期値 medium
 ```
 
-思考トークンは出力トークンとして課金されるため `low` か `minimal` にする。レスポンスの `usage.output_tokens_details.reasoning_tokens` と `usage.input_tokens` をログに出し、実測でどちらにするか決める。
+レスポンスの `usage.output_tokens_details.reasoning_tokens` と `usage.input_tokens` をログに出し、精度・レイテンシ・コストを実測して reasoning effort を調整する。
 
 ### レスポンスの判定
 

@@ -35,4 +35,12 @@ describe('analysisRequestStatus', () => {
   ] as const)('%s は %s(%s)', (status, label, tone) => {
     expect(analysisRequestStatus(item({ status }), now)).toEqual({ label, tone })
   })
+
+  it('ANALYZING は更新から30分を過ぎたら停滞にする', () => {
+    expect(analysisRequestStatus(item({ status: 'ANALYZING', updated_at: '2026-09-17T23:39:59Z' }), now)).toEqual({
+      label: '停滞',
+      tone: 'warning',
+      isStalled: true,
+    })
+  })
 })

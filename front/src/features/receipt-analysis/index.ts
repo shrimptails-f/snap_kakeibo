@@ -1,1 +1,2 @@
-export { ReceiptIntakePage } from './screens/ReceiptIntakePage'
+export { AnalysisRequestsPage } from './screens/AnalysisRequestsPage'
+export { UploadPage } from './screens/UploadPage'

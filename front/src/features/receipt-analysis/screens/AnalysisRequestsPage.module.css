@@ -1,0 +1,26 @@
+.page { display: grid; gap: var(--space-8); }
+.pageHeader, .historyHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
+.pageHeader { padding-bottom: var(--space-4); border-bottom: 1px solid var(--color-border); }
+.pageHeader p, .historyHeader p, .state p, .identity time { color: var(--color-text-muted); font-size: 14px; }
+.uploadLink { min-height: 44px; display: inline-flex; align-items: center; padding: var(--space-2) var(--space-4); border-radius: var(--radius-sm); color: white; background: var(--color-primary); font-weight: 700; text-decoration: none; }
+.history { padding: var(--space-6); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.history h2 { margin: 0; font-size: 18px; }
+.notice, .empty { margin-top: var(--space-4); padding: var(--space-4); background: var(--color-primary-subtle); }
+.errorNotice { margin-top: var(--space-4); padding: var(--space-4); color: var(--color-danger); background: var(--color-danger-subtle); }
+.empty { display: grid; justify-items: start; gap: var(--space-3); }
+.empty a, .actions a { min-height: 44px; display: inline-flex; align-items: center; color: var(--color-primary); font-weight: 700; }
+.list { margin: var(--space-4) 0 0; padding: 0; border-top: 1px solid var(--color-border); list-style: none; }
+.row { display: grid; grid-template-columns: minmax(170px, 1fr) minmax(220px, 1.4fr) minmax(150px, .8fr); gap: var(--space-4); align-items: center; padding: var(--space-4) 0; border-bottom: 1px solid var(--color-border); }
+.identity, .state, .actions { min-width: 0; display: grid; justify-items: start; gap: var(--space-1); }
+.identity strong, .state p { overflow-wrap: anywhere; }
+.statusNeutral, .statusInfo, .statusPrimary, .statusWarning, .statusDanger { display: inline-flex; padding: 2px 8px; border-radius: 999px; font-size: 14px; font-weight: 700; }
+.statusNeutral { background: var(--color-surface-subtle); }
+.statusInfo { color: var(--color-info); background: var(--color-info-subtle); }
+.statusPrimary { color: var(--color-primary); background: var(--color-primary-subtle); }
+.statusWarning { color: var(--color-warning); background: var(--color-warning-subtle); }
+.statusDanger { color: var(--color-danger); background: var(--color-danger-subtle); }
+@media (max-width: 720px) {
+  .pageHeader { display: grid; }
+  .history { padding: var(--space-4); }
+  .row { grid-template-columns: 1fr; gap: var(--space-3); }
+}

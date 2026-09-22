@@ -242,8 +242,8 @@ DynamoDB TransactWriteItems
 
 | 項目 | 値 | 理由 |
 | --- | --- | --- |
-| モデル | 環境変数 `OPENAI_MODEL`(初期値 `gpt-5-mini`) | 非機密値としてCDKのstage設定で管理する。精度が足りなければ `gpt-5` |
-| reasoning.effort | 環境変数 `OPENAI_REASONING_EFFORT`(初期値 `low`) | 思考トークンは出力扱いで課金されるため抑える。読み取りタスクは `minimal` でも成立する |
+| モデル | 環境変数 `OPENAI_MODEL`(初期値 `gpt-5.6-luna`) | 非機密値としてCDKのstage設定で管理する |
+| reasoning.effort | 環境変数 `OPENAI_REASONING_EFFORT`(初期値 `medium`) | 精度・レイテンシ・思考トークン数をログで実測して調整する |
 | 画像 | 長辺 2048px を上限に縮小した JPEG(拡大はしない)を Base64 の data URL で渡す。上限は環境変数 `IMAGE_MAX_EDGE` で変更可 | パッチ方式のモデルは原寸でトークンを数えるため、縮小の効果が大きい。S3 の URL を渡すと Presigned URL の発行と公開範囲の管理が要る。細長いレシートは縮小で文字が潰れやすいので、実画像で読み取り精度を評価してから値を決める |
 | input_image.detail | `high` を明示 | `auto` に任せない。tile 方式のモデルで `low` に落ちると品目が読めない |
 | 出力 | `text.format = json_schema`、`strict = true`、`max_output_tokens = 4096` | 自由文を禁止する。それでも refusal / incomplete は返り得るので、判定は `docs/backend.md` の「レスポンスの判定」に従う |

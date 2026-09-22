@@ -64,7 +64,7 @@ func Dev() Config {
 				InfraLastSuccessfulCommit:    common.InfraLastSuccessfulCommitParameterName.Dev(),
 			},
 		},
-		OpenAI: OpenAIConfig{Model: "gpt-5-mini", ReasoningEffort: "low"},
+		OpenAI: OpenAIConfig{Model: "gpt-5.6-luna", ReasoningEffort: "medium"},
 		Timeouts: Timeouts{
 			Analyze: awscdk.Duration_Minutes(jsii.Number(3)),
 			API:     awscdk.Duration_Seconds(jsii.Number(29)),

@@ -13,6 +13,9 @@
 }
 
 .brand {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
   color: var(--color-primary);
   font-weight: 700;
   text-decoration: none;
@@ -21,6 +24,32 @@
 
 .brand:hover {
   color: var(--color-primary-hover);
+}
+
+.navigation {
+  display: flex;
+  align-self: stretch;
+  gap: var(--space-1);
+}
+
+.navLink,
+.activeNavLink {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  color: var(--color-text-muted);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.activeNavLink {
+  color: var(--color-primary);
+  box-shadow: inset 0 -3px var(--color-primary);
+}
+
+.navLink:hover {
+  color: var(--color-primary);
 }
 
 .sessionBar {
@@ -32,4 +61,17 @@
 /* 「ログアウト」と「ログアウト中...」でヘッダーの幅が動かないようにする。見た目は shared/ui/Button */
 .logoutButton {
   min-width: 104px;
+}
+
+@media (max-width: 600px) {
+  .inner {
+    flex-wrap: wrap;
+    gap: 0 var(--space-3);
+    padding-block: var(--space-2);
+  }
+
+  .brand { order: 1; }
+  .sessionBar { order: 2; }
+  .navigation { order: 3; width: 100%; }
+  .navLink, .activeNavLink { flex: 1; justify-content: center; }
 }

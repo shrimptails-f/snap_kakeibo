@@ -1,0 +1,6 @@
+.backdrop { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: var(--space-4); background: rgb(16 36 30 / 68%); }
+.dialog { width: min(440px, 100%); display: grid; gap: var(--space-3); padding: var(--space-6); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-card); }
+.dialog h2 { font-size: 20px; }
+.fileName { overflow-wrap: anywhere; font-weight: 700; }
+.actions { display: flex; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-3); }
+@media (max-width: 480px) { .actions { display: grid; grid-template-columns: 1fr 1fr; } }

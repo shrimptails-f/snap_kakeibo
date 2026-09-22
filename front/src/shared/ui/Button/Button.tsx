@@ -1,10 +1,10 @@
-import type { ButtonHTMLAttributes } from 'react'
+import type { ComponentPropsWithRef } from 'react'
 import styles from './Button.module.css'
 
 // design_guidelines.md §5 の役割。primary は画面または領域内で原則 1 つ
 export type ButtonVariant = 'primary' | 'secondary' | 'danger'
 
-type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
+type Props = ComponentPropsWithRef<'button'> & {
   variant: ButtonVariant
 }
 
