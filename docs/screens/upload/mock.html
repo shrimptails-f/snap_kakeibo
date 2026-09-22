@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>レシート取り込みモック | snap_kakeibo</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --color-bg:#fff; --color-surface:#fff; --color-surface-subtle:#f6f9f7;
+      --color-text:#1b1f24; --color-text-muted:#667085; --color-border:#e2e8f0;
+      --color-primary:#246b4b; --color-primary-hover:#1c573c; --color-primary-subtle:#e3f0e8;
+      --color-danger:#a3161a; --color-danger-subtle:#fee2e2;
+      --color-warning:#c2410c; --color-warning-subtle:#fff1e6;
+      --color-info:#285f9e; --color-info-subtle:#e7f0fa;
+      --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-6:24px; --space-8:32px; --space-12:48px;
+      --radius-sm:6px; --radius-md:10px; --radius-lg:16px; --shadow-card:0 8px 24px rgb(27 31 36 / 8%);
+      --page-max-width:1120px; --page-padding:16px;
+    }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; color:var(--color-text); background:var(--color-bg); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP","Hiragino Kaku Gothic ProN",Meiryo,sans-serif; font-size:16px; line-height:1.6; }
+    button,input { font:inherit; } button,a { -webkit-tap-highlight-color:transparent; }
+    button:focus-visible,a:focus-visible,input:focus-visible,summary:focus-visible { outline:3px solid rgb(36 107 75 / 28%); outline-offset:2px; }
+    [hidden] { display:none !important; }
+    .header { border-bottom:1px solid var(--color-border); }
+    .header__inner { width:min(100% - 32px,var(--page-max-width)); min-height:64px; margin:auto; display:flex; align-items:center; justify-content:space-between; gap:16px; }
+    .brand { color:var(--color-primary); font-weight:800; letter-spacing:-.02em; }
+    .sample-label,.note,.help { color:var(--color-text-muted); font-size:14px; }
+    .page { width:min(100% - (var(--page-padding) * 2),var(--page-max-width)); margin:auto; padding:32px 0 64px; }
+    .page-head { display:flex; align-items:end; justify-content:space-between; gap:24px; margin-bottom:24px; }
+    h1,h2 { margin:0; line-height:1.3; } h1 { font-size:clamp(26px,4vw,34px); letter-spacing:-.03em; } h2 { font-size:20px; }
+    p { margin:0; } .page-note { max-width:650px; margin-top:6px; }
+    .link { display:inline-flex; min-height:44px; align-items:center; color:var(--color-primary); font-weight:700; text-underline-offset:3px; }
+    .btn { display:inline-flex; min-height:44px; align-items:center; justify-content:center; padding:8px 18px; border:1px solid var(--color-border); border-radius:var(--radius-sm); background:#fff; color:var(--color-text); font-weight:700; cursor:pointer; text-decoration:none; }
+    .btn:hover:not(:disabled) { background:var(--color-surface-subtle); }
+    .btn--primary { border-color:var(--color-primary); background:var(--color-primary); color:#fff; }
+    .btn--primary:hover:not(:disabled) { background:var(--color-primary-hover); }
+    .btn:disabled { cursor:not-allowed; opacity:.52; }
+    .btn[aria-disabled="true"] { cursor:not-allowed; opacity:.52; pointer-events:none; }
+    .file-input:focus-visible + .file-focus-proxy { outline:3px solid rgb(36 107 75 / 28%); outline-offset:2px; }
+    .btn--link { padding-inline:8px; border-color:transparent; color:var(--color-primary); background:transparent; }
+    .card { padding:24px; border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface); }
+    .card + .card { margin-top:24px; }
+    .notice { margin-bottom:20px; padding:12px 16px; border:1px solid #d9a48e; border-radius:var(--radius-sm); background:var(--color-warning-subtle); color:#84310e; }
+    .notice strong { display:block; }
+    .intake-head,.batch-head { display:flex; align-items:start; justify-content:space-between; gap:24px; }
+    .actions { display:flex; flex-wrap:wrap; gap:12px; }
+    .intake-actions { margin-top:20px; }
+    .file-input { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
+    .guidance { margin-top:18px; padding-top:18px; border-top:1px solid var(--color-border); }
+    .guidance p + p { margin-top:4px; }
+    .section-title { display:flex; flex-wrap:wrap; align-items:baseline; gap:8px 14px; }
+    .count { color:var(--color-text-muted); font-weight:700; }
+    .rows { margin-top:18px; border-top:1px solid var(--color-border); }
+    .receipt-row { display:grid; grid-template-columns:112px minmax(0,1fr) minmax(180px,auto); gap:20px; align-items:center; padding:18px 0; border-bottom:1px solid var(--color-border); }
+    .preview-button { display:block; width:112px; height:112px; padding:0; overflow:hidden; border:1px solid var(--color-border); border-radius:var(--radius-sm); background:var(--color-surface-subtle); cursor:zoom-in; }
+    .preview-button img { display:block; width:100%; height:100%; object-fit:contain; }
+    .file-name { font-weight:800; overflow-wrap:anywhere; }
+    .status { display:flex; gap:7px; align-items:baseline; margin-top:5px; font-weight:800; }
+    .status::before { flex:none; width:20px; text-align:center; }
+    .status--selected { color:var(--color-primary); } .status--selected::before { content:"○"; }
+    .status--uploading,.status--info { color:var(--color-info); } .status--uploading::before { content:"↑"; } .status--info::before { content:"…"; }
+    .status--success { color:var(--color-primary); } .status--success::before { content:"✓"; }
+    .status--warning { color:var(--color-warning); } .status--warning::before { content:"!"; }
+    .status--failed { color:var(--color-danger); } .status--failed::before { content:"×"; }
+    .status--neutral::before { content:"－"; color:var(--color-text-muted); }
+    .reason { margin:3px 0 0 27px; color:var(--color-text-muted); font-size:14px; }
+    .row-actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:8px; }
+    .row-actions .link { padding-inline:4px; }
+    .submit-area { display:flex; align-items:center; justify-content:flex-end; gap:16px; margin-top:20px; }
+    .summary { margin-top:6px; color:var(--color-text-muted); font-size:15px; font-weight:600; }
+    .checked { margin-top:3px; color:var(--color-text-muted); font-size:14px; font-variant-numeric:tabular-nums; }
+    .live-notice { margin-top:16px; padding:11px 14px; border-radius:var(--radius-sm); background:var(--color-primary-subtle); color:#15452f; }
+    .live-notice.error { background:var(--color-danger-subtle); color:var(--color-danger); }
+    .batch-actions { text-align:right; }
+    .batch-actions .checked { margin-bottom:6px; }
+    .empty { padding:46px 16px 36px; text-align:center; border-top:1px solid var(--color-border); margin-top:18px; }
+    .empty strong { display:block; font-size:18px; } .empty p { margin:5px 0 14px; color:var(--color-text-muted); }
+    .demo { margin-top:20px; text-align:right; }
+    .demo summary { display:inline-flex; min-height:44px; align-items:center; color:var(--color-text-muted); font-size:14px; cursor:pointer; }
+    .demo-controls { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:8px; padding-top:8px; }
+    .demo-controls button { min-height:44px; padding:7px 12px; border:1px solid #d9a48e; border-radius:999px; background:var(--color-warning-subtle); color:#84310e; font-weight:700; cursor:pointer; }
+    dialog { padding:0; border:0; border-radius:var(--radius-md); color:var(--color-text); box-shadow:0 24px 80px rgb(27 31 36 / 28%); }
+    dialog::backdrop { background:rgb(10 20 15 / 58%); }
+    .dialog-body { width:min(calc(100vw - 32px),470px); padding:26px; }
+    .dialog-body p { margin-top:9px; color:var(--color-text-muted); }
+    .dialog-file { font-weight:800; color:var(--color-text) !important; overflow-wrap:anywhere; }
+    .dialog-actions { display:flex; justify-content:flex-end; gap:12px; margin-top:22px; }
+    .image-dialog { width:min(calc(100vw - 24px),800px); height:min(92vh,900px); background:#253029; }
+    .image-dialog__bar { min-height:62px; padding:8px 12px; display:flex; align-items:center; gap:10px; background:#fff; }
+    .image-dialog__bar strong { margin-right:auto; overflow-wrap:anywhere; }
+    .image-stage { height:calc(100% - 62px); padding:24px; overflow:auto; display:grid; place-items:center; }
+    .image-stage img { display:block; max-width:100%; max-height:100%; object-fit:contain; background:#fff; }
+    @media (min-width:960px) { :root { --page-padding:24px; } }
+    @media (max-width:959px) {
+      .receipt-row { grid-template-columns:96px minmax(0,1fr); }
+      .preview-button { width:96px; height:104px; }
+      .row-actions { grid-column:2; justify-content:flex-start; }
+    }
+    @media (max-width:560px) {
+      .header__inner { min-height:56px; } .sample-label { display:none; }
+      .page { padding-top:24px; } .page-head,.intake-head,.batch-head { display:block; }
+      .page-head .link { margin-top:10px; } .card { padding:16px; }
+      .actions { display:grid; grid-template-columns:1fr; gap:8px; }
+      .actions .btn { width:100%; }
+      .receipt-row { display:grid; grid-template-columns:84px minmax(0,1fr); gap:12px; align-items:start; }
+      .preview-button { width:84px; height:96px; }
+      .row-actions { grid-column:1 / -1; justify-content:flex-start; padding-left:96px; }
+      .row-actions .btn,.row-actions .link { width:100%; justify-content:center; }
+      .submit-area { display:block; } .submit-area .btn { width:100%; margin-top:10px; }
+      .batch-actions { margin-top:14px; text-align:left; } .batch-actions .btn { width:100%; }
+      .dialog-body { padding:22px 20px; } .dialog-actions .btn { flex:1; padding-inline:8px; }
+      .image-dialog__bar { min-height:106px; flex-wrap:wrap; } .image-dialog__bar strong { width:100%; }
+      .image-stage { height:calc(100% - 106px); padding:14px; }
+    }
+    @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } *,*::before,*::after { transition-duration:.01ms !important; animation-duration:.01ms !important; } }
+  </style>
+</head>
+<body>
+  <header class="header"><div class="header__inner"><span class="brand">snap_kakeibo</span><span class="sample-label">画面設計用インタラクティブモック</span></div></header>
+  <main class="page">
+    <div class="page-head"><div><h1>レシートを取り込む</h1><p class="page-note note">説明用の静的モックです。API通信、画像の保存、家計簿への登録は行いません。</p></div><a class="link" href="../analysis-requests/mock.html">解析履歴を見る&nbsp;›</a></div>
+    <div class="notice" id="retryNotice" hidden><strong>撮り直す画像</strong><span id="retryFile"></span><br>新しい画像を撮影するか選んでください。元の画像が送信済みになることはありません。</div>
+
+    <section class="card" aria-labelledby="intakeHeading">
+      <div class="intake-head"><div><h2 id="intakeHeading">画像を用意する</h2><p class="help">撮影は1枚ずつ、画像は複数まとめて選べます。</p></div></div>
+      <div class="actions intake-actions">
+        <input class="file-input" id="cameraInput" type="file" accept="image/*" capture="environment">
+        <label class="btn btn--primary file-focus-proxy" for="cameraInput">レシートを撮影</label>
+        <input class="file-input" id="fileInput" type="file" accept="image/*" multiple>
+        <label class="btn file-focus-proxy" for="fileInput">画像を選ぶ（複数可）</label>
+        <button class="btn" id="sampleAdd" type="button">サンプル画像を追加</button>
+      </div>
+      <div class="guidance"><p>1枚の画像につき1件ずつ解析します。日付と合計まで写してください。</p><p class="help">対応形式・容量・枚数上限は実装時にAPIの契約と揃えます。</p></div>
+    </section>
+
+    <section class="card" id="selectionCard" aria-labelledby="selectionHeading" hidden>
+      <div class="section-title"><h2 id="selectionHeading">選択した画像</h2><span class="count" id="selectionCount"></span></div>
+      <div class="rows" id="selectionRows"></div>
+      <div class="submit-area"><span class="help">アップロードするまで送信されません。</span><button class="btn btn--primary" id="uploadButton" type="button"></button></div>
+    </section>
+
+    <section class="card" id="batchCard" aria-labelledby="batchHeading" hidden>
+      <div class="batch-head">
+        <div><div class="section-title"><h2 id="batchHeading">今回の取り込み</h2><span class="count" id="batchCount"></span></div><p class="summary" id="batchSummary"></p></div>
+        <div class="batch-actions"><p class="checked" id="checkedAt"></p><button class="btn" id="reloadButton" type="button">再読み込み</button></div>
+      </div>
+      <div class="live-notice" id="liveNotice" role="status" aria-live="polite" hidden></div>
+      <div class="rows" id="batchRows"></div>
+    </section>
+
+    <details class="demo"><summary>モックの表示状態を切り替える</summary><div class="demo-controls"><button type="button" data-demo="empty">初期の空状態</button><button type="button" data-demo="selected">選択確認</button><button type="button" data-demo="mixed">結果が混在</button><button type="button" data-demo="recovery">回復操作一覧</button></div></details>
+  </main>
+
+  <dialog id="previewDialog" class="image-dialog" aria-labelledby="previewTitle"><div class="image-dialog__bar"><strong id="previewTitle"></strong><button class="btn" id="closePreview" type="button">閉じる</button></div><div class="image-stage"><img id="largePreview" alt=""></div></dialog>
+  <dialog id="retryDialog" aria-labelledby="retryTitle"><div class="dialog-body"><h2 id="retryTitle">この画像を再解析しますか？</h2><p class="dialog-file" id="retryDialogFile"></p><p>保存済みの画像でもう一度読み取りを行います。</p><div class="dialog-actions"><button class="btn" id="cancelRetry" type="button">キャンセル</button><button class="btn btn--primary" id="confirmRetry" type="button">再解析する</button></div></div></dialog>
+
+  <script>
+    const selectionCard=document.querySelector('#selectionCard'), batchCard=document.querySelector('#batchCard');
+    const selectionRows=document.querySelector('#selectionRows'), batchRows=document.querySelector('#batchRows');
+    const previewDialog=document.querySelector('#previewDialog'), retryDialog=document.querySelector('#retryDialog');
+    let selected=[], batch=[], retryTarget=null, uploadTimer=null, isUploading=false;
+    const receiptSvg=(title,total,tint='#e3f0e8')=>'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="420" height="620" viewBox="0 0 420 620"><rect width="420" height="620" fill="${tint}"/><rect x="55" y="24" width="310" height="572" rx="6" fill="white" stroke="#cbd5d1"/><text x="210" y="82" text-anchor="middle" font-family="sans-serif" font-size="24" font-weight="700" fill="#1b1f24">${title}</text><path d="M85 115h250M85 160h160M85 195h220M85 230h190M85 265h240M85 300h170M85 335h230M85 385h250" stroke="#9ba7a0" stroke-width="9"/><text x="335" y="455" text-anchor="end" font-family="sans-serif" font-size="19" fill="#667085">合計</text><text x="335" y="500" text-anchor="end" font-family="sans-serif" font-size="34" font-weight="700" fill="#1b1f24">${total}</text><path d="M85 535h250M125 565h170" stroke="#9ba7a0" stroke-width="7"/></svg>`);
+    const samples=[
+      {name:'receipt-01.jpg',src:receiptSvg('みどりストア','¥2,780')},
+      {name:'receipt-02.jpg',src:receiptSvg('駅前マート','¥1,246','#e7f0fa')}
+    ];
+    function escapeText(value){ const span=document.createElement('span'); span.textContent=value; return span.innerHTML; }
+    function escapeAttr(value){ return escapeText(value).replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
+    function addFiles(files){ [...files].filter(f=>f.type.startsWith('image/')).forEach(f=>selected.push({id:crypto.randomUUID(),name:f.name,src:URL.createObjectURL(f)})); renderSelection(); }
+    function addSamples(){ samples.forEach((s,i)=>selected.push({id:crypto.randomUUID(),name:s.name.replace('.',`-${selected.length+i+1}.`),src:s.src})); renderSelection(); selectionCard.scrollIntoView({behavior:'smooth',block:'start'}); }
+    function previewButton(item){ return `<button class="preview-button js-preview" type="button" data-id="${escapeAttr(item.id)}" aria-label="${escapeAttr(item.name)}を拡大して見る"><img src="${escapeAttr(item.src)}" alt=""></button>`; }
+    function renderSelection(){
+      selectionCard.hidden=!selected.length;
+      document.querySelector('label[for="cameraInput"]').classList.toggle('btn--primary', !selected.length);
+      document.querySelector('#selectionCount').textContent=`${selected.length}枚`;
+      document.querySelector('#uploadButton').textContent=`${selected.length}枚をアップロード`;
+      selectionRows.innerHTML=selected.map(x=>`<article class="receipt-row">${previewButton(x)}<div><div class="file-name">${escapeText(x.name)}</div><div class="status status--selected">選択済み</div></div><div class="row-actions"><button class="btn js-remove" type="button" data-id="${escapeAttr(x.id)}" aria-label="${escapeAttr(x.name)}を選択から外す">外す</button></div></article>`).join('');
+    }
+    const stateInfo={uploading:['uploading','アップロード中','送信が終わるまでこの画面を開いてください。'],analyzing:['info','解析中','結果は再読み込みで確認してください。'],success:['success','登録完了',''],failed:['failed','解析失敗','合計金額を読み取れませんでした。'],expired:['warning','期限切れ','送信期限を過ぎました。'],stalled:['warning','停滞','解析に時間がかかっています。'],no_data:['neutral','登録対象なし','登録できる明細が見つかりませんでした。家計簿には反映されていません。'],upload_failed:['failed','画像を送信できませんでした','送信結果が不明です。まず依頼の状態を確認してください。']};
+    function actions(item){
+      if(item.state==='success') return `<a class="link" href="../expense-detail/mock.html?from=upload" target="_blank" rel="noopener">支出詳細を見る（別タブ）&nbsp;›</a>`;
+      if(item.state==='failed'||item.state==='stalled'||item.state==='no_data') return `<button class="btn js-retry" type="button" data-id="${escapeAttr(item.id)}" aria-label="${escapeAttr(item.name)}を再解析する">再解析する</button><a class="link" href="#intakeHeading">撮り直してアップロード&nbsp;›</a>`;
+      if(item.state==='expired') return `<button class="btn js-reupload" type="button" data-id="${escapeAttr(item.id)}"${isUploading?' disabled':''}>再アップロード</button>`;
+      if(item.state==='upload_failed') return `<button class="btn js-check-upload" type="button" data-id="${escapeAttr(item.id)}">状態を確認</button>`;
+      return '<span class="help">再読み込みで確認</span>';
+    }
+    function renderBatch(){
+      batchCard.hidden=!batch.length; document.querySelector('#batchCount').textContent=`${batch.length}枚`;
+      const complete=batch.filter(x=>x.state==='success').length, progress=batch.filter(x=>['uploading','analyzing'].includes(x.state)).length, noData=batch.filter(x=>x.state==='no_data').length, attention=batch.length-complete-progress-noData;
+      document.querySelector('#batchSummary').textContent=[[complete,'登録完了'],[progress,'進行中'],[noData,'登録対象なし'],[attention,'要対応']].filter(x=>x[0]).map(x=>`${x[1]}${x[0]}`).join(' / ');
+      batchRows.innerHTML=batch.map(x=>{ const s=stateInfo[x.state]; return `<article class="receipt-row" id="row-${x.id}">${previewButton(x)}<div><div class="file-name">${escapeText(x.name)}</div><div class="status status--${s[0]}">${s[1]}</div>${s[2]?`<p class="reason">${s[2]}</p>`:''}</div><div class="row-actions">${actions(x)}</div></article>`; }).join('');
+    }
+    function showNotice(text,error=false){ const n=document.querySelector('#liveNotice'); n.hidden=false; n.classList.toggle('error',error); n.textContent=text; }
+    function setUploadBusy(busy){ isUploading=busy; document.querySelector('#cameraInput').disabled=busy; document.querySelector('#fileInput').disabled=busy; document.querySelector('#sampleAdd').disabled=busy; document.querySelectorAll('.file-focus-proxy').forEach(x=>x.setAttribute('aria-disabled',String(busy))); }
+    function startUpload(){
+      if(isUploading||!selected.length)return; clearTimeout(uploadTimer); const additions=selected.map((x,i)=>({...x,state:'uploading',order:i})); batch=[...batch,...additions]; selected=[]; setUploadBusy(true); renderSelection(); renderBatch(); batchCard.scrollIntoView({behavior:'smooth',block:'start'}); showNotice(`${additions.length}枚の疑似アップロードを開始しました。`);
+      uploadTimer=setTimeout(()=>{ additions.forEach((x,i)=>x.state=i===1?'upload_failed':'analyzing'); setUploadBusy(false); renderBatch(); const failed=additions.filter(x=>x.state==='upload_failed').length; showNotice(failed?`送信処理が終了しました。${failed}枚は送信結果を確認できないため「状態を確認」から確かめてください。`:'送信が終わりました。解析結果は「再読み込み」で確認できます。',Boolean(failed)); },900);
+    }
+    function resetDemoUpload(){ clearTimeout(uploadTimer); uploadTimer=null; setUploadBusy(false); }
+    function loadMixed(){ resetDemoUpload(); batch=[
+      {id:'m1',name:'receipt-01.jpg',src:receiptSvg('みどりストア','¥2,780'),state:'success'},
+      {id:'m2',name:'receipt-02.jpg',src:receiptSvg('駅前マート','¥1,246','#e7f0fa'),state:'analyzing'},
+      {id:'m3',name:'receipt-03.jpg',src:receiptSvg('商店街スーパー','¥4,890','#fff1e6'),state:'uploading'},
+      {id:'m4',name:'very-long-receipt-file-name_2026-09-22_evening-shopping.jpg',src:receiptSvg('読取サンプル','---','#fee2e2'),state:'failed'}
+    ]; selected=[]; renderSelection(); document.querySelector('#checkedAt').textContent='状態確認 12:04'; renderBatch(); batchCard.scrollIntoView({behavior:'smooth',block:'start'}); }
+    function loadRecovery(){ resetDemoUpload(); batch=[
+      {id:'r1',name:'expired-receipt.jpg',src:receiptSvg('期限切れ','¥980','#fff1e6'),state:'expired'},
+      {id:'r2',name:'stalled-receipt.jpg',src:receiptSvg('停滞','¥3,210','#fff1e6'),state:'stalled'},
+      {id:'r3',name:'no-items-receipt.jpg',src:receiptSvg('対象なし','---','#f6f9f7'),state:'no_data'},
+      {id:'r4',name:'upload-error.jpg',src:receiptSvg('送信失敗','---','#fee2e2'),state:'upload_failed'}
+    ]; selected=[]; renderSelection(); document.querySelector('#checkedAt').textContent='状態確認 10:30'; renderBatch(); batchCard.scrollIntoView({behavior:'smooth',block:'start'}); }
+    function openPreview(id){ const item=[...selected,...batch].find(x=>x.id===id); if(!item)return; document.querySelector('#previewTitle').textContent=item.name; const img=document.querySelector('#largePreview'); img.src=item.src; img.alt=`${item.name}のプレビュー`; previewDialog.showModal(); }
+    document.querySelector('#cameraInput').addEventListener('change',e=>{addFiles(e.target.files);e.target.value='';});
+    document.querySelector('#fileInput').addEventListener('change',e=>{addFiles(e.target.files);e.target.value='';});
+    document.querySelector('#sampleAdd').addEventListener('click',addSamples);
+    document.querySelector('#uploadButton').addEventListener('click',startUpload);
+    document.addEventListener('click',e=>{
+      const preview=e.target.closest('.js-preview'); if(preview) openPreview(preview.dataset.id);
+      const remove=e.target.closest('.js-remove'); if(remove){selected=selected.filter(x=>x.id!==remove.dataset.id);renderSelection();}
+      const retry=e.target.closest('.js-retry'); if(retry){retryTarget=batch.find(x=>x.id===retry.dataset.id);document.querySelector('#retryDialogFile').textContent=retryTarget.name;retryDialog.showModal();}
+      const reupload=e.target.closest('.js-reupload'); if(reupload&&!isUploading){const item=batch.find(x=>x.id===reupload.dataset.id);selected.push({id:crypto.randomUUID(),name:item.name,src:item.src});renderSelection();selectionCard.scrollIntoView({behavior:'smooth',block:'start'});showNotice(`${item.name} を新しいアップロードの選択欄へ戻しました。`);}
+      const check=e.target.closest('.js-check-upload'); if(check){const item=batch.find(x=>x.id===check.dataset.id);item.state='analyzing';renderBatch();showNotice(`${item.name} の依頼を確認できました。現在は解析中です。`);}
+    });
+    document.querySelector('#closePreview').addEventListener('click',()=>previewDialog.close());
+    document.querySelector('#cancelRetry').addEventListener('click',()=>retryDialog.close());
+    document.querySelector('#confirmRetry').addEventListener('click',()=>{retryDialog.close();retryTarget.state='analyzing';renderBatch();showNotice(`${retryTarget.name} の再解析を受け付けました。現在は解析中です。`);});
+    document.querySelector('#reloadButton').addEventListener('click',e=>{const b=e.currentTarget;b.disabled=true;b.textContent='再読み込み中…';setTimeout(()=>{batch.forEach(x=>{if(x.state==='analyzing')x.state='success';});renderBatch();document.querySelector('#checkedAt').textContent=`状態確認 ${new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}`;showNotice('最新の状態を確認しました。アップロード中の画像は送信完了後に確認できます。');b.textContent='再読み込み';setTimeout(()=>b.disabled=false,5000);},700);});
+    document.querySelectorAll('[data-demo]').forEach(b=>b.addEventListener('click',()=>{const mode=b.dataset.demo;if(mode==='empty'){resetDemoUpload();selected=[];batch=[];renderSelection();renderBatch();document.querySelector('#liveNotice').hidden=true;window.scrollTo({top:0,behavior:'smooth'});}if(mode==='selected'){resetDemoUpload();selected=[];batch=[];addSamples();}if(mode==='mixed')loadMixed();if(mode==='recovery')loadRecovery();}));
+    const requested=new URLSearchParams(location.search).get('file'); if(requested){document.querySelector('#retryNotice').hidden=false;document.querySelector('#retryFile').textContent=requested;}
+  </script>
+</body>
+</html>

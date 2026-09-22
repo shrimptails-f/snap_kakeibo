@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>解析履歴モック | snap_kakeibo</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --color-bg: #fff; --color-surface: #fff; --color-surface-subtle: #f6f9f7;
+      --color-text: #1b1f24; --color-text-muted: #667085; --color-border: #e2e8f0;
+      --color-primary: #246b4b; --color-primary-hover: #1c573c; --color-primary-subtle: #e3f0e8;
+      --color-danger: #a3161a; --color-danger-subtle: #fee2e2;
+      --color-warning: #c2410c; --color-warning-subtle: #fff1e6;
+      --color-info: #285f9e; --color-info-subtle: #e7f0fa;
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+      --space-6: 24px; --space-8: 32px; --space-12: 48px;
+      --radius-sm: 6px; --radius-md: 10px; --radius-lg: 16px;
+      --shadow-card: 0 8px 24px rgb(27 31 36 / 8%);
+      --page-max-width: 1120px; --page-padding: 16px;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--color-text); background: var(--color-bg); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif; font-size: 16px; line-height: 1.6; }
+    button, select { font: inherit; }
+    button, a, select { -webkit-tap-highlight-color: transparent; }
+    button:focus-visible, a:focus-visible, select:focus-visible { outline: 3px solid rgb(36 107 75 / 28%); outline-offset: 2px; }
+    [hidden] { display: none !important; }
+    .header { border-bottom: 1px solid var(--color-border); }
+    .header__inner { width: min(100% - 32px, var(--page-max-width)); min-height: 64px; margin: auto; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .brand { color: var(--color-primary); font-weight: 800; letter-spacing: -.02em; }
+    .sample-label { color: var(--color-text-muted); font-size: 14px; }
+    .page { width: min(100% - (var(--page-padding) * 2), var(--page-max-width)); margin: auto; padding: 32px 0 64px; }
+    .page-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+    h1, h2 { margin: 0; line-height: 1.3; }
+    h1 { font-size: clamp(26px, 4vw, 34px); letter-spacing: -.03em; }
+    h2 { font-size: 20px; }
+    .page-note { max-width: 650px; margin: 6px 0 0; color: var(--color-text-muted); font-size: 14px; }
+    .link { display: inline-flex; min-height: 44px; align-items: center; color: var(--color-primary); font-weight: 700; text-underline-offset: 3px; }
+    .card { padding: 24px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+    .card + .card { margin-top: 24px; }
+    .filters { display: flex; align-items: start; gap: 24px; margin-top: 18px; }
+    .field { min-width: 190px; }
+    label { display: block; margin-bottom: 6px; font-weight: 700; }
+    select { width: 100%; min-height: 46px; padding: 8px 38px 8px 12px; border: 1px solid #b8c2cc; border-radius: var(--radius-sm); background: #fff; color: var(--color-text); }
+    .help { margin: 5px 0 0; color: var(--color-text-muted); font-size: 14px; }
+    .attention-link { margin-left: auto; margin-top: 32px; }
+    .history-head { display: grid; grid-template-columns: 1fr auto; gap: 8px 20px; align-items: center; }
+    .history-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; }
+    .current-filter { color: var(--color-text-muted); font-size: 15px; font-weight: 600; }
+    .checked-at { margin: 0; color: var(--color-text-muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; min-height: 44px; padding: 8px 18px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: #fff; color: var(--color-text); font-weight: 700; cursor: pointer; }
+    .btn:hover:not(:disabled) { background: var(--color-surface-subtle); }
+    .btn--primary { border-color: var(--color-primary); background: var(--color-primary); color: #fff; }
+    .btn--primary:hover:not(:disabled) { background: var(--color-primary-hover); }
+    .btn:disabled { cursor: not-allowed; opacity: .52; }
+    .notice { margin: 20px 0 0; padding: 12px 16px; border: 1px solid #a9d0ba; border-radius: var(--radius-sm); background: var(--color-primary-subtle); color: #15452f; }
+    .table-wrap { margin-top: 20px; border-top: 1px solid var(--color-border); }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th { padding: 13px 12px; color: var(--color-text-muted); font-size: 14px; text-align: left; }
+    td { padding: 18px 12px; border-top: 1px solid var(--color-border); vertical-align: top; overflow-wrap: anywhere; }
+    th:first-child, td:first-child { padding-left: 0; }
+    th:last-child, td:last-child { padding-right: 0; }
+    .col-date { width: 16%; } .col-file { width: 27%; } .col-state { width: 34%; } .col-action { width: 23%; }
+    .date { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .filename { font-weight: 700; }
+    .attempt { display: block; margin-top: 3px; color: var(--color-text-muted); font-size: 14px; }
+    .status { display: flex; align-items: baseline; gap: 7px; font-weight: 800; }
+    .status::before { flex: none; width: 22px; text-align: center; }
+    .status--failed { color: var(--color-danger); } .status--failed::before { content: "×"; }
+    .status--warning { color: var(--color-warning); } .status--warning::before { content: "!"; }
+    .status--success { color: var(--color-primary); } .status--success::before { content: "✓"; }
+    .status--info { color: var(--color-info); } .status--info::before { content: "…"; }
+    .status--neutral::before { content: "－"; color: var(--color-text-muted); }
+    .reason { margin: 5px 0 0 29px; color: var(--color-text-muted); font-size: 14px; }
+    .row-actions { display: flex; flex-direction: column; align-items: start; gap: 5px; }
+    .row-actions .btn { width: 100%; max-width: 170px; }
+    .row-actions .link { min-height: 44px; }
+    .passive { color: var(--color-text-muted); font-size: 14px; }
+    .empty { padding: 56px 16px 48px; text-align: center; }
+    .empty strong { display: block; font-size: 18px; }
+    .empty p { margin: 6px 0 14px; color: var(--color-text-muted); }
+    .pagination { display: flex; justify-content: center; align-items: center; gap: 20px; padding-top: 22px; border-top: 1px solid var(--color-border); }
+    .page-count { min-width: 84px; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+    dialog { width: min(calc(100vw - 32px), 460px); padding: 0; border: 0; border-radius: var(--radius-md); color: var(--color-text); box-shadow: 0 24px 80px rgb(27 31 36 / 28%); }
+    dialog::backdrop { background: rgb(10 20 15 / 58%); }
+    .dialog-body { padding: 28px; }
+    .dialog-body h2 { font-size: 21px; }
+    .dialog-file { margin: 14px 0 2px; font-weight: 800; overflow-wrap: anywhere; }
+    .dialog-copy { margin: 0; color: var(--color-text-muted); }
+    .dialog-warning { margin: 12px 0 0; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--color-warning-subtle); color: #84310e; font-size: 14px; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+    .demo { margin-top: 20px; text-align: right; }
+    .demo summary { display: inline-flex; min-height: 44px; align-items: center; color: var(--color-text-muted); font-size: 14px; cursor: pointer; }
+    .demo-controls { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; padding-top: 8px; }
+    .demo-controls button { min-height: 44px; padding: 7px 12px; border: 1px solid #d9a48e; border-radius: 999px; background: var(--color-warning-subtle); color: #84310e; font-weight: 700; cursor: pointer; }
+    .mobile-label { display: none; }
+    @media (min-width: 960px) { :root { --page-padding: 24px; } }
+    @media (max-width: 959px) {
+      .page { padding-top: 24px; }
+      .page-head { align-items: start; }
+      .filters { align-items: stretch; flex-direction: column; gap: 16px; }
+      .field { min-width: 0; }
+      .attention-link { margin: 0; align-self: start; }
+      .history-head { grid-template-columns: 1fr auto; }
+      table, tbody, tr, td { display: block; }
+      thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+      tr { padding: 18px 0; border-top: 1px solid var(--color-border); }
+      tbody tr:first-child { border-top: 0; }
+      td { padding: 3px 0; border: 0; }
+      .mobile-label { display: inline; margin-right: 8px; color: var(--color-text-muted); font-size: 14px; font-weight: 400; }
+      .reason { margin-left: 29px; }
+      .row-actions { margin-top: 7px; }
+      .row-actions .btn { width: auto; max-width: none; }
+    }
+    @media (max-width: 560px) {
+      .header__inner { min-height: 56px; }
+      .sample-label { display: none; }
+      .page-head { display: block; }
+      .page-head > .btn { margin-top: 16px; }
+      .card { padding: 16px; }
+      .history-head { grid-template-columns: 1fr; }
+      .history-head .btn { justify-self: start; margin-top: 4px; }
+      .history-title { display: block; }
+      .current-filter { display: block; margin-top: 4px; }
+      .table-wrap { margin-top: 16px; }
+      .pagination { gap: 8px; }
+      .pagination .btn { flex: 1; padding-inline: 10px; }
+      .dialog-body { padding: 22px 20px; }
+      .dialog-actions .btn { flex: 1; padding-inline: 8px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <header class="header"><div class="header__inner"><span class="brand">snap_kakeibo</span><span class="sample-label">画面設計用インタラクティブモック</span></div></header>
+  <main class="page">
+    <div class="page-head">
+      <div><h1>解析履歴</h1><p class="page-note">説明用のサンプルデータです。API通信や実データの更新は行いません。</p></div>
+      <a class="btn btn--primary" href="../upload/mock.html">レシートを取り込む</a>
+    </div>
+
+    <section class="card" aria-labelledby="searchHeading">
+      <h2 id="searchHeading">検索条件</h2>
+      <div class="filters">
+        <div class="field"><label for="month">受付月</label><select id="month"><option value="2026-09">2026年9月</option><option value="2026-08">2026年8月</option><option value="2026-07">2026年7月</option></select><p class="help">レシートの購入月とは異なります。</p></div>
+        <div class="field"><label for="filter">表示</label><select id="filter"><option value="all">すべて</option><option value="attention">要対応</option><option value="progress">進行中</option><option value="success">登録完了</option><option value="no-data">登録対象なし</option></select></div>
+        <a class="link attention-link" href="#historyHeading" id="attentionLink">要対応を見る&nbsp;›</a>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="historyHeading">
+      <div class="history-head">
+        <div class="history-title"><h2 id="historyHeading">履歴</h2><span class="current-filter" id="currentFilter">2026年9月 / すべて</span></div>
+        <button class="btn" id="reload" type="button">再読み込み</button>
+        <p class="checked-at" id="checkedAt">状態確認 12:04</p>
+      </div>
+      <div class="notice" id="notice" role="status" tabindex="-1" hidden></div>
+      <div class="table-wrap" id="resultArea">
+        <table>
+          <thead><tr><th class="col-date" scope="col">受付日時</th><th class="col-file" scope="col">ファイル名</th><th class="col-state" scope="col">状態・理由</th><th class="col-action" scope="col">操作</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <div class="empty" id="empty" hidden><strong id="emptyTitle"></strong><p id="emptyCopy"></p><a class="link" href="#" id="emptyAction"></a></div>
+      </div>
+      <nav class="pagination" aria-label="解析履歴のページ切り替え">
+        <button class="btn" id="prev" type="button">前へ</button><span class="page-count" id="pageCount" aria-live="polite">1ページ目</span><button class="btn" id="next" type="button">次へ</button>
+      </nav>
+    </section>
+
+    <details class="demo"><summary>モックの表示状態を切り替える</summary><div class="demo-controls"><button type="button" data-demo="normal">通常表示</button><button type="button" data-demo="month-empty">履歴なし</button><button type="button" data-demo="filter-empty">絞り込み結果なし</button></div></details>
+  </main>
+
+  <dialog id="confirm" aria-labelledby="dialogTitle"><div class="dialog-body"><h2 id="dialogTitle">この画像を再解析しますか？</h2><p class="dialog-file" id="dialogFile"></p><p class="dialog-copy">保存済みの画像でもう一度読み取りを行います。</p><p class="dialog-warning" id="dialogWarning" hidden>前の解析が進行中の可能性があります。新しい試行を開始します。</p><div class="dialog-actions"><button class="btn" id="cancel" type="button">キャンセル</button><button class="btn btn--primary" id="confirmRetry" type="button">再解析する</button></div></div></dialog>
+
+  <script>
+    const septemberItems = [
+      { id: 1, date: '9/22 12:00', file: 'receipt-04.jpg', state: 'failed', status: '解析失敗', reason: '合計金額を読み取れませんでした。', attempt: 2, retry: true, upload: true },
+      { id: 2, date: '9/22 11:55', file: 'receipt-03.jpg', state: 'success', status: '登録完了', reason: '', attempt: 1, expense: true },
+      { id: 3, date: '9/22 11:50', file: 'receipt-02.jpg', state: 'info', status: '解析中', reason: '再読み込みで結果を確認してください。', attempt: 1 },
+      { id: 4, date: '9/22 10:30', file: 'receipt-01.jpg', state: 'warning', status: '停滞', reason: '解析に時間がかかっています。', attempt: 1, retry: true, stalled: true },
+      { id: 5, date: '9/21 18:42', file: 'long-file-name_for_weekend-shopping_20260921.jpg', state: 'neutral', status: '登録対象なし', reason: '登録できる明細がありませんでした。', attempt: 1, retry: true },
+      { id: 6, date: '9/21 09:10', file: 'receipt-many-items.jpg', state: 'failed', status: '解析失敗', reason: '商品明細が50件を超えています。取り込み可能な画像を選び直してください。', attempt: 3, upload: true },
+      ...Array.from({ length: 19 }, (_, index) => ({
+        id: index + 7,
+        date: '9/' + String(20 - Math.floor(index / 3)).padStart(2, '0') + ' ' + String(17 - (index % 6)).padStart(2, '0') + ':' + String((index * 7) % 60).padStart(2, '0'),
+        file: 'receipt-' + String(index + 7).padStart(2, '0') + '-202609.jpg',
+        state: index % 5 === 0 ? 'warning' : index % 4 === 0 ? 'neutral' : 'success',
+        status: index % 5 === 0 ? '停滞' : index % 4 === 0 ? '登録対象なし' : '登録完了',
+        reason: index % 5 === 0 ? '解析に時間がかかっています。' : index % 4 === 0 ? '登録できる明細がありませんでした。' : '',
+        attempt: index % 5 === 0 ? 2 : 1,
+        retry: index % 5 === 0 || index % 4 === 0,
+        stalled: index % 5 === 0,
+        expense: index % 5 !== 0 && index % 4 !== 0
+      }))
+    ];
+    const augustItems = [
+      { id: 101, date: '8/31 18:20', file: 'receipt-august-03.jpg', state: 'success', status: '登録完了', reason: '', attempt: 1, expense: true },
+      { id: 102, date: '8/24 11:05', file: 'receipt-august-02.jpg', state: 'neutral', status: '登録対象なし', reason: '登録できる明細がありませんでした。', attempt: 1, retry: true },
+      { id: 103, date: '8/03 08:42', file: 'receipt-august-01.jpg', state: 'failed', status: '解析失敗', reason: '購入日を読み取れませんでした。', attempt: 2, retry: true, upload: true }
+    ];
+    const itemsByMonth = { '2026-09': septemberItems, '2026-08': augustItems, '2026-07': [] };
+    const labels = { all: 'すべて', attention: '要対応', progress: '進行中', success: '登録完了', 'no-data': '登録対象なし' };
+    const monthLabels = { '2026-09': '2026年9月', '2026-08': '2026年8月', '2026-07': '2026年7月' };
+    const month = document.querySelector('#month'); const filter = document.querySelector('#filter');
+    const rows = document.querySelector('#rows'); const empty = document.querySelector('#empty'); const pagination = document.querySelector('.pagination');
+    let page = 1; let retryItem = null; let demoMode = 'normal';
+
+    function matches(item) {
+      if (filter.value === 'attention') return ['failed', 'warning'].includes(item.state);
+      if (filter.value === 'progress') return item.state === 'info';
+      if (filter.value === 'success') return item.state === 'success';
+      if (filter.value === 'no-data') return item.state === 'neutral';
+      return true;
+    }
+    function actions(item) {
+      if (item.expense) return '<a class="link" href="../expense-detail/mock.html?from=analysis-requests&amp;month=' + month.value + '&amp;filter=' + filter.value + '&amp;page=' + page + '" target="_blank" rel="noopener">支出詳細を見る（別タブ）&nbsp;›</a>';
+      let html = '';
+      if (item.retry) html += '<button class="btn js-retry" type="button" data-id="' + item.id + '" aria-label="' + item.file + 'を再解析する">再解析する</button>';
+      if (item.upload) html += '<a class="link" href="../upload/mock.html?file=' + encodeURIComponent(item.file) + '">撮り直してアップロード&nbsp;›</a>';
+      if (!item.retry && !item.upload) html = '<span class="passive">再読み込みで確認</span>';
+      return html;
+    }
+    function render() {
+      document.querySelector('#currentFilter').textContent = monthLabels[month.value] + ' / ' + labels[filter.value];
+      document.querySelector('#pageCount').textContent = page + 'ページ目';
+      const isMonthEmpty = demoMode === 'month-empty';
+      const allVisible = isMonthEmpty ? [] : (itemsByMonth[month.value] || []).filter(matches);
+      const totalPages = Math.max(1, Math.ceil(allVisible.length / 20));
+      if (page > totalPages) page = totalPages;
+      const visible = allVisible.slice((page - 1) * 20, page * 20);
+      const isFilterEmpty = demoMode === 'filter-empty';
+      rows.innerHTML = '';
+      if (visible.length && !isFilterEmpty) {
+        visible.forEach(item => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td><span class="mobile-label">受付日時</span><span class="date">' + item.date + '</span></td>' +
+            '<td><span class="mobile-label">ファイル名</span><span class="filename">' + item.file + '</span><span class="attempt">試行 ' + item.attempt + '</span></td>' +
+            '<td><div class="status status--' + item.state + '">' + item.status + '</div>' + (item.reason ? '<p class="reason">' + item.reason + '</p>' : '') + '</td>' +
+            '<td><span class="mobile-label">操作</span><div class="row-actions">' + actions(item) + '</div></td>';
+          rows.appendChild(tr);
+        });
+        empty.hidden = true; rows.closest('table').hidden = false; pagination.hidden = false;
+      } else {
+        rows.closest('table').hidden = true; empty.hidden = false; pagination.hidden = true;
+        const monthEmpty = (isMonthEmpty || (itemsByMonth[month.value] || []).length === 0) && !isFilterEmpty;
+        document.querySelector('#emptyTitle').textContent = monthEmpty ? 'この受付月の取り込みはありません' : labels[filter.value] + 'の画像はありません';
+        document.querySelector('#emptyCopy').textContent = monthEmpty ? '別の受付月を選ぶか、新しいレシートを取り込んでください。' : '条件を変えると、ほかの解析履歴を確認できます。';
+        const link = document.querySelector('#emptyAction');
+        link.textContent = monthEmpty ? 'レシートを取り込む' : 'すべてを見る ›';
+        link.classList.toggle('btn', monthEmpty);
+        link.classList.toggle('btn--primary', monthEmpty);
+        link.classList.toggle('link', !monthEmpty);
+        link.href = monthEmpty ? '../upload/mock.html' : '#historyHeading';
+      }
+      document.querySelector('#prev').disabled = page === 1;
+      document.querySelector('#next').disabled = page >= totalPages;
+      bindRetries();
+    }
+    function applyConditions() { page = 1; demoMode = 'normal'; history.replaceState(null, '', '?month=' + month.value + '&filter=' + filter.value); render(); }
+    function bindRetries() { document.querySelectorAll('.js-retry').forEach(button => button.addEventListener('click', () => { retryItem = (itemsByMonth[month.value] || []).find(x => x.id === Number(button.dataset.id)); document.querySelector('#dialogFile').textContent = retryItem.file; document.querySelector('#dialogWarning').hidden = !retryItem.stalled; document.querySelector('#confirm').showModal(); })); }
+    month.addEventListener('change', applyConditions); filter.addEventListener('change', applyConditions);
+    document.querySelector('#attentionLink').addEventListener('click', () => { filter.value = 'attention'; applyConditions(); });
+    document.querySelector('#emptyAction').addEventListener('click', event => { if (event.currentTarget.getAttribute('href').startsWith('#')) { event.preventDefault(); filter.value = 'all'; applyConditions(); } });
+    document.querySelector('#reload').addEventListener('click', event => { const button = event.currentTarget; button.disabled = true; button.textContent = '再読み込み中…'; setTimeout(() => { button.textContent = '再読み込み'; document.querySelector('#checkedAt').textContent = '状態確認 ' + new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }); setTimeout(() => button.disabled = false, 5000); }, 700); });
+    function movePage(nextPage) { page = nextPage; render(); const heading = document.querySelector('#historyHeading'); heading.focus(); heading.scrollIntoView(); }
+    document.querySelector('#prev').addEventListener('click', () => movePage(Math.max(1, page - 1)));
+    document.querySelector('#next').addEventListener('click', () => movePage(page + 1));
+    document.querySelector('#cancel').addEventListener('click', () => document.querySelector('#confirm').close());
+    document.querySelector('#confirmRetry').addEventListener('click', () => {
+      document.querySelector('#confirm').close();
+      retryItem.state = 'info'; retryItem.status = '解析中'; retryItem.reason = '再読み込みで結果を確認してください。'; retryItem.attempt += 1; retryItem.retry = false; retryItem.upload = false;
+      const notice = document.querySelector('#notice'); notice.hidden = false;
+      notice.innerHTML = '再解析を開始しました。' + (filter.value === 'attention' ? '<a class="link" href="#" id="progressLink">進行中で確認できます&nbsp;›</a>' : ' 結果は再読み込みで確認できます。');
+      render(); notice.focus();
+      document.querySelector('#progressLink')?.addEventListener('click', event => { event.preventDefault(); filter.value = 'progress'; applyConditions(); });
+    });
+    document.querySelectorAll('[data-demo]').forEach(button => button.addEventListener('click', () => { demoMode = button.dataset.demo; render(); }));
+    document.querySelector('#confirm').addEventListener('click', event => { if (event.target === event.currentTarget) event.currentTarget.close(); });
+    const params = new URLSearchParams(location.search); if (monthLabels[params.get('month')]) month.value = params.get('month'); if (labels[params.get('filter')]) filter.value = params.get('filter');
+    document.querySelector('#historyHeading').tabIndex = -1;
+    render();
+  </script>
+</body>
+</html>

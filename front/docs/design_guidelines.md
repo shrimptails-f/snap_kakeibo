@@ -12,7 +12,7 @@ snap_kakeibo は「レシートを取り込み、確認し、必要な箇所だ�
 
 ## 2. ビジュアル方針
 
-白を背景に、落ち着いた緑を主要色として使う。緑は主要操作、登録完了、選択状態など「進める・できた」ことに限定し、装飾目的で多用しない。注意(warning)は橙色、失敗(danger)は赤で、いずれも一般的な意味に合わせる。
+白を背景に、落ち着いた緑を主要色として使う。UIの緑は主要操作、登録完了、選択状態など「進める・できた」ことに限定し、装飾目的で多用しない。注意(warning)は橙色、失敗(danger)は赤で、いずれも一般的な意味に合わせる。
 
 通常テキストと白背景の組み合わせは WCAG AA(4.5:1)を満たす値にする。`--color-primary` の白文字は 6.4:1、`--color-warning` の白文字は 5.2:1、`--color-text-muted` は白と `--color-surface-subtle` のどちらでも 4.5:1 以上。
 
@@ -64,6 +64,49 @@ snap_kakeibo は「レシートを取り込み、確認し、必要な箇所だ�
 ```
 
 色名を `green` や `red` ではなく役割で命名する。新しい色や余白を画面ごとに追加せず、まず既存トークンで表現できるか確認する。
+
+### カテゴリの共通色
+
+カテゴリの保存値と表示名は [ユビキタス言語](../../docs/ddd/ubiquitous-language.md#カテゴリ) に従う。全画面のグラフ・凡例・カテゴリ表示では、次の固定の対応を使う。カテゴリ色は分類を示すための色で、成功・失敗などの状態色とは役割を分ける。
+
+| 保存値 | 表示名 | CSSトークン | 色 |
+| --- | --- | --- | --- |
+| `food` | 食費 | `--color-category-food` | `#39795a` |
+| `daily_goods` | 日用品 | `--color-category-daily-goods` | `#4f80ad` |
+| `medical` | 医療 | `--color-category-medical` | `#b45664` |
+| `transport` | 交通 | `--color-category-transport` | `#39878b` |
+| `utilities` | 水道・光熱・通信 | `--color-category-utilities` | `#827c35` |
+| `entertainment` | 娯楽 | `--color-category-entertainment` | `#7159a6` |
+| `social` | 交際・会食 | `--color-category-social` | `#b87830` |
+| `clothing` | 衣類 | `--color-category-clothing` | `#a75587` |
+| `education` | 教育 | `--color-category-education` | `#4d6494` |
+| `other` | その他 | `--color-category-other` | `#8e699f` |
+| `unknown` | 分類不能 | `--color-category-unknown` | `#7b858d` |
+
+```css
+:root {
+  --color-category-food: #39795a;
+  --color-category-daily-goods: #4f80ad;
+  --color-category-medical: #b45664;
+  --color-category-transport: #39878b;
+  --color-category-utilities: #827c35;
+  --color-category-entertainment: #7159a6;
+  --color-category-social: #b87830;
+  --color-category-clothing: #a75587;
+  --color-category-education: #4d6494;
+  --color-category-other: #8e699f;
+  --color-category-unknown: #7b858d;
+}
+```
+
+- カテゴリIDをキーに参照する。表示順・金額順・月・画面が変わっても色を変えず、配列の添字で割り当てない。
+- 本実装では共通トークンとカテゴリIDの対応を共有し、画面固有CSSへ色値を複製しない。独立したHTMLモックも本表の名前と値に揃える。
+- 凡例と積み上げ順は上表の定義順に固定する。内訳一覧を金額順に並べ替えても色の対応は維持する。
+- 色だけで識別させない。カテゴリ名・金額を凡例、ツールチップ、テキスト一覧でも表示する。`other`（その他）と `unknown`（分類不能）は別カテゴリとして扱う。
+- 色は棒・円グラフ・小さな色見本に使い、本文と金額は `--color-text` で表示する。色付き背景の上に白文字を一律に載せない。隣接部分に境界線を入れ、必要ならパターンを併用する。
+- ホバーとキーボードフォーカスで対象月・カテゴリ名・金額を表示し、タップでも同じ情報を確認できるようにする。ツールチップ上へポインターを移しても消さず、Escapeで閉じられるようにする。
+- 小さい区画をタップできない場合に備え、44px以上の月選択操作から同じ月の内訳一覧へ切り替えられるようにする。
+- 積み上げの高さは `category_totals` の明細合計。`total_recorded_amount` の計上額と一致するとは限らないため、表示切替・見出し・説明で区別する。差額を架空のカテゴリに割り当てない。
 
 ## 3. タイポグラフィ
 
