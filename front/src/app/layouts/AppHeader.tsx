@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { useAuthSession } from '@/features/auth'
 import { APP_NAME } from '@/shared/config/app'
+import { Button } from '@/shared/ui/Button'
 import styles from './AppHeader.module.css'
 
 // ログイン後の全画面に共通するヘッダー。アプリ名を押すとログイン後のトップページへ戻る。
@@ -28,14 +29,14 @@ export function AppHeader() {
         {/* セッション確認中はログイン状態が未確定なので、ログアウトを出さない */}
         {isAuthorized && (
           <div className={styles.sessionBar}>
-            <button
+            <Button
+              variant="secondary"
               className={styles.logoutButton}
-              type="button"
               onClick={() => void handleLogout()}
               disabled={isLoggingOut}
             >
               {isLoggingOut ? 'ログアウト中...' : 'ログアウト'}
-            </button>
+            </Button>
           </div>
         )}
       </div>

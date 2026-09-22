@@ -35,21 +35,3 @@
   color: var(--color-danger);
   background: var(--color-danger-subtle);
 }
-
-.submit {
-  min-height: 44px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  color: #fff;
-  background: var(--color-primary);
-  cursor: pointer;
-}
-
-.submit:hover {
-  background: var(--color-primary-hover);
-}
-
-.submit:disabled {
-  opacity: 0.6;
-  cursor: default;
-}

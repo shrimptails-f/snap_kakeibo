@@ -29,18 +29,7 @@
   margin-left: auto;
 }
 
+/* 「ログアウト」と「ログアウト中...」でヘッダーの幅が動かないようにする。見た目は shared/ui/Button */
 .logoutButton {
   min-width: 104px;
-  min-height: 44px;
-  padding: 0 var(--space-4);
-  border: 0;
-  border-radius: var(--radius-sm);
-  color: var(--color-primary);
-  background: var(--color-primary-subtle);
-  cursor: pointer;
-}
-
-.logoutButton:disabled {
-  opacity: 0.6;
-  cursor: default;
 }

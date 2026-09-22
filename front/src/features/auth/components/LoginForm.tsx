@@ -1,5 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
+import { Button } from '@/shared/ui/Button'
 import { loginErrorMessage } from '../lib/loginErrorMessage'
 import { loginFormSchema } from '../types/login.schema'
 import type { LoginFormValues } from '../types/login.schema'
@@ -77,9 +78,9 @@ export function LoginForm({ onSubmit }: Props) {
           {errors.root.server.message}
         </p>
       )}
-      <button className={styles.submit} disabled={isSubmitting} type="submit">
+      <Button variant="primary" type="submit" disabled={isSubmitting}>
         {isSubmitting ? 'ログイン中...' : 'ログイン'}
-      </button>
+      </Button>
     </form>
   )
 }
