@@ -119,6 +119,7 @@ func NewAppStack(scope constructs.Construct, id string, props *AppStackProps) *A
 	listAnalysisRequests := s.newFunction("list-analysis-requests", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
 	addRoute(s.API, awsapigatewayv2.HttpMethod_GET, APIPathPrefix+"/months/{month}/analysis-requests", listAnalysisRequests.Handler)
 	s.storage.AnalysisRequestsTable.GrantReadData(listAnalysisRequests.Handler)
+	s.storage.ExpensesTable.GrantReadData(listAnalysisRequests.Handler)
 	s.grantJWTSecretRead(listAnalysisRequests.Function)
 
 	getExpense := s.newFunction("get-expense", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})

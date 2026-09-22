@@ -1,6 +1,7 @@
 import type { z } from 'zod'
 import type {
   analysisRequestItemSchema,
+	analysisRequestFilterSchema,
   analysisRequestStatusSchema,
   createUploadResponseSchema,
   listAnalysisRequestsResponseSchema,
@@ -10,6 +11,7 @@ import type {
 // receipt-analysis の通信 DTO。形の定義は analysis-request.schema.ts
 
 export type AnalysisRequestStatus = z.infer<typeof analysisRequestStatusSchema>
+export type AnalysisRequestFilter = z.infer<typeof analysisRequestFilterSchema>
 
 export type AnalysisRequestItem = z.infer<typeof analysisRequestItemSchema>
 

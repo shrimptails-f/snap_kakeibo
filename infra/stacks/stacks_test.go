@@ -180,7 +180,7 @@ func TestStorageStackResources(t *testing.T) {
 	app.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]any{
 		"FunctionName": "dev-snap-kakeibo-analyze-receipt",
 		"Environment": map[string]any{"Variables": assertions.Match_ObjectLike(&map[string]any{
-			"OPENAI_MODEL": "gpt-5.6-luna", "OPENAI_REASONING_EFFORT": "medium",
+			"OPENAI_MODEL": "gpt-5.6-terra", "OPENAI_REASONING_EFFORT": "medium",
 		})},
 	})
 	// SQS イベントソースは live Alias に付け、CodeDeploy の切り替えで解析側も更新できるようにする
@@ -195,6 +195,12 @@ func TestStorageStackResources(t *testing.T) {
 	})
 	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{"RouteKey": "POST /api/analysis-requests/{analysisRequestId}/retry"})
 	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{"RouteKey": "GET /api/months/{month}/analysis-requests"})
+	app.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]any{
+		"FunctionName": "dev-snap-kakeibo-list-analysis-requests",
+		"Environment": map[string]any{"Variables": assertions.Match_ObjectLike(&map[string]any{
+			"ANALYSIS_REQUESTS_TABLE": assertions.Match_AnyValue(), "EXPENSES_TABLE": assertions.Match_AnyValue(),
+		})},
+	})
 	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{"RouteKey": "GET /api/expenses/{expenseId}"})
 	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{"RouteKey": "PATCH /api/expenses/{expenseId}"})
 	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{"RouteKey": "POST /api/monthly-summaries/{month}/rebuild"})

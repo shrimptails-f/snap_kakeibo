@@ -5,6 +5,7 @@ import "snap_kakeibo/backend/internal/library/oswrapper"
 // ListAnalysisRequestsConfig は list-analysis-requests に必要な設定値。読み取りだけなのでバケットもキューも使わない。
 type ListAnalysisRequestsConfig struct {
 	AnalysisRequestsTable string
+	ExpensesTable         string
 	// JWTSecretParameter は access token の検証鍵を持つ SSM SecureString パラメータ名。署名鍵自体は環境変数で受け取らない。
 	JWTSecretParameter string
 	Stage              string
@@ -20,6 +21,7 @@ func LoadListAnalysisRequests(osw oswrapper.Interface) (ListAnalysisRequestsConf
 		dst *string
 	}{
 		{"ANALYSIS_REQUESTS_TABLE", &cfg.AnalysisRequestsTable},
+		{"EXPENSES_TABLE", &cfg.ExpensesTable},
 		{"SSM_JWT_SECRET", &cfg.JWTSecretParameter},
 		{"STAGE", &cfg.Stage},
 	} {

@@ -3,8 +3,11 @@ package infrastructure
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	analysisdomain "snap_kakeibo/backend/internal/analysis/domain"
@@ -107,31 +110,129 @@ func (r DynamoDBAnalysisRequestRepository) MarkRetrying(ctx context.Context, use
 	return updated.Attempt, nil
 }
 
-// ListByMonth は analysis_request_month_index を GSI1PK(利用者 + 月)で引き、作成日時の降順で返す。
-// 1 回の Query の範囲(1MB)だけを返し、ページネーションはしない。個人利用で 1 月分がそれを超えない前提。
-func (r DynamoDBAnalysisRequestRepository) ListByMonth(ctx context.Context, userID, yearMonth string) ([]domain.AnalysisRequest, error) {
-	out, err := r.Table.Query(ctx, &awssdk.QueryInput{
-		IndexName:                 aws.String(libdynamodb.AnalysisRequestMonthIndex),
-		KeyConditionExpression:    aws.String("GSI1PK = :pk"),
-		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{":pk": stringValue(UserMonthPK(userID, yearMonth))},
-		ScanIndexForward:          aws.Bool(false),
-	})
+// analysisRequestCursor は DynamoDB のキーを外部へ直接見せず、同じ利用者・月でだけ再利用できる形にする。
+type analysisRequestCursor struct {
+	UserID            string `json:"user_id"`
+	YearMonth         string `json:"year_month"`
+	Filter            string `json:"filter"`
+	AnalysisRequestID string `json:"analysis_request_id"`
+	CreatedAt         string `json:"created_at"`
+}
+
+// ListPage は analysis_request_month_index を作成日時の降順で読み、月全体へ状態フィルターを適用して1ページ返す。
+// DynamoDB の FilterExpression は Limit 適用後に評価されるため、次の一致項目が見つかるまで Query を継続する。
+func (r DynamoDBAnalysisRequestRepository) ListPage(ctx context.Context, query application.AnalysisRequestListQuery) (application.AnalysisRequestPage, error) {
+	startKey, err := decodeAnalysisRequestCursor(query)
 	if err != nil {
-		return nil, err
+		return application.AnalysisRequestPage{}, err
 	}
-	var items []analysisRequestItem
-	if err := attributevalue.UnmarshalListOfMaps(out.Items, &items); err != nil {
-		return nil, fmt.Errorf("unmarshal analysis requests: %w", err)
-	}
-	requests := make([]domain.AnalysisRequest, 0, len(items))
-	for _, item := range items {
-		request, err := item.toDomain(userID)
+	values := map[string]ddbtypes.AttributeValue{":pk": stringValue(UserMonthPK(query.UserID, query.YearMonth))}
+	filterExpression, names := analysisRequestFilterExpression(query, values)
+	matched := make([]analysisRequestItem, 0, query.PageSize+1)
+
+	for len(matched) <= query.PageSize {
+		in := &awssdk.QueryInput{
+			IndexName: aws.String(libdynamodb.AnalysisRequestMonthIndex), KeyConditionExpression: aws.String("GSI1PK = :pk"),
+			ExpressionAttributeValues: values, ExclusiveStartKey: startKey, ScanIndexForward: aws.Bool(false), Limit: aws.Int32(100),
+		}
+		if filterExpression != "" {
+			in.FilterExpression = aws.String(filterExpression)
+			in.ExpressionAttributeNames = names
+		}
+		out, err := r.Table.Query(ctx, in)
 		if err != nil {
-			return nil, fmt.Errorf("restore analysis request %s: %w", item.AnalysisRequestID, err)
+			return application.AnalysisRequestPage{}, err
+		}
+		var items []analysisRequestItem
+		if err := attributevalue.UnmarshalListOfMaps(out.Items, &items); err != nil {
+			return application.AnalysisRequestPage{}, fmt.Errorf("unmarshal analysis requests: %w", err)
+		}
+		matched = append(matched, items...)
+		if len(matched) > query.PageSize || len(out.LastEvaluatedKey) == 0 {
+			break
+		}
+		startKey = out.LastEvaluatedKey
+	}
+
+	hasNext := len(matched) > query.PageSize
+	if hasNext {
+		matched = matched[:query.PageSize]
+	}
+	requests := make([]domain.AnalysisRequest, 0, len(matched))
+	for _, item := range matched {
+		request, err := item.toDomain(query.UserID)
+		if err != nil {
+			return application.AnalysisRequestPage{}, fmt.Errorf("restore analysis request %s: %w", item.AnalysisRequestID, err)
 		}
 		requests = append(requests, request)
 	}
-	return requests, nil
+	page := application.AnalysisRequestPage{Requests: requests}
+	if hasNext {
+		page.NextCursor, err = encodeAnalysisRequestCursor(query, matched[len(matched)-1])
+		if err != nil {
+			return application.AnalysisRequestPage{}, err
+		}
+	}
+	return page, nil
+}
+
+func analysisRequestFilterExpression(query application.AnalysisRequestListQuery, values map[string]ddbtypes.AttributeValue) (string, map[string]string) {
+	if query.Filter == application.AnalysisRequestFilterAll {
+		return "", nil
+	}
+	names := map[string]string{"#status": "status"}
+	switch query.Filter {
+	case application.AnalysisRequestFilterAttention:
+		values[":uploading"] = stringValue(string(analysisdomain.AnalysisStatusUploading))
+		values[":analyzing"] = stringValue(string(analysisdomain.AnalysisStatusAnalyzing))
+		values[":failed"] = stringValue(string(analysisdomain.AnalysisStatusFailed))
+		values[":now"] = stringValue(formatTime(query.Now))
+		values[":stalled_at"] = stringValue(formatTime(query.Now.Add(-application.AnalysisStalledAfter)))
+		return "#status = :failed OR (#status = :uploading AND upload_expires_at < :now) OR (#status = :analyzing AND updated_at < :stalled_at)", names
+	case application.AnalysisRequestFilterInProgress:
+		values[":uploading"] = stringValue(string(analysisdomain.AnalysisStatusUploading))
+		values[":analyzing"] = stringValue(string(analysisdomain.AnalysisStatusAnalyzing))
+		values[":now"] = stringValue(formatTime(query.Now))
+		values[":stalled_at"] = stringValue(formatTime(query.Now.Add(-application.AnalysisStalledAfter)))
+		return "(#status = :uploading AND upload_expires_at >= :now) OR (#status = :analyzing AND updated_at >= :stalled_at)", names
+	case application.AnalysisRequestFilterSucceeded:
+		values[":succeeded"] = stringValue(string(analysisdomain.AnalysisStatusSucceeded))
+		return "#status = :succeeded", names
+	case application.AnalysisRequestFilterNoData:
+		values[":no_data"] = stringValue(string(analysisdomain.AnalysisStatusNoData))
+		return "#status = :no_data", names
+	default:
+		return "", nil
+	}
+}
+
+func encodeAnalysisRequestCursor(query application.AnalysisRequestListQuery, item analysisRequestItem) (string, error) {
+	payload, err := json.Marshal(analysisRequestCursor{UserID: query.UserID, YearMonth: query.YearMonth, Filter: string(query.Filter), AnalysisRequestID: item.AnalysisRequestID, CreatedAt: item.CreatedAt})
+	if err != nil {
+		return "", fmt.Errorf("marshal analysis requests cursor: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(payload), nil
+}
+
+func decodeAnalysisRequestCursor(query application.AnalysisRequestListQuery) (map[string]ddbtypes.AttributeValue, error) {
+	if query.Cursor == "" {
+		return nil, nil
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(query.Cursor)
+	if err != nil {
+		return nil, application.ErrInvalidCursor
+	}
+	var cursor analysisRequestCursor
+	if err := json.Unmarshal(payload, &cursor); err != nil || cursor.UserID != query.UserID || cursor.YearMonth != query.YearMonth || cursor.Filter != string(query.Filter) || strings.TrimSpace(cursor.AnalysisRequestID) == "" {
+		return nil, application.ErrInvalidCursor
+	}
+	if _, err := time.Parse(time.RFC3339, cursor.CreatedAt); err != nil {
+		return nil, application.ErrInvalidCursor
+	}
+	return map[string]ddbtypes.AttributeValue{
+		"PK": stringValue(UserPK(query.UserID)), "SK": stringValue(AnalysisRequestSK(cursor.AnalysisRequestID)),
+		"GSI1PK": stringValue(UserMonthPK(query.UserID, query.YearMonth)), "GSI1SK": stringValue(AnalysisRequestMonthSK(cursor.CreatedAt, cursor.AnalysisRequestID)),
+	}, nil
 }
 
 // retryableCondition は domain.RetryableStatuses(FAILED / NO_DATA / ANALYZING)に対応する条件式。

@@ -6,23 +6,37 @@ import (
 	"testing"
 	"time"
 
+	analysisdomain "snap_kakeibo/backend/internal/analysis/domain"
+	common "snap_kakeibo/backend/internal/common/domain"
+	"snap_kakeibo/backend/internal/library/timewrapper"
 	"snap_kakeibo/backend/internal/upload/application"
 	"snap_kakeibo/backend/internal/upload/domain"
 )
 
 type lister struct {
-	userID, yearMonth string
-	called            bool
-	requests          []domain.AnalysisRequest
+	query  application.AnalysisRequestListQuery
+	called bool
+	page   application.AnalysisRequestPage
+	err    error
+}
+
+func (l *lister) ListPage(_ context.Context, query application.AnalysisRequestListQuery) (application.AnalysisRequestPage, error) {
+	l.called, l.query = true, query
+	return l.page, l.err
+}
+
+type expenseReader struct {
+	userID, expenseID string
+	summaries         map[string]application.ExpenseSummary
 	err               error
 }
 
-func (l *lister) ListByMonth(_ context.Context, userID, yearMonth string) ([]domain.AnalysisRequest, error) {
-	l.called, l.userID, l.yearMonth = true, userID, yearMonth
-	if l.err != nil {
-		return nil, l.err
+func (r *expenseReader) FindSummaries(_ context.Context, userID string, expenseIDs []string) (map[string]application.ExpenseSummary, error) {
+	r.userID = userID
+	if len(expenseIDs) > 0 {
+		r.expenseID = expenseIDs[0]
 	}
-	return l.requests, nil
+	return r.summaries, r.err
 }
 
 func uploadRequest(t *testing.T, id string, createdAt time.Time) domain.AnalysisRequest {
@@ -34,29 +48,53 @@ func uploadRequest(t *testing.T, id string, createdAt time.Time) domain.Analysis
 	return request
 }
 
-func TestListReturnsRequestsForTheMonth(t *testing.T) {
+func succeededRequest(t *testing.T, id, expenseID string) domain.AnalysisRequest {
+	t.Helper()
+	request := uploadRequest(t, id, now)
+	attempt, _ := analysisdomain.NewAttempt(1)
+	if err := request.StartAnalysis(attempt, now.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	expense, _ := common.NewExpenseID(expenseID)
+	if err := request.Complete(attempt, expense, now.Add(2*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	return request
+}
+
+func newListUsecase(requests *lister, expenses *expenseReader) application.ListAnalysisRequestsUsecaseInterface {
+	return application.NewListAnalysisRequestsUsecase(requests, expenses, timewrapper.NewFixed(now))
+}
+
+func TestListReturnsFilteredPageWithExpenseSummary(t *testing.T) {
 	t.Parallel()
-	requests := &lister{requests: []domain.AnalysisRequest{uploadRequest(t, "req2", now.Add(time.Minute)), uploadRequest(t, "req1", now)}}
-	out, err := application.NewListAnalysisRequestsUsecase(requests).List(context.Background(), application.ListAnalysisRequestsInput{UserID: "u1", YearMonth: "2026-09"})
+	completed := succeededRequest(t, "req1", "expense1")
+	requests := &lister{page: application.AnalysisRequestPage{Requests: []domain.AnalysisRequest{completed}, NextCursor: "next"}}
+	expenses := &expenseReader{summaries: map[string]application.ExpenseSummary{"expense1": {ExpenseID: "expense1", StoreName: "スーパー", RecordedAmount: 2780}}}
+	out, err := newListUsecase(requests, expenses).List(context.Background(), application.ListAnalysisRequestsInput{UserID: "u1", YearMonth: "2026-09", Filter: "attention", Cursor: "current"})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
-	if requests.userID != "u1" || requests.yearMonth != "2026-09" {
-		t.Errorf("ListByMonth args = %q / %q", requests.userID, requests.yearMonth)
+	if requests.query.UserID != "u1" || requests.query.YearMonth != "2026-09" || requests.query.Filter != application.AnalysisRequestFilterAttention || requests.query.Cursor != "current" || requests.query.PageSize != 20 || !requests.query.Now.Equal(now) {
+		t.Errorf("ListPage query = %+v", requests.query)
 	}
-	if len(out.Requests) != 2 || out.Requests[0].ID() != "req2" || out.Requests[1].ID() != "req1" {
-		t.Errorf("List() = %+v, want %+v", out.Requests, requests.requests)
+	if out.NextCursor != "next" || len(out.Items) != 1 || out.Items[0].ExpenseSummary == nil || out.Items[0].ExpenseSummary.RecordedAmount != 2780 {
+		t.Errorf("List() = %+v", out)
+	}
+	if expenses.userID != "u1" || expenses.expenseID != "expense1" {
+		t.Errorf("FindSummaries args = %q / %q", expenses.userID, expenses.expenseID)
 	}
 }
 
-func TestListReturnsEmptyWhenNothingUploaded(t *testing.T) {
+func TestListDefaultsToAllAndReturnsEmpty(t *testing.T) {
 	t.Parallel()
-	out, err := application.NewListAnalysisRequestsUsecase(&lister{requests: []domain.AnalysisRequest{}}).List(context.Background(), application.ListAnalysisRequestsInput{UserID: "u1", YearMonth: "2026-09"})
+	requests := &lister{page: application.AnalysisRequestPage{Requests: []domain.AnalysisRequest{}}}
+	out, err := newListUsecase(requests, &expenseReader{}).List(context.Background(), application.ListAnalysisRequestsInput{UserID: "u1", YearMonth: "2026-09"})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
-	if len(out.Requests) != 0 {
-		t.Errorf("List() = %+v, want empty", out.Requests)
+	if requests.query.Filter != application.AnalysisRequestFilterAll || len(out.Items) != 0 {
+		t.Errorf("List() query/output = %+v / %+v", requests.query, out)
 	}
 }
 
@@ -64,31 +102,31 @@ func TestListRejectsInvalidInput(t *testing.T) {
 	t.Parallel()
 	for name, in := range map[string]application.ListAnalysisRequestsInput{
 		"missing user":       {YearMonth: "2026-09"},
-		"blank user":         {UserID: " ", YearMonth: "2026-09"},
 		"missing month":      {UserID: "u1"},
-		"month with day":     {UserID: "u1", YearMonth: "2026-09-01"},
-		"single digit month": {UserID: "u1", YearMonth: "2026-9"},
 		"month out of range": {UserID: "u1", YearMonth: "2026-13"},
-		"whitespace":         {UserID: "u1", YearMonth: " 2026-09"},
+		"unknown filter":     {UserID: "u1", YearMonth: "2026-09", Filter: "failed"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			requests := &lister{}
-			if _, err := application.NewListAnalysisRequestsUsecase(requests).List(context.Background(), in); !errors.Is(err, application.ErrInvalidInput) {
+			if _, err := newListUsecase(requests, &expenseReader{}).List(context.Background(), in); !errors.Is(err, application.ErrInvalidInput) {
 				t.Fatalf("List() error = %v, want ErrInvalidInput", err)
 			}
 			if requests.called {
-				t.Errorf("ListByMonth should not be called for %+v", in)
+				t.Fatal("ListPage should not be called")
 			}
 		})
 	}
 }
 
-func TestListWrapsRepositoryFailure(t *testing.T) {
+func TestListWrapsDependencyFailures(t *testing.T) {
 	t.Parallel()
 	cause := errors.New("boom")
-	_, err := application.NewListAnalysisRequestsUsecase(&lister{err: cause}).List(context.Background(), application.ListAnalysisRequestsInput{UserID: "u1", YearMonth: "2026-09"})
-	if !errors.Is(err, cause) {
-		t.Fatalf("List() error = %v, want wrapped %v", err, cause)
+	if _, err := newListUsecase(&lister{err: cause}, &expenseReader{}).List(context.Background(), application.ListAnalysisRequestsInput{UserID: "u1", YearMonth: "2026-09"}); !errors.Is(err, cause) {
+		t.Fatalf("List() repository error = %v", err)
+	}
+	request := uploadRequest(t, "req1", now)
+	if _, err := newListUsecase(&lister{page: application.AnalysisRequestPage{Requests: []domain.AnalysisRequest{request}}}, &expenseReader{err: cause}).List(context.Background(), application.ListAnalysisRequestsInput{UserID: "u1", YearMonth: "2026-09"}); !errors.Is(err, cause) {
+		t.Fatalf("List() expense error = %v", err)
 	}
 }

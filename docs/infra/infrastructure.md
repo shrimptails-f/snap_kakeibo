@@ -242,7 +242,7 @@ DynamoDB TransactWriteItems
 
 | 項目 | 値 | 理由 |
 | --- | --- | --- |
-| モデル | 環境変数 `OPENAI_MODEL`(初期値 `gpt-5.6-luna`) | 非機密値としてCDKのstage設定で管理する |
+| モデル | 環境変数 `OPENAI_MODEL`(初期値 `gpt-5.6-terra`) | 非機密値としてCDKのstage設定で管理する |
 | reasoning.effort | 環境変数 `OPENAI_REASONING_EFFORT`(初期値 `medium`) | 精度・レイテンシ・思考トークン数をログで実測して調整する |
 | 画像 | 長辺 2048px を上限に縮小した JPEG(拡大はしない)を Base64 の data URL で渡す。上限は環境変数 `IMAGE_MAX_EDGE` で変更可 | パッチ方式のモデルは原寸でトークンを数えるため、縮小の効果が大きい。S3 の URL を渡すと Presigned URL の発行と公開範囲の管理が要る。細長いレシートは縮小で文字が潰れやすいので、実画像で読み取り精度を評価してから値を決める |
 | input_image.detail | `high` を明示 | `auto` に任せない。tile 方式のモデルで `low` に落ちると品目が読めない |
@@ -261,14 +261,9 @@ DynamoDB TransactWriteItems
 
 ### コスト目安
 
-スマホ写真 1 枚(1080×2400)あたり。
+モデル別の対応effort、公式トークン単価、レシート解析精度の期待値、評価方法は[レシート解析モデルの比較](../receipt-analysis-models.md)を正とする。
 
-| モデル | 1枚 | 月100枚 |
-| --- | --- | --- |
-| gpt-5-mini | ≈ ¥0.4〜0.6 | ≈ ¥40〜60 |
-| gpt-5 | ≈ ¥1.5 | ≈ ¥150 |
-
-参考: Textract AnalyzeExpense は $0.01/ページ ≈ ¥1.5/枚。
+レシート1枚あたりの料金は画像サイズ、画像detail、指示文、出力・推論トークンによって変わるため、固定の円換算値は置かない。実レスポンスの`usage`から1枚あたりと成功1件あたりのUSDを計測する。
 
 ### タイムアウトとリトライ
 

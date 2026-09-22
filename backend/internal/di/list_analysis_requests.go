@@ -28,6 +28,9 @@ func NewListAnalysisRequestsContainer(cfg settings.ListAnalysisRequestsConfig, a
 		func(client *libdynamodb.Client, cfg settings.ListAnalysisRequestsConfig) application.AnalysisRequestLister {
 			return infrastructure.DynamoDBAnalysisRequestRepository{Table: client.Table(cfg.AnalysisRequestsTable)}
 		},
+		func(client *libdynamodb.Client, cfg settings.ListAnalysisRequestsConfig) application.AnalysisRequestExpenseReader {
+			return infrastructure.DynamoDBAnalysisRequestExpenseReader{Client: client, Expenses: client.Table(cfg.ExpensesTable)}
+		},
 		application.NewListAnalysisRequestsUsecase,
 	); err != nil {
 		return nil, err

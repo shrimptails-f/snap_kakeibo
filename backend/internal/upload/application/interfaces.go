@@ -39,6 +39,11 @@ type RetryAnalysisEnqueuer interface {
 
 // AnalysisRequestLister は利用者の解析依頼を月ごとに引く。
 type AnalysisRequestLister interface {
-	// ListByMonth は yearMonth(YYYY-MM)の解析依頼を作成日時の降順で返す。該当が無ければ空のスライス。
-	ListByMonth(ctx context.Context, userID, yearMonth string) ([]domain.AnalysisRequest, error)
+	// ListPage は月全体へ状態フィルターを適用し、作成日時の降順で最大 PageSize 件と次のカーソルを返す。
+	ListPage(ctx context.Context, query AnalysisRequestListQuery) (AnalysisRequestPage, error)
+}
+
+// AnalysisRequestExpenseReader は登録完了した解析依頼に対応する支出の一覧表示項目をまとめて取得する。
+type AnalysisRequestExpenseReader interface {
+	FindSummaries(ctx context.Context, userID string, expenseIDs []string) (map[string]ExpenseSummary, error)
 }

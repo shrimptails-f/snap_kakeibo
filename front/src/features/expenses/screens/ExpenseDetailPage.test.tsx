@@ -42,6 +42,20 @@ describe('ExpenseDetailPage', () => {
     expect(screen.getByRole('button', { name: '編集する' })).toBeEnabled()
   })
 
+  it('解析履歴の検索条件と復元情報を保って戻る', async () => {
+    mockFetch({ '/api/expenses/e1': original })
+    const router = createMemoryRouter([
+      { path: '/expenses/:expenseId', element: <ExpenseDetailPage /> },
+      { path: '/analysis-requests', element: <h1>解析履歴</h1> },
+    ], { initialEntries: [{ pathname: '/expenses/e1', state: { from: '/analysis-requests?month=2026-09&filter=attention&cursor=next&page=2', backLabel: '解析履歴へ', requestId: 'req1', scrollY: 320, analysisCursorHistory: [''] } }] })
+    render(<QueryClientProvider client={createQueryClient()}><RouterProvider router={router} /></QueryClientProvider>)
+    await userEvent.click(await screen.findByRole('link', { name: /解析履歴へ/ }))
+    expect(router.state.location.pathname).toBe('/analysis-requests')
+    expect(router.state.location.search).toContain('filter=attention')
+    expect(router.state.location.search).toContain('page=2')
+    expect(router.state.location.state).toEqual(expect.objectContaining({ restoreRequestId: 'req1', scrollY: 320, analysisCursorHistory: [''] }))
+  })
+
   it('レシート画像を表示し、拡大ダイアログを操作できる', async () => {
     mockFetch({ '/api/expenses/e1': withImage })
     renderPage(); const user = userEvent.setup()

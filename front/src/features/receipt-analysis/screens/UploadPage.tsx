@@ -41,8 +41,8 @@ function serverStatus(upload: ReceiptUpload, request?: AnalysisRequestItem) {
 export function UploadPage() {
   const month = currentMonth()
   const [searchParams] = useSearchParams()
-  const { data: requests, dataUpdatedAt } = useAnalysisRequests(month)
-  const reload = useReloadAnalysisRequests(month)
+  const { data: requests, dataUpdatedAt } = useAnalysisRequests(month, 'all', '')
+  const reload = useReloadAnalysisRequests(month, 'all', '')
   const retry = useRetryAnalysis(month)
   const batch = useReceiptUploadBatch(month)
   const [preview, setPreview] = useState<Preview | null>(null)

@@ -187,7 +187,7 @@ expenses は作成済みだがカテゴリだけ未反映、という中間状�
 ### 入力
 
 ```text
-model                = 環境変数 OPENAI_MODEL の値(初期値 gpt-5.6-luna)
+model                = 環境変数 OPENAI_MODEL の値(初期値 gpt-5.6-terra)
 reasoning.effort     = 環境変数 OPENAI_REASONING_EFFORT の値(初期値 medium)
 store                = false(レシートを OpenAI 側に保存させない)
 max_output_tokens    = 4096
@@ -205,6 +205,8 @@ input
     image_url = data:image/jpeg;base64,...(長辺2048pxを上限に縮小したJPEG。拡大はしない)
     detail    = high
 ```
+
+モデル別の対応effort、コスト、レシート解析精度の期待値と評価方法は[レシート解析モデルの比較](./receipt-analysis-models.md)を参照する。
 
 縮小の上限は環境変数 `IMAGE_MAX_EDGE`(初期値 2048)で変える。細長いレシートは縮小で文字が潰れやすいため、実画像で評価してから値を決める。
 
@@ -291,7 +293,7 @@ unknown
 Analyze Lambda の環境変数として設定する。変更時は app スタックを再デプロイする。
 
 ```text
-OPENAI_MODEL             初期値 gpt-5.6-luna
+OPENAI_MODEL             初期値 gpt-5.6-terra
 OPENAI_REASONING_EFFORT  初期値 medium
 ```
 
@@ -757,13 +759,17 @@ GSI1PK = USER#{user_id}#MONTH#{yyyy-MM}
 
 ## GET /months/{yyyy-MM}/analysis-requests
 
-指定月の解析依頼を取得する。
+指定月の解析依頼を作成日時の降順で取得する。`filter` で月全体を状態区分へ絞り込み、20件と継続カーソルを返す。
 
 ```text
 analysis_request_month_index
 
 GSI1PK = USER#{user_id}#MONTH#{yyyy-MM}
 ```
+
+期限切れは `UPLOADING` と `upload_expires_at`、停滞は `ANALYZING` と `updated_at`（30分超）からリクエスト時刻で判定する。DynamoDBの `FilterExpression` は `Limit` の後に適用されるため、一致する21件目または月末までQueryを継続し、空の途中結果を最終結果としない。
+
+1ページの `SUCCEEDED` にある `expense_id` は `expenses` を `BatchGetItem` し、支出編集後の最新の `store_name` / `recorded_amount` を補う。解析依頼へ複製しないことで更新時の二重書き込みを避ける。
 
 ---
 

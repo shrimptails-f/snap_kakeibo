@@ -22,6 +22,7 @@ import (
 
 // span 名のうち dynamodb が出すもの。
 const (
+	SpanBatchGetItem  = "dynamodb_batch_get_item"
 	SpanGetItem       = "dynamodb_get_item"
 	SpanPutItem       = "dynamodb_put_item"
 	SpanUpdateItem    = "dynamodb_update_item"
@@ -39,6 +40,14 @@ type API interface {
 }
 
 var _ API = (*awssdk.Client)(nil)
+
+// BatchGetAPI は複数キー取得を使う機能だけが要求する追加能力。
+// API と分けることで、他の操作だけを使うテストfakeへ不要なメソッドを要求しない。
+type BatchGetAPI interface {
+	BatchGetItem(ctx context.Context, params *awssdk.BatchGetItemInput, optFns ...func(*awssdk.Options)) (*awssdk.BatchGetItemOutput, error)
+}
+
+var _ BatchGetAPI = (*awssdk.Client)(nil)
 
 // Client は DynamoDB 操作の起点。
 type Client struct {
@@ -61,6 +70,28 @@ func NewWithAPI(api API, log logger.Interface) *Client {
 
 // Table は name に束縛した Table を返す。
 func (c *Client) Table(name string) *Table { return &Table{client: c, name: name} }
+
+// BatchGetItem は複数のキーをまとめて取得し、dynamodb_batch_get_item span を出す。
+// RequestItems は複数テーブルを指定できるため、Table ではなく Client に置く。
+func (c *Client) BatchGetItem(ctx context.Context, in *awssdk.BatchGetItemInput, optFns ...func(*awssdk.Options)) (*awssdk.BatchGetItemOutput, error) {
+	if in == nil {
+		return nil, fmt.Errorf("dynamodb: BatchGetItemInput is nil")
+	}
+	itemCount := 0
+	for _, request := range in.RequestItems {
+		itemCount += len(request.Keys)
+	}
+	ctx, span := logger.StartSpan(ctx, c.log, SpanBatchGetItem, logger.Int("item_count", itemCount), logger.Int("table_count", len(in.RequestItems)))
+	api, ok := c.api.(BatchGetAPI)
+	if !ok {
+		err := fmt.Errorf("dynamodb: API does not support BatchGetItem")
+		span.End(err)
+		return nil, err
+	}
+	out, err := api.BatchGetItem(ctx, in, optFns...)
+	span.End(err)
+	return out, err
+}
 
 // TransactWriteItems は複数テーブルにまたがる書き込みをまとめて実行し、dynamodb_transact_write span を出す。
 // テーブル名は各 TransactWriteItem に指定する(Table.Name を使う)。
