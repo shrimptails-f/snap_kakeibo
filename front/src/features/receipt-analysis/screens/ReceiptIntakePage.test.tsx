@@ -25,8 +25,10 @@ const succeededItem = {
 const expenseResponse = {
   expense: {
     expense_id: 'e1',
+    analysis_request_id: 'req1',
     store_name: '居酒屋',
     purchase_date: '2026-09-18',
+    year_month: '2026-09',
     read_amount: 5000,
     adjustment_amount: -2500,
     recorded_amount: 2500,
@@ -34,7 +36,7 @@ const expenseResponse = {
     is_edited: true,
     updated_at: '2026-09-18T01:00:00Z',
   },
-  details: [{ detail_id: 'd1', name: '飲み会', category: 'social', amount: 5000, quantity: 1, source: 'AI', is_edited: true }],
+  details: [{ detail_id: 'd1', name: '飲み会', category: 'social', category_source: 'AI', amount: 5000, quantity: 1, source: 'AI', is_edited: true }],
 }
 
 describe('ReceiptIntakePage', () => {

@@ -127,6 +127,20 @@ func NewAppStack(scope constructs.Construct, id string, props *AppStackProps) *A
 	s.storage.ExpenseDetailsTable.GrantReadData(getExpense.Handler)
 	s.grantJWTSecretRead(getExpense.Function)
 
+	updateExpense := s.newFunction("update-expense", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
+	addRoute(s.API, awsapigatewayv2.HttpMethod_PATCH, APIPathPrefix+"/expenses/{expenseId}", updateExpense.Handler)
+	s.storage.ExpensesTable.GrantReadWriteData(updateExpense.Handler)
+	s.storage.ExpenseDetailsTable.GrantReadWriteData(updateExpense.Handler)
+	s.storage.MonthlySummariesTable.GrantReadWriteData(updateExpense.Handler)
+	s.grantJWTSecretRead(updateExpense.Function)
+
+	rebuildMonthlySummary := s.newFunction("rebuild-monthly-summary", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
+	addRoute(s.API, awsapigatewayv2.HttpMethod_POST, APIPathPrefix+"/monthly-summaries/{month}/rebuild", rebuildMonthlySummary.Handler)
+	s.storage.ExpensesTable.GrantReadData(rebuildMonthlySummary.Handler)
+	s.storage.ExpenseDetailsTable.GrantReadData(rebuildMonthlySummary.Handler)
+	s.storage.MonthlySummariesTable.GrantReadWriteData(rebuildMonthlySummary.Handler)
+	s.grantJWTSecretRead(rebuildMonthlySummary.Function)
+
 	return s
 }
 

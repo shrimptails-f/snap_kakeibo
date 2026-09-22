@@ -8,10 +8,11 @@ import (
 
 func validEnv() map[string]string {
 	return map[string]string{
-		"EXPENSES_TABLE":        "expenses",
-		"EXPENSE_DETAILS_TABLE": "expense-details",
-		"SSM_JWT_SECRET":        "/dev/jwt",
-		"STAGE":                 "dev",
+		"EXPENSES_TABLE":          "expenses",
+		"EXPENSE_DETAILS_TABLE":   "expense-details",
+		"MONTHLY_SUMMARIES_TABLE": "monthly-summaries",
+		"SSM_JWT_SECRET":          "/dev/jwt",
+		"STAGE":                   "dev",
 	}
 }
 
@@ -23,7 +24,7 @@ func TestLoadReadsRequiredAndOptionalValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	want := Config{ExpensesTable: "expenses", ExpenseDetailsTable: "expense-details", JWTSecretParameter: "/dev/jwt", Stage: "dev", LogLevel: "debug"}
+	want := Config{ExpensesTable: "expenses", ExpenseDetailsTable: "expense-details", MonthlySummariesTable: "monthly-summaries", JWTSecretParameter: "/dev/jwt", Stage: "dev", LogLevel: "debug"}
 	if cfg != want {
 		t.Errorf("cfg = %+v, want %+v", cfg, want)
 	}
@@ -37,6 +38,7 @@ func TestLoadRejectsMissingValues(t *testing.T) {
 	}{
 		{"missing expenses table", func(env map[string]string) { delete(env, "EXPENSES_TABLE") }},
 		{"missing details table", func(env map[string]string) { delete(env, "EXPENSE_DETAILS_TABLE") }},
+		{"missing monthly summaries table", func(env map[string]string) { delete(env, "MONTHLY_SUMMARIES_TABLE") }},
 		{"missing jwt secret parameter", func(env map[string]string) { delete(env, "SSM_JWT_SECRET") }},
 		{"missing stage", func(env map[string]string) { delete(env, "STAGE") }},
 	}

@@ -721,9 +721,13 @@ expense_details.category
    カテゴリを変更した明細は category_source = USER
    expense_detailsのGSIキーも更新
 
+   支出1件と既存の全明細をDynamoDB transactionで一括更新する
+
 2. 月次再構築を実行
    purchase_dateの月が変わる場合は旧月と新月の両方
 ```
+
+支出自体の更新競合は初期構成では後勝ちとする。月次再構築は `version` の条件更新が競合した場合に、読み直しから最大3回やり直す。
 
 差分更新(`ADD total_recorded_amount :diff_amount`)は行わない。月あたりの支出数は数十件のため、再構築のコストは無視できる。差分計算の競合や月またぎ・カテゴリ変更の複雑さを避ける。
 

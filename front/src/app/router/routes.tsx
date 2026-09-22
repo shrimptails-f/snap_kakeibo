@@ -1,5 +1,6 @@
 import { Navigate, type RouteObject } from 'react-router'
 import { LoginPage } from '@/features/auth'
+import { ExpenseDetailPage } from '@/features/expenses'
 import { ReceiptIntakePage } from '@/features/receipt-analysis'
 import { AppLayout } from '../layouts/AppLayout'
 import { GuestLayout } from '../layouts/GuestLayout'
@@ -21,7 +22,10 @@ export const routes: RouteObject[] = [
     children: [
       {
         element: <AuthGuard />,
-        children: [{ index: true, element: <ReceiptIntakePage />, errorElement: <RouteErrorPage /> }],
+        children: [
+          { index: true, element: <ReceiptIntakePage />, errorElement: <RouteErrorPage /> },
+          { path: '/expenses/:expenseId', element: <ExpenseDetailPage />, errorElement: <RouteErrorPage /> },
+        ],
       },
     ],
   },

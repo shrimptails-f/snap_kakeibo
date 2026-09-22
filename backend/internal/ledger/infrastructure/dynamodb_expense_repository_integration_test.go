@@ -56,8 +56,81 @@ func newRepository(t *testing.T) infrastructure.DynamoDBExpenseRepository {
 	t.Helper()
 	env := dynamodbtest.Connect(t)
 	return infrastructure.DynamoDBExpenseRepository{
+		Client:         env.Client,
 		Expenses:       env.CreateTable(t, libdynamodb.ExpensesSchema),
 		ExpenseDetails: env.CreateTable(t, libdynamodb.ExpenseDetailsSchema),
+	}
+}
+
+func TestSaveAndFindByMonthAgainstDynamoDB(t *testing.T) {
+	t.Parallel()
+	repo := newRepository(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	putRecord(ctx, t, repo.Expenses, expenseRecord("user-1", "expense-1", "request-1", 1200, 0, false))
+	putRecord(ctx, t, repo.ExpenseDetails, detailRecord("user-1", "expense-1", "detail-1", "牛乳", "food", "AI", 1200, 1))
+	expense, err := find(ctx, repo, "user-1", "expense-1")
+	if err != nil {
+		t.Fatalf("FindByID() error = %v", err)
+	}
+	date, _ := common.NewPurchaseDate("2026-10-01")
+	amount, _ := common.NewDetailAmount(900)
+	quantity, _ := common.NewQuantity(2)
+	category, _ := common.NewCategory("daily_goods")
+	if err := expense.ChangePurchaseDate(date); err != nil {
+		t.Fatal(err)
+	}
+	expense.ChangeStoreName("別の店")
+	if err := expense.AdjustAmount(domain.NewAdjustmentAmount(-300)); err != nil {
+		t.Fatal(err)
+	}
+	if err := expense.RenameDetail("detail-1", "洗剤"); err != nil {
+		t.Fatal(err)
+	}
+	if err := expense.ChangeDetailAmount("detail-1", amount, quantity); err != nil {
+		t.Fatal(err)
+	}
+	if err := expense.ChangeDetailCategory("detail-1", category); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Save(ctx, expense, time.Date(2026, 9, 22, 1, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	userID, _ := common.NewUserID("user-1")
+	oldMonth, _ := common.NewYearMonth("2026-09")
+	newMonth, _ := common.NewYearMonth("2026-10")
+	oldExpenses, err := repo.FindByMonth(ctx, userID, oldMonth)
+	if err != nil || len(oldExpenses) != 0 {
+		t.Fatalf("FindByMonth(old) = %+v, %v", oldExpenses, err)
+	}
+	newExpenses, err := repo.FindByMonth(ctx, userID, newMonth)
+	if err != nil || len(newExpenses) != 1 {
+		t.Fatalf("FindByMonth(new) = %+v, %v", newExpenses, err)
+	}
+	got := newExpenses[0]
+	if got.StoreName() != "別の店" || got.RecordedAmount().Yen() != 900 || got.Details()[0].CategorySource() != domain.CategorySourceUser {
+		t.Errorf("updated expense = %+v / %+v", got, got.Details())
+	}
+}
+
+func TestMonthlySummaryVersionConditionAgainstDynamoDB(t *testing.T) {
+	t.Parallel()
+	env := dynamodbtest.Connect(t)
+	repository := infrastructure.DynamoDBMonthlySummaryRepository{Table: env.CreateTable(t, libdynamodb.MonthlySummariesSchema)}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	userID, _ := common.NewUserID("user-1")
+	month, _ := common.NewYearMonth("2026-09")
+	summary := domain.MonthlySummary{UserID: userID, YearMonth: month, TotalRecordedAmount: 100, ExpenseCount: 1, DetailCount: 1, CategoryTotals: domain.CategoryTotals{common.CategoryFood: 100}, Version: 0}
+	if err := repository.Save(ctx, summary, time.Now()); err != nil {
+		t.Fatalf("first Save() error = %v", err)
+	}
+	version, err := repository.Version(ctx, userID, month)
+	if err != nil || version != 1 {
+		t.Fatalf("Version() = %d, %v", version, err)
+	}
+	if err := repository.Save(ctx, summary, time.Now()); !errors.Is(err, application.ErrConcurrentUpdate) {
+		t.Fatalf("stale Save() error = %v, want ErrConcurrentUpdate", err)
 	}
 }
 
