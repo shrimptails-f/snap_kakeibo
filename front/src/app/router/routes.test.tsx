@@ -75,16 +75,16 @@ describe('routes', () => {
     expect(screen.queryByRole('button', { name: 'ログアウト' })).not.toBeInTheDocument()
   })
 
-  it('Cookie からセッションを復元できたときは /upload を表示する', async () => {
+  it('Cookie からセッションを復元できたときはダッシュボードを表示する', async () => {
     const { calls } = mockBackend({ hasRefreshCookie: true })
 
     const router = renderAt('/')
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'レシートを取り込む' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: 'ダッシュボード' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'snap_kakeibo' })).toHaveAttribute('href', '/')
     expect(screen.queryByText('user@example.com')).not.toBeInTheDocument()
     expect(screen.getByRole('contentinfo')).toHaveTextContent('snap_kakeibo')
-    expect(router.state.location.pathname).toBe('/upload')
+    expect(router.state.location.pathname).toBe('/')
     // メモリに token が無いので refresh → check の 2 リクエストで復元する
     expect(calls.slice(0, 2).map((call) => call.url)).toEqual(['/api/auth/refresh', '/api/auth/check'])
   })
@@ -109,7 +109,7 @@ describe('routes', () => {
     const router = renderAt('/login')
 
     expect(await screen.findByRole('button', { name: 'ログアウト' })).toBeInTheDocument()
-    await waitFor(() => expect(router.state.location.pathname).toBe('/upload'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
   })
 
   it('ログイン済みなら月別支出の直接URLを表示する', async () => {
@@ -131,8 +131,8 @@ describe('routes', () => {
     await user.click(screen.getByRole('button', { name: 'ログイン' }))
 
     expect(await screen.findByRole('button', { name: 'ログアウト' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/upload')
-    expect(router.state.location.search).toBe('')
+    expect(router.state.location.pathname).toBe('/')
+    expect(router.state.location.search).toBe('?tab=recent')
 
     await user.click(screen.getByRole('button', { name: 'ログアウト' }))
 
@@ -146,7 +146,7 @@ describe('routes', () => {
     const router = renderAt('/no-such-page')
 
     expect(await screen.findByRole('button', { name: 'ログアウト' })).toBeInTheDocument()
-    await waitFor(() => expect(router.state.location.pathname).toBe('/upload'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'))
   })
 
   it('パスワードを間違えるとログイン画面に留まり、誤りを案内する', async () => {

@@ -76,7 +76,7 @@ describe('MonthlyExpensesPage', () => {
     renderPage()
     expect(await screen.findByRole('heading', { name: 'この月の支出はまだありません' })).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /レシートを取り込む/ })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: /レシートを取り込む/ })).toHaveAttribute('href', '/upload')
   })
 
   it('集計と明細の両方が失敗した場合は一つの回復操作を表示する', async () => {
