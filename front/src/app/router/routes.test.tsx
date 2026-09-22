@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -87,6 +87,25 @@ describe('routes', () => {
     expect(router.state.location.pathname).toBe('/')
     // メモリに token が無いので refresh → check の 2 リクエストで復元する
     expect(calls.slice(0, 2).map((call) => call.url)).toEqual(['/api/auth/refresh', '/api/auth/check'])
+  })
+
+  it('共通ナビゲーションから主要画面へ進み、現在地を示す', async () => {
+    mockBackend({ hasRefreshCookie: true })
+    const router = renderAt('/')
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const nav = await screen.findByRole('navigation', { name: 'メインナビゲーション' })
+    expect(within(nav).getByRole('link', { name: 'ダッシュボード' })).toHaveAttribute('aria-current', 'page')
+    expect(within(nav).getByRole('link', { name: '月別支出' })).toHaveAttribute('href', `/months/${month}`)
+    await user.click(within(nav).getByRole('link', { name: '月別支出' }))
+    expect(await screen.findByRole('heading', { level: 1, name: '月別支出' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe(`/months/${month}`)
+    expect(within(nav).getByRole('link', { name: '月別支出' })).toHaveAttribute('aria-current', 'page')
+    await user.click(within(nav).getByRole('link', { name: '取り込む' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'レシートを取り込む' })).toBeInTheDocument()
+    expect(within(nav).getByRole('link', { name: '取り込む' })).toHaveAttribute('aria-current', 'page')
+    await user.click(within(nav).getByRole('link', { name: '解析履歴' }))
+    expect(await screen.findByRole('heading', { level: 1, name: '解析履歴' })).toBeInTheDocument()
+    expect(within(nav).getByRole('link', { name: '解析履歴' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('利用中にセッションが切れたら、画面の API の 401 を受けてログイン画面へ送る', async () => {

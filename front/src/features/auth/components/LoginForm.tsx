@@ -40,7 +40,7 @@ export function LoginForm({ onSubmit }: Props) {
         <label className={styles.label} htmlFor="login-email">メールアドレス</label>
         <input
           id="login-email"
-          className={styles.input}
+          className="field-control"
           autoComplete="email"
           inputMode="email"
           required
@@ -59,7 +59,7 @@ export function LoginForm({ onSubmit }: Props) {
         <label className={styles.label} htmlFor="login-password">パスワード</label>
         <input
           id="login-password"
-          className={styles.input}
+          className="field-control"
           autoComplete="current-password"
           required
           type="password"

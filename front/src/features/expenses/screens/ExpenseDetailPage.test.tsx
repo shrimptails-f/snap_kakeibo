@@ -56,6 +56,18 @@ describe('ExpenseDetailPage', () => {
     expect(router.state.location.state).toEqual(expect.objectContaining({ restoreRequestId: 'req1', scrollY: 320, analysisCursorHistory: [''] }))
   })
 
+  it('アップロードから開いた支出は依頼IDを保って取り込みへ戻る', async () => {
+    mockFetch({ '/api/expenses/e1': original })
+    const router = createMemoryRouter([
+      { path: '/expenses/:expenseId', element: <ExpenseDetailPage /> },
+      { path: '/upload', element: <h1>レシートを取り込む</h1> },
+    ], { initialEntries: ['/expenses/e1?from=upload&request=r1'] })
+    render(<QueryClientProvider client={createQueryClient()}><RouterProvider router={router} /></QueryClientProvider>)
+    await userEvent.click(await screen.findByRole('link', { name: /アップロードへ/ }))
+    expect(router.state.location.pathname).toBe('/upload')
+    expect(router.state.location.search).toBe('?request=r1')
+  })
+
   it('レシート画像を表示し、拡大ダイアログを操作できる', async () => {
     mockFetch({ '/api/expenses/e1': withImage })
     renderPage(); const user = userEvent.setup()
