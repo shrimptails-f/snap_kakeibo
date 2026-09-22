@@ -96,6 +96,7 @@ SNS (通知用トピック)
 | --- | --- | --- |
 | `{stage}-snap-kakeibo-storage` | ECR(関数ごと)、S3(receipt / front)、DynamoDB、SQS + DLQ、SNS(アラート)、DLQ アラーム、Lambda のロググループ | 人間が成果物を push する先。stage の `RemovalPolicy` で残すかを決める |
 | `{stage}-snap-kakeibo-app` | Lambda、API Gateway、CloudFront、イベントソースマッピング | destroy して作り直せる |
+| `{stage}-snap-kakeibo-certificate` | CloudFront 用 ACM 証明書 | `us-east-1`。共有 Hosted Zone で DNS 検証する |
 
 SQS / SNS を storage 側に置くのは、S3 → SQS の通知設定がバケット側のスタックに生成されるため(app 側に置くと循環参照になる)と、DLQ のメッセージとメール購読の確認状態を失いたくないため。
 
@@ -151,9 +152,10 @@ S3 frontend bucket (公開アクセスはブロック)
 | バケットポリシー | `cloudfront.amazonaws.com` に `s3:GetObject`、`AWS:SourceArn` を自アカウントの `distribution/*` で制限 | Distribution は app スタック側にあり、ARN を storage 側から参照すると循環するため |
 | エラー応答 | 403 / 404 → `/index.html` (200) | SPA のルーティング。OAC 経由で存在しないキーは 403 になる |
 | 価格クラス | PriceClass_200 | 日本を含む。PriceClass_100 は北米・欧州のみ |
-| 独自ドメイン | 使わない | `*.cloudfront.net` で運用する |
+| 独自ドメイン | dev は `dev.snap-kakeibo.shrimptail.net` | CloudFront 用 ACM 証明書は `us-east-1`。親 Hosted Zone は dotfiles の `PersonalDNS`、アプリ用レコードはこの CDK で管理する |
 
 キャッシュの無効化は `task front:push` が `/*` で行う。
+CloudFront の `/api/*` は `origin-api.dev.snap-kakeibo.shrimptail.net`（API Gateway Regional ドメイン）へ転送する。API Gateway の既定 `execute-api` URL は切替確認後に無効化する。初回の段階的な手順は [infra README](../../infra/README.md#dev-の独自ドメインの初回切替) を参照する。オリジン用ドメインへの直接アクセスは引き続き可能であり、CloudFront 経由のみに制限するには別のアクセス制御が必要になる。
 
 ### コスト
 

@@ -4,9 +4,12 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsapigatewayv2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsapigatewayv2integrations"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awscertificatemanager"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudfront"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudfrontorigins"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awslambda"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsroute53"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsroute53targets"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 
@@ -19,10 +22,27 @@ const APIPathPrefix = "/api"
 // newHTTPAPI は Lambda を束ねる HTTP API(v2)を作る。
 // 呼び出しは CloudFront の /api/* 経由に統一するので CORS は設定しない。
 func newHTTPAPI(scope constructs.Construct, cfg config.Config) awsapigatewayv2.HttpApi {
-	api := awsapigatewayv2.NewHttpApi(scope, jsii.String("HttpApi"), &awsapigatewayv2.HttpApiProps{
-		ApiName: jsii.String(cfg.ResourceName("api")),
+	zone := awsroute53.HostedZone_FromHostedZoneAttributes(scope, jsii.String("APIHostedZone"), &awsroute53.HostedZoneAttributes{
+		HostedZoneId: jsii.String(cfg.Domains.HostedZoneID), ZoneName: jsii.String(cfg.Domains.ZoneName),
 	})
-	awscdk.NewCfnOutput(scope, jsii.String("ApiUrl"), &awscdk.CfnOutputProps{Value: api.ApiEndpoint()})
+	certificate := awscertificatemanager.NewCertificate(scope, jsii.String("APIOriginCertificate"), &awscertificatemanager.CertificateProps{
+		DomainName: jsii.String(cfg.Domains.APIOriginFQDN()),
+		Validation: awscertificatemanager.CertificateValidation_FromDns(zone),
+	})
+	domain := awsapigatewayv2.NewDomainName(scope, jsii.String("APIOriginDomain"), &awsapigatewayv2.DomainNameProps{
+		DomainName: jsii.String(cfg.Domains.APIOriginFQDN()), Certificate: certificate,
+		EndpointType: awsapigatewayv2.EndpointType_REGIONAL,
+	})
+	api := awsapigatewayv2.NewHttpApi(scope, jsii.String("HttpApi"), &awsapigatewayv2.HttpApiProps{
+		ApiName:                   jsii.String(cfg.ResourceName("api")),
+		DefaultDomainMapping:      &awsapigatewayv2.DomainMappingOptions{DomainName: domain},
+		DisableExecuteApiEndpoint: jsii.Bool(cfg.Domains.DisableExecuteAPIEndpoint),
+	})
+	alias := awsroute53.RecordTarget_FromAlias(awsroute53targets.NewApiGatewayv2DomainProperties(domain.RegionalDomainName(), domain.RegionalHostedZoneId()))
+	awsroute53.NewARecord(scope, jsii.String("APIOriginAliasA"), &awsroute53.ARecordProps{
+		Zone: zone, RecordName: jsii.String(cfg.Domains.APIOriginRecordName), Target: alias,
+	})
+	awscdk.NewCfnOutput(scope, jsii.String("ApiUrl"), &awscdk.CfnOutputProps{Value: jsii.String("https://" + cfg.Domains.APIOriginFQDN())})
 	return api
 }
 
@@ -37,9 +57,12 @@ func addRoute(api awsapigatewayv2.HttpApi, method awsapigatewayv2.HttpMethod, pa
 
 // attachAPIToDistribution は CloudFront の /api/* を HTTP API へ転送する。
 // キャッシュはせず、Host 以外のヘッダとクエリをそのまま渡す。
-func attachAPIToDistribution(dist awscloudfront.Distribution, api awsapigatewayv2.HttpApi) {
-	// ApiEndpoint は https://{id}.execute-api.{region}.amazonaws.com の形なのでホスト部分だけ取り出す
-	host := awscdk.Fn_Select(jsii.Number(2), awscdk.Fn_Split(jsii.String("/"), api.ApiEndpoint(), nil))
+func attachAPIToDistribution(dist awscloudfront.Distribution, api awsapigatewayv2.HttpApi, cfg config.Config) {
+	host := jsii.String(cfg.Domains.APIOriginFQDN())
+	if cfg.Domains.UseLegacyAPIOrigin {
+		// 初回切替の第1段階では新しい API ドメインを先に配備し、CloudFront は旧オリジンを維持する。
+		host = awscdk.Fn_Select(jsii.Number(2), awscdk.Fn_Split(jsii.String("/"), api.ApiEndpoint(), nil))
+	}
 	origin := awscloudfrontorigins.NewHttpOrigin(host, &awscloudfrontorigins.HttpOriginProps{
 		ProtocolPolicy: awscloudfront.OriginProtocolPolicy_HTTPS_ONLY,
 	})

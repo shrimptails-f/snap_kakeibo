@@ -17,8 +17,18 @@ import (
 func synth(t *testing.T, cfg config.Config) (assertions.Template, assertions.Template) {
 	t.Helper()
 	app := awscdk.NewApp(nil)
-	storage := NewStorageStack(app, cfg.StorageStackName, &StorageStackProps{Config: cfg})
-	appStack := NewAppStack(app, cfg.AppStackName, &AppStackProps{Config: cfg, Storage: storage})
+	storageProps := awscdk.StackProps{Env: &awscdk.Environment{Account: jsii.String(cfg.AccountID), Region: jsii.String(cfg.Region)}}
+	storage := NewStorageStack(app, cfg.StorageStackName, &StorageStackProps{StackProps: storageProps, Config: cfg})
+	certProps := &awscdk.StackProps{
+		Env:                   &awscdk.Environment{Account: jsii.String(cfg.AccountID), Region: jsii.String("us-east-1")},
+		CrossRegionReferences: jsii.Bool(true),
+	}
+	certificate := NewFrontendCertificateStack(app, "TestFrontendCertificate", certProps, cfg)
+	appProps := awscdk.StackProps{
+		Env:                   &awscdk.Environment{Account: jsii.String(cfg.AccountID), Region: jsii.String(cfg.Region)},
+		CrossRegionReferences: jsii.Bool(true),
+	}
+	appStack := NewAppStack(app, cfg.AppStackName, &AppStackProps{StackProps: appProps, Config: cfg, Storage: storage, FrontendCertificate: certificate.Certificate})
 	return assertions.Template_FromStack(storage.Stack, nil), assertions.Template_FromStack(appStack.Stack, nil)
 }
 
@@ -27,6 +37,65 @@ func synthPipeline(t *testing.T, cfg config.Config) assertions.Template {
 	app := awscdk.NewApp(nil)
 	pipeline := NewPipelineStack(app, cfg.PipelineStackName, &PipelineStackProps{Config: cfg})
 	return assertions.Template_FromStack(pipeline.Stack, nil)
+}
+
+func TestCustomDomains(t *testing.T) {
+	cfg := config.Dev()
+	storage, app := synth(t, cfg)
+
+	storage.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]any{
+		"CorsConfiguration": map[string]any{"CorsRules": assertions.Match_ArrayWith(&[]any{assertions.Match_ObjectLike(&map[string]any{
+			"AllowedMethods": []string{"PUT"},
+			"AllowedOrigins": []string{"https://dev.snap-kakeibo.shrimptail.net"},
+		})})},
+	})
+	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Api"), map[string]any{
+		"DisableExecuteApiEndpoint": true,
+	})
+	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::DomainName"), map[string]any{
+		"DomainName": "origin-api.dev.snap-kakeibo.shrimptail.net",
+	})
+	app.ResourceCountIs(jsii.String("AWS::ApiGatewayV2::ApiMapping"), jsii.Number(1))
+	app.HasResourceProperties(jsii.String("AWS::CertificateManager::Certificate"), map[string]any{
+		"DomainName": "origin-api.dev.snap-kakeibo.shrimptail.net",
+	})
+	app.HasResourceProperties(jsii.String("AWS::CloudFront::Distribution"), map[string]any{
+		"DistributionConfig": assertions.Match_ObjectLike(&map[string]any{
+			"Aliases": []string{"dev.snap-kakeibo.shrimptail.net"},
+			"Origins": assertions.Match_ArrayWith(&[]any{assertions.Match_ObjectLike(&map[string]any{
+				"DomainName": "origin-api.dev.snap-kakeibo.shrimptail.net",
+			})}),
+		}),
+	})
+	app.ResourceCountIs(jsii.String("AWS::Route53::RecordSet"), jsii.Number(3))
+
+	certificateApp := awscdk.NewApp(nil)
+	certificate := NewFrontendCertificateStack(certificateApp, "TestCertificate", &awscdk.StackProps{
+		Env:                   &awscdk.Environment{Account: jsii.String(cfg.AccountID), Region: jsii.String("us-east-1")},
+		CrossRegionReferences: jsii.Bool(true),
+	}, cfg)
+	certTemplate := assertions.Template_FromStack(certificate.Stack, nil)
+	certTemplate.HasResourceProperties(jsii.String("AWS::CertificateManager::Certificate"), map[string]any{
+		"DomainName": "dev.snap-kakeibo.shrimptail.net",
+	})
+}
+
+func TestInitialDomainCutoverKeepsExistingAPIPath(t *testing.T) {
+	cfg := config.Dev()
+	cfg.Domains.DisableExecuteAPIEndpoint = false
+	cfg.Domains.UseLegacyAPIOrigin = true
+	_, app := synth(t, cfg)
+
+	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Api"), map[string]any{
+		"DisableExecuteApiEndpoint": false,
+	})
+	app.HasResourceProperties(jsii.String("AWS::CloudFront::Distribution"), map[string]any{
+		"DistributionConfig": assertions.Match_ObjectLike(&map[string]any{
+			"Origins": assertions.Match_ArrayWith(&[]any{assertions.Match_ObjectLike(&map[string]any{
+				"DomainName": map[string]any{"Fn::Select": []any{2, assertions.Match_AnyValue()}},
+			})}),
+		}),
+	})
 }
 
 func TestStorageStackResources(t *testing.T) {

@@ -16,8 +16,15 @@ func Dev() Config {
 		Region:    common.AWSRegion,
 		// TODO: DLQ アラートを受け取るメールアドレスを設定する
 		AlertEmail: "",
-		// TODO: フロントエンドの配信ドメインが決まったら絞る
-		CORSAllowedOrigins: []string{"*"},
+		// 旧 *.cloudfront.net URL でのアップロードはドメイン切替後にサポートしない。
+		CORSAllowedOrigins: []string{"https://dev.snap-kakeibo.shrimptail.net"},
+		Domains: DomainConfig{
+			HostedZoneID:              "Z102143231J5HFGPDMXG8",
+			ZoneName:                  "shrimptail.net",
+			FrontendRecordName:        "dev.snap-kakeibo",
+			APIOriginRecordName:       "origin-api.dev.snap-kakeibo",
+			DisableExecuteAPIEndpoint: true,
+		},
 		// dev は作り直せればよいので残さない
 		RemovalPolicy: awscdk.RemovalPolicy_DESTROY,
 
