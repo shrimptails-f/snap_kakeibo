@@ -20,6 +20,18 @@
   --color-info: #285f9e;
   --color-info-subtle: #e7f0fa;
 
+  --color-category-food: #39795a;
+  --color-category-daily-goods: #4f80ad;
+  --color-category-medical: #b45664;
+  --color-category-transport: #39878b;
+  --color-category-utilities: #827c35;
+  --color-category-entertainment: #7159a6;
+  --color-category-social: #b87830;
+  --color-category-clothing: #a75587;
+  --color-category-education: #4d6494;
+  --color-category-other: #8e699f;
+  --color-category-unknown: #7b858d;
+
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;

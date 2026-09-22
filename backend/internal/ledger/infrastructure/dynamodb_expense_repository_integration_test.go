@@ -134,6 +134,40 @@ func TestMonthlySummaryVersionConditionAgainstDynamoDB(t *testing.T) {
 	}
 }
 
+func TestMonthlyReadModelsAgainstDynamoDB(t *testing.T) {
+	t.Parallel()
+	env := dynamodbtest.Connect(t)
+	detailsTable := env.CreateTable(t, libdynamodb.ExpenseDetailsSchema)
+	summariesTable := env.CreateTable(t, libdynamodb.MonthlySummariesSchema)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	first := detailRecord("user-1", "expense-1", "detail-1", "高い品", "food", "AI", 5000, 1)
+	first["GSI1SK"] = infrastructure.DetailMonthSK(5000, "2026-09-18", "detail-1")
+	second := detailRecord("user-1", "expense-2", "detail-2", "安い品", "daily_goods", "USER", 1000, 2)
+	second["GSI1SK"] = infrastructure.DetailMonthSK(1000, "2026-09-12", "detail-2")
+	second["source"], second["is_edited"] = "USER", true
+	putRecord(ctx, t, detailsTable, second)
+	putRecord(ctx, t, detailsTable, first)
+	putRecord(ctx, t, summariesTable, map[string]any{
+		"PK": "USER#user-1", "SK": "MONTH#2026-09", "user_id": "user-1", "year_month": "2026-09",
+		"total_recorded_amount": int64(5500), "expense_count": int64(2), "detail_count": int64(2), "version": int64(1),
+		"category_total_food": int64(5000), "category_total_daily_goods": int64(1000), "updated_at": "2026-09-22T01:00:00Z",
+	})
+	userID, _ := common.NewUserID("user-1")
+	month, _ := common.NewYearMonth("2026-09")
+	details, err := (infrastructure.DynamoDBExpenseRepository{ExpenseDetails: detailsTable}).ListByMonth(ctx, userID, month)
+	if err != nil || len(details) != 2 || details[0].DetailID != "detail-1" || details[1].Source != domain.RecordSourceUser || !details[1].IsEdited {
+		t.Fatalf("ListByMonth() = %+v, %v", details, err)
+	}
+	summaries, err := (infrastructure.DynamoDBMonthlySummaryRepository{Table: summariesTable}).List(ctx, userID)
+	if err != nil || len(summaries) != 1 || summaries[0].Summary.TotalRecordedAmount != 5500 || summaries[0].Summary.CategoryTotals[common.CategoryFood] != 5000 {
+		t.Fatalf("List() = %+v, %v", summaries, err)
+	}
+	if len(summaries[0].Summary.CategoryTotals) != len(common.Categories()) {
+		t.Errorf("category totals count = %d", len(summaries[0].Summary.CategoryTotals))
+	}
+}
+
 // find は文字列の識別子を値オブジェクトへ変換して FindByID を呼ぶ。
 func find(ctx context.Context, repo infrastructure.DynamoDBExpenseRepository, user, expense string) (domain.Expense, error) {
 	userID, _ := common.NewUserID(user)

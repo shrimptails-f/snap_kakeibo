@@ -651,6 +651,14 @@ ValidationError
 
 ---
 
+## GET /monthly-summaries
+
+保存済みの月次集計を `PK = USER#{user_id}`、`SK begins_with MONTH#` で取得し、`year_month` 降順で全件返す。トップレベルの `category_total_{category}` は、定義済み全カテゴリを持つ `category_totals` の map に組み立てる。
+
+外部向けページネーションは持たず、DynamoDB の `LastEvaluatedKey` がなくなるまで Lambda 内で取得する。
+
+---
+
 ## 月次再構築
 
 ```text
@@ -737,7 +745,7 @@ expense_details.category
 
 指定月の購入明細を金額降順で取得する。
 
-表示上限とページネーションは初期構成では持たない。
+表示上限と外部向けページネーションは初期構成では持たない。DynamoDB の 1 回の Query 上限を越えても全件返せるよう、Lambda 内では `LastEvaluatedKey` がなくなるまで取得する。
 
 ```text
 detail_month_amount_index

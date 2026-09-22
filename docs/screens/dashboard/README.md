@@ -4,7 +4,7 @@
 
 月ごとの計上額と前月からの変化を俯瞰し、気になった月の支出へ進む。
 
-設計対象: [Issue #77](https://github.com/shrimptails-f/snap_kakeibo/issues/77) のダッシュボード。記号ベースの画面設計案であり、実装済みの画面ではない。API の関連課題は [Issue #61](https://github.com/shrimptails-f/snap_kakeibo/issues/61)。
+設計対象: [Issue #77](https://github.com/shrimptails-f/snap_kakeibo/issues/77) のダッシュボード。記号ベースの画面設計案であり、画面は未実装。参照 API `GET /api/monthly-summaries` は [Issue #83](https://github.com/shrimptails-f/snap_kakeibo/issues/83) で実装する。
 
 表示と操作を試すための [HTMLモック](./mock.html) をブラウザで開ける。サンプルデータを使った独立した画面で、実際のAPIには接続しない。
 
@@ -227,9 +227,9 @@
 
 ### GET /monthly-summaries
 
-月次集計一覧を取得する。Issue #61 の契約では `year_month` 降順、ページネーションなし。表示期間の切り替えは取得した一覧から行う。
+月次集計一覧を取得する。`year_month` 降順、外部向けページネーションなしで、表示期間の切り替えは取得した一覧から行う。
 
-以下は既存仕様のレスポンス例（0円のカテゴリは省略）。Issue #61 の実装では定義済み全カテゴリを `category_totals` に含める方針。
+以下はレスポンス例。実際のレスポンスは定義済み全カテゴリを `category_totals` に含める。
 
 ```json
 {

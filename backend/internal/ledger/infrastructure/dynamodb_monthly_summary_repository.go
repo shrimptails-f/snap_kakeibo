@@ -20,6 +20,73 @@ import (
 type DynamoDBMonthlySummaryRepository struct{ Table *libdynamodb.Table }
 
 var _ application.MonthlySummaryRepository = DynamoDBMonthlySummaryRepository{}
+var _ application.MonthlySummaryLister = DynamoDBMonthlySummaryRepository{}
+
+type monthlySummaryItem struct {
+	UserID              string `dynamodbav:"user_id"`
+	YearMonth           string `dynamodbav:"year_month"`
+	TotalRecordedAmount int64  `dynamodbav:"total_recorded_amount"`
+	ExpenseCount        int64  `dynamodbav:"expense_count"`
+	DetailCount         int64  `dynamodbav:"detail_count"`
+	Version             int64  `dynamodbav:"version"`
+	UpdatedAt           string `dynamodbav:"updated_at"`
+	Food                int64  `dynamodbav:"category_total_food"`
+	DailyGoods          int64  `dynamodbav:"category_total_daily_goods"`
+	Medical             int64  `dynamodbav:"category_total_medical"`
+	Transport           int64  `dynamodbav:"category_total_transport"`
+	Utilities           int64  `dynamodbav:"category_total_utilities"`
+	Entertainment       int64  `dynamodbav:"category_total_entertainment"`
+	Social              int64  `dynamodbav:"category_total_social"`
+	Clothing            int64  `dynamodbav:"category_total_clothing"`
+	Education           int64  `dynamodbav:"category_total_education"`
+	Other               int64  `dynamodbav:"category_total_other"`
+	Unknown             int64  `dynamodbav:"category_total_unknown"`
+}
+
+// List は利用者の保存済み集計を全件読み、year_month 降順で返す。
+func (r DynamoDBMonthlySummaryRepository) List(ctx context.Context, userID common.UserID) ([]application.MonthlySummaryItem, error) {
+	result := make([]application.MonthlySummaryItem, 0)
+	var cursor map[string]ddbtypes.AttributeValue
+	for {
+		out, err := r.Table.Query(ctx, &awssdk.QueryInput{
+			KeyConditionExpression:    aws.String("PK = :pk AND begins_with(SK, :sk)"),
+			ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{":pk": stringValue(UserPK(userID.String())), ":sk": stringValue("MONTH#")},
+			ScanIndexForward:          aws.Bool(false), ExclusiveStartKey: cursor,
+		})
+		if err != nil {
+			return nil, err
+		}
+		var items []monthlySummaryItem
+		if err := attributevalue.UnmarshalListOfMaps(out.Items, &items); err != nil {
+			return nil, fmt.Errorf("unmarshal monthly summaries: %w", err)
+		}
+		for _, item := range items {
+			month, err := common.NewYearMonth(item.YearMonth)
+			if err != nil {
+				return nil, fmt.Errorf("restore monthly summary month: %w", err)
+			}
+			updatedAt, err := time.Parse(time.RFC3339, item.UpdatedAt)
+			if err != nil {
+				return nil, fmt.Errorf("restore monthly summary updated_at: %w", err)
+			}
+			totals := domain.CategoryTotals{
+				common.CategoryFood: item.Food, common.CategoryDailyGoods: item.DailyGoods, common.CategoryMedical: item.Medical,
+				common.CategoryTransport: item.Transport, common.CategoryUtilities: item.Utilities, common.CategoryEntertainment: item.Entertainment,
+				common.CategorySocial: item.Social, common.CategoryClothing: item.Clothing, common.CategoryEducation: item.Education,
+				common.CategoryOther: item.Other, common.CategoryUnknown: item.Unknown,
+			}
+			result = append(result, application.MonthlySummaryItem{Summary: domain.MonthlySummary{
+				UserID: userID, YearMonth: domain.YearMonth(month), TotalRecordedAmount: item.TotalRecordedAmount,
+				ExpenseCount: item.ExpenseCount, DetailCount: item.DetailCount, CategoryTotals: totals, Version: item.Version,
+			}, UpdatedAt: updatedAt})
+		}
+		if len(out.LastEvaluatedKey) == 0 {
+			break
+		}
+		cursor = out.LastEvaluatedKey
+	}
+	return result, nil
+}
 
 func (r DynamoDBMonthlySummaryRepository) Version(ctx context.Context, userID common.UserID, month domain.YearMonth) (int64, error) {
 	out, err := r.Table.GetItem(ctx, &awssdk.GetItemInput{Key: map[string]ddbtypes.AttributeValue{"PK": stringValue(UserPK(userID.String())), "SK": stringValue(MonthSK(month.String()))}, ProjectionExpression: aws.String("version")})

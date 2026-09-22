@@ -27,6 +27,8 @@ function mockBackend({ hasRefreshCookie }: { hasRefreshCookie: boolean }) {
     '/api/auth/logout': () => new Response(null, { status: 204 }),
     [`/api/months/${month}/analysis-requests`]: ({ init }) =>
       isAuthorized(init) ? jsonResponse({ items: [] }) : unauthorized(),
+    '/api/monthly-summaries': ({ init }) => isAuthorized(init) ? jsonResponse({ monthly_summaries: [] }) : unauthorized(),
+    [`/api/months/${month}/expenses`]: ({ init }) => isAuthorized(init) ? jsonResponse({ year_month: month, items: [] }) : unauthorized(),
   })
   return {
     ...mocked,
@@ -50,6 +52,7 @@ function renderAt(path: string) {
 describe('routes', () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.stubGlobal('scrollTo', vi.fn())
   })
 
   afterEach(() => {
@@ -107,6 +110,14 @@ describe('routes', () => {
 
     expect(await screen.findByRole('button', { name: 'ログアウト' })).toBeInTheDocument()
     await waitFor(() => expect(router.state.location.pathname).toBe('/upload'))
+  })
+
+  it('ログイン済みなら月別支出の直接URLを表示する', async () => {
+    mockBackend({ hasRefreshCookie: true })
+    const router = renderAt(`/months/${month}`)
+    expect(await screen.findByRole('heading', { level: 1, name: '月別支出' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'この月の支出はまだありません' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe(`/months/${month}`)
   })
 
   it('ログインすると元の URL へ戻り、ログアウトするとログイン画面へ戻る', async () => {

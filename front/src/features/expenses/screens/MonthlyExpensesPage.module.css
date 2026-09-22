@@ -1,0 +1,36 @@
+.page { display: grid; gap: var(--space-8); }
+.pageHeader, .sectionHeading, .itemTop { display: flex; justify-content: space-between; gap: var(--space-4); align-items: flex-start; }
+.pageHeader p, .sectionHeading p, .itemMeta, .help { color: var(--color-text-muted); }
+.monthNav { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); align-items: end; }
+.monthNav a { min-height: 44px; display: inline-flex; align-items: center; color: var(--color-primary); text-decoration-thickness: 1px; }
+.monthNav a:nth-of-type(2) { justify-content: flex-end; }
+.monthNav label { grid-column: 1 / -1; display: grid; gap: var(--space-1); font-weight: 700; }
+.monthNav input { min-height: 44px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); }
+.total, .breakdown, .details { border-top: 1px solid var(--color-border); padding-top: var(--space-6); }
+.total > strong { display: block; font-size: clamp(32px, 9vw, 44px); line-height: 1.2; }
+.total > p { color: var(--color-text-muted); }
+.breakdownGrid { display: grid; gap: var(--space-6); align-items: center; }
+.chart { width: min(64vw, 240px); aspect-ratio: 1; margin-inline: auto; border: 1px solid var(--color-border); border-radius: 50%; background: var(--chart-segments); }
+.noChart { min-height: 120px; display: grid; place-items: center; padding: var(--space-4); text-align: center; color: var(--color-text-muted); background: var(--color-surface-subtle); border-radius: var(--radius-md); }
+.breakdown table { width: 100%; border-collapse: collapse; }
+.breakdown th, .breakdown td { padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border); text-align: right; }
+.breakdown th:first-child { text-align: left; }
+.swatch { display: inline-block; width: 12px; height: 12px; margin-right: var(--space-2); border: 1px solid rgb(27 31 36 / 35%); border-radius: 2px; }
+.swatch[data-category="food"] { background: var(--color-category-food); }.swatch[data-category="daily_goods"] { background: var(--color-category-daily-goods); }.swatch[data-category="medical"] { background: var(--color-category-medical); }.swatch[data-category="transport"] { background: var(--color-category-transport); }.swatch[data-category="utilities"] { background: var(--color-category-utilities); }.swatch[data-category="entertainment"] { background: var(--color-category-entertainment); }.swatch[data-category="social"] { background: var(--color-category-social); }.swatch[data-category="clothing"] { background: var(--color-category-clothing); }.swatch[data-category="education"] { background: var(--color-category-education); }.swatch[data-category="other"] { background: var(--color-category-other); }.swatch[data-category="unknown"] { background: var(--color-category-unknown); }
+.help { margin-top: var(--space-4); font-size: 14px; }
+.details ol { margin: 0; padding: 0; list-style: none; }
+.details li { border-bottom: 1px solid var(--color-border); }
+.details li:focus { outline: none; }
+.details li:focus-within { background: var(--color-primary-subtle); }
+.details a { display: grid; gap: var(--space-2); min-height: 44px; padding: var(--space-4) 0; color: inherit; text-decoration: none; }
+.itemTop > strong:first-child { overflow-wrap: anywhere; }
+.itemTop > strong:last-child { flex: none; text-align: right; }
+.barTrack { display: block; height: 6px; overflow: hidden; border-radius: 999px; background: var(--color-surface-subtle); }
+.barTrack span { display: block; height: 100%; background: var(--color-text-muted); }
+.itemMeta { font-size: 14px; overflow-wrap: anywhere; }
+.error, .warning, .empty, .invalid { padding: var(--space-4); border-radius: var(--radius-md); }
+.error { background: var(--color-danger-subtle); }.warning { background: var(--color-warning-subtle); }.empty, .invalid { background: var(--color-surface-subtle); }
+.error p, .warning p, .empty p, .invalid p { margin-bottom: var(--space-3); }
+.empty a, .invalid a { color: var(--color-primary); min-height: 44px; display: inline-flex; align-items: center; }
+@media (min-width: 600px) { .monthNav { grid-template-columns: auto minmax(180px, 240px) auto auto; }.monthNav label { grid-column: auto; }.breakdownGrid { grid-template-columns: minmax(220px, .8fr) minmax(360px, 1.2fr); } }
+@media (max-width: 480px) { .pageHeader { display: grid; }.pageHeader button { justify-self: start; }.itemTop { display: grid; }.itemTop > strong:last-child { justify-self: end; } }

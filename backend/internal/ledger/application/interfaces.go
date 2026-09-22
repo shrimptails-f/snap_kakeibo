@@ -26,6 +26,36 @@ type ExpenseRepository interface {
 	Save(ctx context.Context, expense domain.Expense, updatedAt time.Time) error
 }
 
+// MonthlyExpenseItem は月別支出画面へ返す、支出明細に複製された読み取りモデル。
+type MonthlyExpenseItem struct {
+	DetailID     domain.ExpenseDetailID
+	ExpenseID    domain.ExpenseID
+	Name         string
+	Category     common.Category
+	Amount       int64
+	Quantity     int64
+	Source       domain.RecordSource
+	IsEdited     bool
+	StoreName    string
+	PurchaseDate string
+}
+
+// MonthlyExpenseLister は指定月の支出明細を金額降順で返す。
+type MonthlyExpenseLister interface {
+	ListByMonth(ctx context.Context, userID common.UserID, month domain.YearMonth) ([]MonthlyExpenseItem, error)
+}
+
+// MonthlySummaryItem は保存済み月次集計の読み取りモデル。
+type MonthlySummaryItem struct {
+	Summary   domain.MonthlySummary
+	UpdatedAt time.Time
+}
+
+// MonthlySummaryLister は利用者の月次集計を対象月降順で返す。
+type MonthlySummaryLister interface {
+	List(ctx context.Context, userID common.UserID) ([]MonthlySummaryItem, error)
+}
+
 // MonthlySummaryRepository は version 付きの月次集計を読み書きする。
 type MonthlySummaryRepository interface {
 	Version(ctx context.Context, userID common.UserID, month domain.YearMonth) (int64, error)

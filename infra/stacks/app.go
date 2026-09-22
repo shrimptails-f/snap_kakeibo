@@ -145,6 +145,16 @@ func NewAppStack(scope constructs.Construct, id string, props *AppStackProps) *A
 	s.storage.MonthlySummariesTable.GrantReadWriteData(rebuildMonthlySummary.Handler)
 	s.grantJWTSecretRead(rebuildMonthlySummary.Function)
 
+	getMonthlySummaries := s.newFunction("get-monthly-summaries", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
+	addRoute(s.API, awsapigatewayv2.HttpMethod_GET, APIPathPrefix+"/monthly-summaries", getMonthlySummaries.Handler)
+	s.storage.MonthlySummariesTable.GrantReadData(getMonthlySummaries.Handler)
+	s.grantJWTSecretRead(getMonthlySummaries.Function)
+
+	listMonthExpenses := s.newFunction("list-month-expenses", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})
+	addRoute(s.API, awsapigatewayv2.HttpMethod_GET, APIPathPrefix+"/months/{month}/expenses", listMonthExpenses.Handler)
+	s.storage.ExpenseDetailsTable.GrantReadData(listMonthExpenses.Handler)
+	s.grantJWTSecretRead(listMonthExpenses.Function)
+
 	return s
 }
 

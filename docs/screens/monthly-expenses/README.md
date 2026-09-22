@@ -18,7 +18,7 @@ python3 -m http.server 4175 --directory docs/screens/monthly-expenses
 
 指定月の計上額とカテゴリ別内訳を確認し、気になる明細から支出詳細へ進む。
 
-設計対象: [Issue #77](https://github.com/shrimptails-f/snap_kakeibo/issues/77) の月別支出画面。以下は記号ベースの画面設計案であり、実装済みの画面ではない。月別明細APIは [Issue #62](https://github.com/shrimptails-f/snap_kakeibo/issues/62) を参照する。
+実装対象: [Issue #83](https://github.com/shrimptails-f/snap_kakeibo/issues/83)（親: [Issue #77](https://github.com/shrimptails-f/snap_kakeibo/issues/77)）。React 画面は `/months/:yearMonth`、月別明細 API は `GET /api/months/{yyyy-MM}/expenses` で提供する。
 
 ## 設計方針
 
@@ -237,7 +237,7 @@ python3 -m http.server 4175 --directory docs/screens/monthly-expenses
 
 ## 実装時の確認項目
 
-以下は本番画面の実装後の検証項目。モックではサンプルデータを使って表示・操作を確認しており、API接続や編集保存まで検証済みという意味ではない。
+以下は本番画面と API を継続して確認するための検証項目。モックはサンプルデータを使う独立した設計資料である。
 
 - 360px / 390px / 768px / 1280pxで月選択、円グラフと表、明細を確認し、横スクロール・金額の欠け・操作の重なりがない。
 - 長い商品名・店舗名、全カテゴリ、明細多数、全件0円、負の計上額でも情報を読める。
@@ -248,7 +248,6 @@ python3 -m http.server 4175 --directory docs/screens/monthly-expenses
 
 ## 今回の対象外
 
-- Reactによる画面実装とAPI変更。図とHTMLモックは設計の確認用とする。
 - 並べ替え切り替え、検索、カテゴリ絞り込み、予算、前月比。まず全明細の金額比較と詳細への導線を成立させる。
 - 月別画面での編集・削除・再解析・集計再構築。編集は支出詳細で行い、再読み込みは取得のみとする。
 - アプリ全体のナビゲーション実装。Issue #77 の別項目として扱う。
