@@ -3,6 +3,7 @@ import type { ChangeEvent } from 'react'
 import { useQueryErrorResetBoundary } from '@tanstack/react-query'
 import { ExpenseDetailPanel } from '@/features/expenses'
 import { toFriendlyMessage } from '@/shared/api/errors'
+import { Button } from '@/shared/ui/Button'
 import { ErrorBoundary } from '@/shared/ui/ErrorBoundary'
 import { SpinnerBlock } from '@/shared/ui/Spinner'
 import { useAnalysisRequests } from '../hooks/useAnalysisRequests'
@@ -49,14 +50,9 @@ export function ReceiptIntakePage() {
         <h1 className={styles.title}>{month} のレシート取り込み</h1>
         <div className={styles.actions}>
           {/* 解析は非同期に進むので、利用者が再読み込みで確かめる(定期取得はしない) */}
-          <button
-            className={styles.reloadButton}
-            type="button"
-            onClick={reloadRequests.reload}
-            disabled={reloadRequests.isDisabled}
-          >
+          <Button variant="secondary" onClick={reloadRequests.reload} disabled={reloadRequests.isDisabled}>
             {reloadRequests.isFetching ? '再読み込み中...' : '再読み込み'}
-          </button>
+          </Button>
           <label className={styles.uploadButton}>
             <input type="file" accept="image/*,.pdf" onChange={handleFileChange} disabled={upload.isPending} />
             {upload.isPending ? 'アップロード中...' : 'ファイルを選択'}
@@ -116,9 +112,9 @@ export function ReceiptIntakePage() {
               fallback={(error, reset) => (
                 <div className={styles.panelError}>
                   <p role="alert">{toFriendlyMessage(error)}</p>
-                  <button className={styles.retryButton} type="button" onClick={reset}>
+                  <Button variant="secondary" onClick={reset}>
                     再試行
-                  </button>
+                  </Button>
                 </div>
               )}
             >

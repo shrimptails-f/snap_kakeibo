@@ -17,21 +17,6 @@
   gap: var(--space-2);
 }
 
-.reloadButton {
-  min-height: 44px;
-  padding: 0 var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  color: var(--color-text);
-  background: var(--color-surface);
-  cursor: pointer;
-}
-
-.reloadButton:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
 .uploadButton {
   display: inline-flex;
   align-items: center;
@@ -175,16 +160,6 @@
 
 .panelError p {
   color: var(--color-danger);
-}
-
-.retryButton {
-  min-height: 44px;
-  padding: 0 var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  color: var(--color-text);
-  background: var(--color-surface);
-  cursor: pointer;
 }
 
 @media (max-width: 959px) {

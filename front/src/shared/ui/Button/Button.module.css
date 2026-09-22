@@ -1,0 +1,45 @@
+/* 共通ボタン(design_guidelines.md §5)。タップ領域は 44px 以上、focus indicator は globals.css の :focus-visible に任せる */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+/* disabled は理由を伝えないので、必要なら近くに説明を置く(§5) */
+.button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* 主要操作 */
+.primary {
+  color: #fff;
+  background: var(--color-primary);
+}
+
+.primary:not(:disabled):hover {
+  background: var(--color-primary-hover);
+}
+
+/* 戻る、キャンセル、再読み込みなどの補助操作 */
+.secondary {
+  border-color: var(--color-border);
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.secondary:not(:disabled):hover {
+  background: var(--color-surface-subtle);
+}
+
+/* 削除など取り消しにくい操作。hover 用の色トークンが無いので背景は変えない */
+.danger {
+  color: #fff;
+  background: var(--color-danger);
+}

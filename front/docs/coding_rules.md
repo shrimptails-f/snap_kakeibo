@@ -70,6 +70,7 @@ screen はルートと feature の接続に留める。通信、状態判定、�
 - import は外部パッケージ、絶対パス、相対パスの順にまとめる
 - feature 内部は相対 import、feature 外からは公開 `index.ts` を使う
 - `shared/index.ts` のような全体 barrel は作らない
+- `shared/ui` は部品ごとにディレクトリを切り(`shared/ui/Button/`)、component・`*.module.css`・test を同じディレクトリに置く。外からは `@/shared/ui/Button` のようにディレクトリの `index.ts` を経由する
 - 型だけの import は `import type` を使う
 - 深い相対パスを避けるため、`@/` を `src/` に割り当てる
 - 循環依存を避けるため、feature 内部から自身の `index.ts` を経由しない
@@ -95,6 +96,7 @@ API のフィールド名は境界では snake_case のまま扱ってよい。U
 - グローバル CSS は `app/styles/globals.css` だけとし、トークン、リセット、`.page-shell` / `.amount` / `.muted` のような全画面共通の class に限定する。feature 固有の class を追加しない
 - 状態による見た目の切り替えは、`aria-invalid` などの属性セレクタか、`.status` + `.statusDanger` のような追加 class で表す
 - 別 component の module を import するのは、同じ見た目を意図的に共有する場合(`GuestLayout` が `AppHeader.module.css` を使うなど)に限る。2 つ以上の feature で同じ部品が必要になったら `shared/ui` へ移す
+- `shared/ui` の部品に `className` を渡すのは幅や配置など置き場所の都合に限り、色や形は部品の props(`Button` の `variant` など)で選ぶ
 - inline style は動的な数値など、CSS で表現しにくい場合に限定する
 - `!important` は原則使用しない
 
