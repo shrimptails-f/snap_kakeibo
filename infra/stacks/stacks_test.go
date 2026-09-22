@@ -180,7 +180,7 @@ func TestStorageStackResources(t *testing.T) {
 	app.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]any{
 		"FunctionName": "dev-snap-kakeibo-analyze-receipt",
 		"Environment": map[string]any{"Variables": assertions.Match_ObjectLike(&map[string]any{
-			"OPENAI_MODEL": "gpt-5-mini", "OPENAI_REASONING_EFFORT": "low",
+			"OPENAI_MODEL": "gpt-5.6-luna", "OPENAI_REASONING_EFFORT": "medium",
 		})},
 	})
 	// SQS イベントソースは live Alias に付け、CodeDeploy の切り替えで解析側も更新できるようにする
