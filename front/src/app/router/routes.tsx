@@ -1,5 +1,6 @@
 import { Navigate, type RouteObject } from 'react-router'
 import { LoginPage } from '@/features/auth'
+import { DashboardPage } from '@/features/dashboard'
 import { ExpenseDetailPage, MonthlyExpensesPage } from '@/features/expenses'
 import { AnalysisRequestsPage, UploadPage } from '@/features/receipt-analysis'
 import { AppLayout } from '../layouts/AppLayout'
@@ -22,7 +23,7 @@ export const routes: RouteObject[] = [
       {
         element: <AuthGuard />,
         children: [
-          { index: true, element: <Navigate to="/upload" replace /> },
+          { index: true, element: <DashboardPage />, errorElement: <RouteErrorPage /> },
           { path: '/upload', element: <UploadPage />, errorElement: <RouteErrorPage /> },
           { path: '/analysis-requests', element: <AnalysisRequestsPage />, errorElement: <RouteErrorPage /> },
           { path: '/months/:yearMonth', element: <MonthlyExpensesPage />, errorElement: <RouteErrorPage /> },

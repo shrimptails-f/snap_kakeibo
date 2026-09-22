@@ -116,7 +116,7 @@ export function MonthlyExpensesPage() {
       {!bothFailed && (expenses.isError && !expenses.data ? (
         <ErrorNotice message="明細を読み込めませんでした。" action="明細を再読み込み" onRetry={() => void expenses.refetch()} />
       ) : expenses.isPending ? <SpinnerBlock label="支出明細を読み込み中" /> : isEmpty ? (
-        <section className={styles.empty}><h2>この月の支出はまだありません</h2><p>レシートを取り込むと、ここで月ごとの支出を確認できます。</p><Link to="/">レシートを取り込む ›</Link></section>
+        <section className={styles.empty}><h2>この月の支出はまだありません</h2><p>レシートを取り込むと、ここで月ごとの支出を確認できます。</p><Link to="/upload">レシートを取り込む ›</Link></section>
       ) : (
         <>
           {isInconsistent && <div className={styles.warning} role="alert"><p>月合計と明細の情報が揃っていません。</p><Button variant="secondary" onClick={reloadAll}>再読み込み</Button></div>}
