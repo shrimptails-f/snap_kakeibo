@@ -72,20 +72,18 @@ describe('DashboardPage', () => {
     expect(screen.getByText(/集計更新：2026年9月15日 21:01/)).toBeInTheDocument()
   })
 
-  it('カテゴリ区画で詳細を開いて参考月を切り替え、Escapeで閉じる', async () => {
+  it('カテゴリ区画に詳細パネルを出さず、参考月は選択欄で切り替える', async () => {
     mockFetch({ '/api/monthly-summaries': summaries })
     const router = renderPage()
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
 
-    const segment = await screen.findByRole('button', { name: /2026年8月、食費.*内訳を表示/ })
-    await user.click(segment)
-    const tooltip = screen.getByRole('complementary')
-    expect(tooltip).toHaveTextContent('2026年8月・食費')
+    await screen.findByRole('list', { name: '月ごとのカテゴリ別明細合計' })
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /内訳を表示/ })).not.toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText('対象月'), '2026-08')
     expect(screen.getByLabelText('対象月')).toHaveValue('2026-08')
     expect(router.state.location.search).toContain('reference=2026-08')
-
-    await user.keyboard('{Escape}')
-    expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
   })
 
   it('計上額表示では棒から月別支出へ移動できる', async () => {

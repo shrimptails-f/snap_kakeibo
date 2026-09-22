@@ -17,11 +17,10 @@ import {
   yearMonthLabel,
 } from '../lib/dashboardData'
 import { dashboardCategories } from '../types/monthly-summary.schema'
-import type { DashboardCategory, MonthlySummary } from '../types/monthly-summary.types'
+import type { MonthlySummary } from '../types/monthly-summary.types'
 import styles from './DashboardPage.module.css'
 
 type ChartMode = 'category' | 'recorded'
-type SegmentDetails = { summary: MonthlySummary; category: DashboardCategory; amount: number }
 type ChartStyle = CSSProperties & Record<'--segment-start' | '--segment-size', string>
 
 function valueStyle(start: number, size: number): ChartStyle {
@@ -74,15 +73,11 @@ function SummaryGraph({
   mode,
   period,
   summariesByMonth,
-  onPreviewSegment,
-  onSelectSegment,
   onOpenMonth,
 }: {
   mode: ChartMode
   period: string[]
   summariesByMonth: Map<string, MonthlySummary>
-  onPreviewSegment: (details: SegmentDetails) => void
-  onSelectSegment: (details: SegmentDetails) => void
   onOpenMonth: () => void
 }) {
   const scale = graphScale(period, summariesByMonth, mode)
@@ -104,16 +99,12 @@ function SummaryGraph({
                 <span className={styles.zeroLine} aria-hidden="true" />
                 {!summary ? <span className={styles.noBar}>集計なし</span> : mode === 'category' ? (
                   segmentPositions(summary, scale.minimum, scale.range).map((segment) => (
-                    <button
+                    <span
                       key={segment.category}
-                      type="button"
                       className={styles.segment}
                       data-category={segment.category}
                       style={valueStyle(segment.start, segment.size)}
-                      aria-label={`${yearMonthLabel(month)}、${CATEGORY_LABELS[segment.category]} ${formatYen(segment.amount)}、内訳を表示`}
-                      onMouseEnter={() => onPreviewSegment({ summary, category: segment.category, amount: segment.amount })}
-                      onFocus={() => onPreviewSegment({ summary, category: segment.category, amount: segment.amount })}
-                      onClick={() => onSelectSegment({ summary, category: segment.category, amount: segment.amount })}
+                      aria-hidden="true"
                     />
                   ))
                 ) : (
@@ -158,7 +149,6 @@ export function DashboardPage() {
   const query = useMonthlySummaries()
   const [searchParams, setSearchParams] = useSearchParams()
   const [isCoolingDown, setIsCoolingDown] = useState(false)
-  const [activeSegment, setActiveSegment] = useState<SegmentDetails | null>(null)
   const cooldownTimer = useRef<number | undefined>(undefined)
   const didRestoreScroll = useRef(false)
   const scrollStorageKey = `dashboard-scroll:${searchParams.toString()}`
@@ -217,12 +207,6 @@ export function DashboardPage() {
       ? referenceMonth
       : ([...nextPeriod].reverse().find((month) => summariesByMonth.has(month)) ?? nextEndMonth)
     updateParams({ end: nextEndMonth, reference: nextReference })
-    setActiveSegment(null)
-  }
-
-  function selectSegment(details: SegmentDetails) {
-    setActiveSegment(details)
-    updateParams({ reference: details.summary.year_month })
   }
 
   function rememberScrollPosition() {
@@ -263,7 +247,7 @@ export function DashboardPage() {
   const previousReference = referenceSummary ? summariesByMonth.get(shiftYearMonth(referenceSummary.year_month, -1)) : undefined
 
   return (
-    <div className={styles.page} onKeyDown={(event) => { if (event.key === 'Escape') setActiveSegment(null) }}>
+    <div className={styles.page}>
       <header className={styles.pageHeader}>
         <div><h1>ダッシュボード</h1><p>月ごとの支出を振り返る</p></div>
         <Link className={styles.uploadLink} to="/upload">レシートを取り込む ›</Link>
@@ -291,8 +275,8 @@ export function DashboardPage() {
         <div className={styles.sectionHeading}>
           <div><h2 id="trend-heading">月ごとの支出</h2><p>{mode === 'category' ? 'カテゴリ別の高さは明細合計です。計上額とは一致しない場合があります。' : '各支出の計上額を月ごとに合計しています。'}</p></div>
           <div className={styles.modeSwitch} role="group" aria-label="グラフの表示内容">
-            <button type="button" aria-pressed={mode === 'category'} onClick={() => { updateParams({ mode: 'category' }); setActiveSegment(null) }}>カテゴリ別（明細）</button>
-            <button type="button" aria-pressed={mode === 'recorded'} onClick={() => { updateParams({ mode: 'recorded' }); setActiveSegment(null) }}>計上額</button>
+            <button type="button" aria-pressed={mode === 'category'} onClick={() => updateParams({ mode: 'category' })}>カテゴリ別（明細）</button>
+            <button type="button" aria-pressed={mode === 'recorded'} onClick={() => updateParams({ mode: 'recorded' })}>計上額</button>
           </div>
         </div>
         {mode === 'category' && <ul className={styles.legend} aria-label="カテゴリの凡例">{dashboardCategories.map((category) => <li key={category}><span data-category={category} />{CATEGORY_LABELS[category]}</li>)}</ul>}
@@ -300,18 +284,8 @@ export function DashboardPage() {
           mode={mode}
           period={period}
           summariesByMonth={summariesByMonth}
-          onPreviewSegment={setActiveSegment}
-          onSelectSegment={selectSegment}
           onOpenMonth={rememberScrollPosition}
         />
-        {activeSegment && (
-          <aside className={styles.tooltip} aria-live="polite">
-            <div><strong>{yearMonthLabel(activeSegment.summary.year_month)}・{CATEGORY_LABELS[activeSegment.category]}</strong><button type="button" aria-label="カテゴリ詳細を閉じる" onClick={() => setActiveSegment(null)}>×</button></div>
-            <p><span>カテゴリの明細金額</span><strong className="amount">{formatYen(activeSegment.amount)}</strong></p>
-            <p><span>明細合計</span><strong className="amount">{formatYen(detailTotal(activeSegment.summary))}</strong></p>
-            <p><span>計上額</span><strong className="amount">{formatYen(activeSegment.summary.total_recorded_amount)}</strong></p>
-          </aside>
-        )}
         {summariesByMonth.has(nowMonth) && period.includes(nowMonth) && <p className={styles.currentMonthNote}>※ {yearMonthLabel(nowMonth)}は月途中の登録分です。前月全体との比較になります。</p>}
       </section>
 
@@ -319,7 +293,7 @@ export function DashboardPage() {
         <div className={styles.sectionHeading}>
           <div><h2 id="breakdown-heading">カテゴリ別内訳</h2><p>明細ベース・参考</p></div>
           <label>対象月
-            <select value={referenceMonth} onChange={(event) => { updateParams({ reference: event.target.value }); setActiveSegment(null) }}>
+            <select value={referenceMonth} onChange={(event) => updateParams({ reference: event.target.value })}>
               {period.map((month) => <option key={month} value={month}>{yearMonthLabel(month)}</option>)}
             </select>
           </label>

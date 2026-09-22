@@ -79,14 +79,9 @@
     .swatch { display: inline-block; width: 12px; height: 12px; flex: none; border-radius: 2px; background: var(--category); }
     .stack-column { position: relative; height: 100%; display: flex; align-items: end; justify-content: center; }
     .stack { display: flex; flex-direction: column-reverse; width: min(58px, 74%); height: var(--bar); }
-    .segment { display: block; flex: var(--share) 0 0; min-height: 0; min-width: 0; padding: 0; border: 0; border-radius: 0; background: var(--category); cursor: pointer; }
+    .segment { display: block; flex: var(--share) 0 0; min-height: 0; min-width: 0; background: var(--category); }
     .segment + .segment { border-bottom: 1px solid white; }
-    .segment:hover, .segment:focus-visible { filter: brightness(.85); outline: 2px solid var(--color-text); outline-offset: 1px; z-index: 1; }
     .stack-column .bar-month { min-height: 44px; display: flex; align-items: center; top: 100%; color: var(--color-primary); }
-    .chart-tooltip { position: fixed; z-index: 10; width: 250px; max-width: calc(100vw - 24px); background: white; border: 1px solid var(--color-border); border-radius: var(--radius-sm); box-shadow: 0 6px 24px rgb(27 31 36 / 16%); padding: 12px 16px; font-size: 14px; }
-    .chart-tooltip strong { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
-    .chart-tooltip p { margin: 4px 0; }
-    .chart-tooltip .muted { color: var(--color-text-muted); }
     .hbar .stack { flex-direction: row; width: var(--bar); height: 100%; }
     .hbar .segment + .segment { border-bottom: 0; border-left: 1px solid white; }
     .hbar .hbar__track { height: 36px; }
@@ -203,7 +198,6 @@
       </section>
     </div>
   </main>
-  <div id="chartTooltip" class="chart-tooltip" role="tooltip" hidden></div>
   <div class="toast" id="toast" role="status" hidden></div>
   <style>.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}</style>
   <script>
@@ -233,52 +227,25 @@
     const categoryColors = { '食費':'var(--color-category-food)', '日用品':'var(--color-category-daily-goods)', '医療':'var(--color-category-medical)', '交通':'var(--color-category-transport)', '水道・光熱・通信':'var(--color-category-utilities)', '娯楽':'var(--color-category-entertainment)', '交際・会食':'var(--color-category-social)', '衣類':'var(--color-category-clothing)', '教育':'var(--color-category-education)', 'その他':'var(--color-category-other)', '分類不能':'var(--color-category-unknown)' };
     let chartMode='categories';
     const detailSum=m=>m.categories.reduce((sum,c)=>sum+c[1],0);
-    const tooltip=document.querySelector('#chartTooltip');
-    let tooltipTimer;
-    function hideTooltip() { clearTimeout(tooltipTimer); tooltip.hidden=true; document.querySelectorAll('[aria-describedby="chartTooltip"]').forEach(el=>el.removeAttribute('aria-describedby')); }
-    function showCategory(button) {
-      clearTimeout(tooltipTimer);
-      const m=visible.find(m=>m.ym===button.dataset.month);
-      const [name,amount]=m.categories.find(c=>c[0]===button.dataset.category);
-      document.querySelectorAll('[aria-describedby="chartTooltip"]').forEach(el=>el.removeAttribute('aria-describedby'));
-      tooltip.innerHTML=`<p>${m.label} · ${name}</p><strong>${yen(amount)}</strong><p class="muted">明細合計 ${yen(detailSum(m))}<br>計上額 ${yen(m.amount)}</p>`;
-      tooltip.hidden=false; button.setAttribute('aria-describedby','chartTooltip');
-      const r=button.getBoundingClientRect();
-      tooltip.style.left=`${Math.max(12,Math.min(innerWidth-tooltip.offsetWidth-12,r.left+r.width/2-tooltip.offsetWidth/2))}px`;
-      tooltip.style.top=`${Math.max(12,Math.min(innerHeight-tooltip.offsetHeight-12,r.top-tooltip.offsetHeight-8>12?r.top-tooltip.offsetHeight-8:r.bottom+8))}px`;
-    }
     function renderChart() {
-      hideTooltip();
       const months=[...visible].reverse(); const stacked=chartMode==='categories';
       const max=Math.max(150000,...months.map(m=>stacked?detailSum(m):(m.amount||0)));
       const valueLabel=m=>`<span class="bar-value">${m.amount===null?'集計なし':yen(stacked?detailSum(m):m.amount)}</span>`;
       const segments=m=>Object.entries(categoryColors).map(([name,color])=>{
         const amount=m.categories.find(c=>c[0]===name)?.[1]||0;
-        return amount>0?`<button type="button" class="segment" style="--share:${amount};--category:${color}" data-month="${m.ym}" data-category="${name}" aria-label="${m.label}、${name}、${yen(amount)}"></button>`:'';
+        return amount>0?`<span class="segment" style="--share:${amount};--category:${color}" aria-hidden="true"></span>`:'';
       }).join('');
       document.querySelector('#chartLegend').innerHTML=Object.entries(categoryColors).filter(([name])=>months.some(m=>m.categories.some(c=>c[0]===name&&c[1]>0))).map(([name,color])=>`<span><i class="swatch" style="--category:${color}" aria-hidden="true"></i>${name}</span>`).join('');
       document.querySelector('#chartLegend').hidden=!stacked;
       document.querySelector('#chartMeaning').textContent=stacked?'積み上げの高さは明細合計です。月の計上額とは一致しない場合があります。月名から明細へ進めます。':'各月の計上額の合計です。棒を選ぶと、その月の支出を開きます。';
       document.querySelectorAll('.chart-mode button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===chartMode)));
       document.querySelector('.chart').setAttribute('aria-label',stacked?'カテゴリ別の明細金額。各色の金額は参考内訳でも確認できます。':'月ごとの計上額。各月の棒に正確な金額を併記しています。');
-      document.querySelector('#mobileChart').setAttribute('aria-label',stacked?'カテゴリ別の明細金額。タップで金額を確認できます。':'月ごとの計上額。各棒は同じ尺度です。');
+      document.querySelector('#mobileChart').setAttribute('aria-label',stacked?'カテゴリ別の明細金額。正確な金額は参考内訳で確認できます。':'月ごとの計上額。各棒は同じ尺度です。');
       document.querySelectorAll('.y-label').forEach((el,i)=>el.textContent=yen(Math.round(max*(3-i)/3)));
       document.querySelector('#chartBars').innerHTML=months.map(m=>stacked?`<div class="stack-column"><div class="stack" style="--bar:${detailSum(m)/max*100}%">${segments(m)}</div><a class="bar-month js-nav" href="/months/${m.ym}">${m.short}</a>${valueLabel(m)}</div>`:`<a class="bar-link js-nav" style="--bar:${(m.amount||0)/max*100}%" href="/months/${m.ym}" aria-label="${m.label}、${m.amount===null?'集計なし':yen(m.amount)}、月別支出を見る"><span class="bar-month">${m.short}</span>${valueLabel(m)}</a>`).join('');
       document.querySelector('#mobileChart').innerHTML=months.map(m=>stacked?`<div class="hbar"><a class="hbar__label text-link js-nav" href="/months/${m.ym}">${m.short}</a><div class="hbar__track"><div class="stack" style="--bar:${detailSum(m)/max*100}%">${segments(m)}</div></div>${valueLabel(m)}</div>`:`<a class="hbar js-nav" style="--bar:${(m.amount||0)/max*100}%" href="/months/${m.ym}" aria-label="${m.label}、${m.amount===null?'集計なし':yen(m.amount)}、月別支出を見る"><span class="hbar__label">${m.short}</span><span class="hbar__track"><span class="hbar__fill"></span></span>${valueLabel(m)}</a>`).join('')+`<div class="scale"><span>0</span><span>${yen(max)}</span></div>`;
-      document.querySelectorAll('.segment').forEach(button=>{
-        button.addEventListener('mouseenter',()=>showCategory(button));
-        button.addEventListener('focus',()=>showCategory(button));
-        button.addEventListener('click',()=>{showCategory(button);ref.value=button.dataset.month;renderBreakdown(ref.value);});
-        button.addEventListener('mouseleave',()=>{tooltipTimer=setTimeout(()=>{if(document.activeElement!==button)hideTooltip();},180);});
-        button.addEventListener('blur',hideTooltip);
-      });
       bindNav();
     }
-    tooltip.addEventListener('mouseenter',()=>clearTimeout(tooltipTimer));
-    tooltip.addEventListener('mouseleave',hideTooltip);
-    document.addEventListener('keydown',event=>{if(event.key==='Escape')hideTooltip();});
-    document.addEventListener('click',event=>{if(!event.target.closest('.segment,.chart-tooltip'))hideTooltip();});
-    window.addEventListener('resize',hideTooltip);
     document.querySelectorAll('[data-mode]').forEach(button=>button.addEventListener('click',()=>{chartMode=button.dataset.mode;renderChart();}));
     function renderPeriod(endYm) {
       const endIndex=data.findIndex(m=>m.ym===endYm); const previousRef=ref.value;
