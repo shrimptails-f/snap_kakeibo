@@ -1,0 +1,31 @@
+.root { display: grid; gap: var(--space-3); }
+.mobileToggle { width: 100%; }
+.content { display: none; }
+.contentOpen { display: grid; gap: var(--space-3); }
+.viewport { position: relative; min-height: 180px; max-height: 30vh; overflow: auto; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-subtle); }
+.image { display: block; width: 100%; height: auto; object-fit: contain; }
+.image[hidden] { display: none; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: var(--color-text-muted); background: rgb(246 249 247 / 88%); }
+.message { display: grid; place-items: center; min-height: 180px; padding: var(--space-6); color: var(--color-text-muted); text-align: center; }
+.message p { margin: 0; color: var(--color-text); font-weight: 700; }
+.message small { margin-top: var(--space-2); }
+.dialogBackdrop { position: fixed; z-index: 40; inset: 0; padding: var(--space-4); background: rgb(27 31 36 / 72%); }
+.dialog { display: grid; grid-template-rows: auto minmax(0, 1fr); width: 100%; height: 100%; border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-card); }
+.dialogToolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border); }
+.dialogToolbar h2 { margin: 0; font-size: 20px; }
+.dialogToolbar > div { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.dialogViewport { overflow: auto; padding: var(--space-4); text-align: center; }
+.dialogViewport img { display: block; max-width: none; height: auto; margin-inline: auto; }
+
+@media (min-width: 960px) {
+  .mobileToggle { display: none; }
+  .content, .contentOpen { display: grid; gap: var(--space-3); }
+  .viewport { min-height: min(62vh, 680px); max-height: calc(100vh - 180px); }
+}
+
+@media (max-width: 600px) {
+  .dialogBackdrop { padding: 0; }
+  .dialog { border-radius: 0; }
+  .dialogToolbar { align-items: stretch; }
+  .dialogToolbar > div { display: grid; grid-template-columns: repeat(2, 1fr); width: 100%; }
+}

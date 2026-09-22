@@ -14,6 +14,11 @@ type ExpenseFinder interface {
 	FindByID(ctx context.Context, userID common.UserID, expenseID domain.ExpenseID) (domain.Expense, error)
 }
 
+// ReceiptImageURLPresigner は支出の元になったレシート画像を直接取得する期限付き URL を発行する。
+type ReceiptImageURLPresigner interface {
+	PresignGet(ctx context.Context, userID common.UserID, requestID common.AnalysisRequestID, expires time.Duration) (string, error)
+}
+
 // ExpenseRepository は支出集約の取得・月別一覧・保存を提供する。
 type ExpenseRepository interface {
 	ExpenseFinder

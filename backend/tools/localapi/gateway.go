@@ -208,3 +208,32 @@ func rewritePutURL(tc transformContext, body []byte) ([]byte, error) {
 	res["put_url"] = rewritten
 	return json.Marshal(res)
 }
+
+// rewriteExpenseImageURL は get-expense が返す署名付き GET URL をブラウザから到達できる S3 中継へ差し替える。
+func rewriteExpenseImageURL(tc transformContext, body []byte) ([]byte, error) {
+	var res map[string]json.RawMessage
+	if err := json.Unmarshal(body, &res); err != nil {
+		return nil, err
+	}
+	var expense map[string]json.RawMessage
+	if err := json.Unmarshal(res["expense"], &expense); err != nil {
+		return nil, fmt.Errorf("expense: %w", err)
+	}
+	var imageURL string
+	if err := json.Unmarshal(expense["image_url"], &imageURL); err != nil {
+		return nil, fmt.Errorf("image_url: %w", err)
+	}
+	if !strings.HasPrefix(imageURL, tc.endpoint) {
+		return nil, fmt.Errorf("image_url %q does not start with %s", imageURL, tc.endpoint)
+	}
+	rewritten, err := json.Marshal(tc.publicS3URL + strings.TrimPrefix(imageURL, tc.endpoint))
+	if err != nil {
+		return nil, err
+	}
+	expense["image_url"] = rewritten
+	res["expense"], err = json.Marshal(expense)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(res)
+}

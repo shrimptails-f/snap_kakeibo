@@ -104,10 +104,13 @@ func TestReceiptUploadAnalysisAndRetrieval(t *testing.T) {
 
 	getExpense := ledgerapp.NewGetExpenseUsecase(ledgerinfra.DynamoDBExpenseRepository{
 		Expenses: expenses, ExpenseDetails: expenseDetails,
-	})
+	}, ledgerinfra.S3ReceiptImageURLPresigner{Bucket: bucket})
 	got, err := getExpense.Get(ctx, ledgerapp.GetExpenseInput{UserID: "scenario-user", ExpenseID: analyzed.ExpenseID})
 	if err != nil {
 		t.Fatalf("get expense: %v", err)
+	}
+	if got.ImageURL == "" {
+		t.Error("get expense image URL is empty")
 	}
 	expense := got.Expense
 	if expense.ID().String() != "expense-receipt-flow" || expense.SourceRequestID().String() != uploaded.AnalysisRequestID ||

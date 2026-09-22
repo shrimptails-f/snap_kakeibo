@@ -8,7 +8,8 @@
 //	receipts := libs3.New(awsCfg, log).Bucket(cfg.ReceiptBucket)   // バケットに束縛(Bucket 参照)
 //	data, err := receipts.GetBytes(ctx, key, 30<<20)                // s3_get_object span
 //	err = receipts.PutBytes(ctx, key, raw, "application/json")      // s3_put_object span
-//	url, err := receipts.PresignPutObject(ctx, key, "image/jpeg", 15*time.Minute)
+//	putURL, err := receipts.PresignPutObject(ctx, key, "image/jpeg", 15*time.Minute)
+//	getURL, err := receipts.PresignGetObject(ctx, key, 15*time.Minute)
 //
 // バケットを呼び出しごとに指定する Client.GetBytes などもある(S3 イベントが運んできたバケットを使う場合など)。
 //
@@ -47,6 +48,7 @@ type API interface {
 
 // Presigner は署名付き URL を作る操作。*awss3.PresignClient が満たす。
 type Presigner interface {
+	PresignGetObject(ctx context.Context, params *awss3.GetObjectInput, optFns ...func(*awss3.PresignOptions)) (*PresignedRequest, error)
 	PresignPutObject(ctx context.Context, params *awss3.PutObjectInput, optFns ...func(*awss3.PresignOptions)) (*PresignedRequest, error)
 }
 
@@ -169,6 +171,27 @@ func (c *Client) PresignPutObject(ctx context.Context, bucket, key, contentType 
 		return "", err
 	}
 	if req.Method != http.MethodPut {
+		return "", fmt.Errorf("s3: unexpected presigned method %s", req.Method)
+	}
+	return req.URL, nil
+}
+
+// PresignGetObject はブラウザなどがオブジェクトを直接 GET するための署名付き URL を返す。
+// ネットワークには出ないので span は出さない。
+func (c *Client) PresignGetObject(ctx context.Context, bucket, key string, expires time.Duration) (string, error) {
+	if c.presigner == nil {
+		return "", fmt.Errorf("s3: presigner is not configured")
+	}
+	req, err := c.presigner.PresignGetObject(ctx, &awss3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	}, func(o *awss3.PresignOptions) {
+		o.Expires = expires
+	})
+	if err != nil {
+		return "", err
+	}
+	if req.Method != http.MethodGet {
 		return "", fmt.Errorf("s3: unexpected presigned method %s", req.Method)
 	}
 	return req.URL, nil

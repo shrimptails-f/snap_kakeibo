@@ -63,3 +63,32 @@ func TestRewritePutURLRejectsUnexpectedOrigin(t *testing.T) {
 		t.Error("expected an error for a put_url outside the local endpoint")
 	}
 }
+
+func TestRewriteExpenseImageURLReplacesNestedURL(t *testing.T) {
+	t.Parallel()
+	tc := transformContext{endpoint: "http://floci:4566", publicS3URL: "http://localhost:8080/s3"}
+	in := `{"expense":{"expense_id":"e1","image_url":"http://floci:4566/bucket/receipts/u1/r1/original.jpg?X-Amz-Signature=sig"},"details":[]}`
+
+	out, err := rewriteExpenseImageURL(tc, []byte(in))
+	if err != nil {
+		t.Fatalf("rewriteExpenseImageURL() error = %v", err)
+	}
+	var res struct {
+		Expense map[string]string `json:"expense"`
+		Details []any             `json:"details"`
+	}
+	if err := json.Unmarshal(out, &res); err != nil {
+		t.Fatalf("output is not JSON: %v", err)
+	}
+	if res.Expense["image_url"] != "http://localhost:8080/s3/bucket/receipts/u1/r1/original.jpg?X-Amz-Signature=sig" || res.Expense["expense_id"] != "e1" || len(res.Details) != 0 {
+		t.Errorf("rewritten = %+v", res)
+	}
+}
+
+func TestRewriteExpenseImageURLRejectsUnexpectedOrigin(t *testing.T) {
+	t.Parallel()
+	tc := transformContext{endpoint: "http://floci:4566", publicS3URL: "http://localhost:8080/s3"}
+	if _, err := rewriteExpenseImageURL(tc, []byte(`{"expense":{"image_url":"https://s3.amazonaws.com/bucket/key"},"details":[]}`)); err == nil {
+		t.Error("expected an error for an image_url outside the local endpoint")
+	}
+}

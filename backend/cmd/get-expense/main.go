@@ -34,6 +34,7 @@ type expenseResponse struct {
 	IsEdited          bool   `json:"is_edited"`
 	Source            string `json:"source"`
 	UpdatedAt         string `json:"updated_at"`
+	ImageURL          string `json:"image_url"`
 }
 
 type detailResponse struct {
@@ -115,11 +116,11 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 		}
 		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
 	}
-	return apigateway.JSON(200, toResponse(out.Expense))
+	return apigateway.JSON(200, toResponse(out.Expense, out.ImageURL))
 }
 
 // toResponse は支出集約を HTTP レスポンスへ変換する。明細は 0 件でも null ではなく [] にする(画面は details をそのまま map する)。
-func toResponse(e domain.Expense) response {
+func toResponse(e domain.Expense, imageURL string) response {
 	source := e.Details()
 	details := make([]detailResponse, 0, len(source))
 	for _, d := range source {
@@ -131,6 +132,7 @@ func toResponse(e domain.Expense) response {
 			PurchaseDate: e.PurchaseDate().String(), YearMonth: e.PurchaseDate().YearMonth().String(),
 			ReadAmount: e.ReadAmount().Yen(), AdjustmentAmount: e.AdjustmentAmount().Yen(), RecordedAmount: e.RecordedAmount().Yen(), IsEdited: e.Edited(),
 			Source: e.Source().String(), UpdatedAt: e.UpdatedAt().UTC().Format(time.RFC3339),
+			ImageURL: imageURL,
 		},
 		Details: details,
 	}

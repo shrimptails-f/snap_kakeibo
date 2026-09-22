@@ -125,6 +125,10 @@ func NewAppStack(scope constructs.Construct, id string, props *AppStackProps) *A
 	addRoute(s.API, awsapigatewayv2.HttpMethod_GET, APIPathPrefix+"/expenses/{expenseId}", getExpense.Handler)
 	s.storage.ExpensesTable.GrantReadData(getExpense.Handler)
 	s.storage.ExpenseDetailsTable.GrantReadData(getExpense.Handler)
+	getExpense.Function.AddToRolePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Actions:   jsii.Strings("s3:GetObject"),
+		Resources: jsii.Strings(*s.storage.Bucket.ArnForObjects(jsii.String("receipts/*"))),
+	}))
 	s.grantJWTSecretRead(getExpense.Function)
 
 	updateExpense := s.newFunction("update-expense", functionProps{MemorySize: 256, Timeout: props.Config.Timeouts.API, CodeDeploy: true})

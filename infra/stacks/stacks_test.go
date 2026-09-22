@@ -211,7 +211,17 @@ func TestStorageStackResources(t *testing.T) {
 			"EXPENSES_TABLE":          assertions.Match_AnyValue(),
 			"EXPENSE_DETAILS_TABLE":   assertions.Match_AnyValue(),
 			"ANALYSIS_REQUESTS_TABLE": assertions.Match_AnyValue(),
+			"RECEIPT_BUCKET":          assertions.Match_AnyValue(),
 		})},
+	})
+	app.HasResourceProperties(jsii.String("AWS::IAM::Policy"), map[string]any{
+		"Roles": assertions.Match_ArrayWith(&[]any{map[string]any{
+			"Ref": assertions.Match_StringLikeRegexp(jsii.String("^GetExpenseFunctionServiceRole")),
+		}}),
+		"PolicyDocument": map[string]any{"Statement": assertions.Match_ArrayWith(&[]any{assertions.Match_ObjectLike(&map[string]any{
+			"Action": "s3:GetObject",
+			"Effect": "Allow",
+		})})},
 	})
 	app.HasParameter(jsii.String("*"), map[string]any{
 		"Type":    "AWS::SSM::Parameter::Value<String>",

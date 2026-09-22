@@ -38,3 +38,8 @@ func (b *Bucket) PutBytes(ctx context.Context, key string, body []byte, contentT
 func (b *Bucket) PresignPutObject(ctx context.Context, key, contentType string, expires time.Duration) (string, error) {
 	return b.client.PresignPutObject(ctx, b.name, key, contentType, expires)
 }
+
+// PresignGetObject は Client.PresignGetObject をこのバケットに対して行う。
+func (b *Bucket) PresignGetObject(ctx context.Context, key string, expires time.Duration) (string, error) {
+	return b.client.PresignGetObject(ctx, b.name, key, expires)
+}

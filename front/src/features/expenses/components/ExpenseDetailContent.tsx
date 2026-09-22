@@ -12,6 +12,7 @@ import type { ExpenseDetail, GetExpenseResponse, UpdateExpenseRequest } from '..
 import { formatYen } from '@/shared/lib/formatYen'
 import { Button } from '@/shared/ui/Button'
 import { SourceBadge } from './SourceBadge'
+import { ReceiptImage } from './ReceiptImage'
 import styles from './ExpenseDetailContent.module.css'
 
 const CATEGORIES = ['food', 'daily_goods', 'medical', 'transport', 'utilities', 'entertainment', 'social', 'clothing', 'education', 'other', 'unknown'] as const
@@ -106,14 +107,14 @@ export function ExpenseDetailContent({ expenseId }: Props) {
       {isRefreshFailed && <div className={styles.warning} role="alert"><p>保存は完了しましたが、最新の表示を取得できませんでした。</p><Button variant="secondary" onClick={reloadLatest}>最新の内容を読み込む</Button></div>}
 
       <div className={styles.layout}>
+        <section className={styles.amountSummary} aria-label="支出金額">
+          <div><span>{isEditing ? '保存後の計上額' : '計上額'}</span><strong className="amount">{recordedAmount === null ? '入力中' : formatYen(recordedAmount)}</strong></div>
+          <p><span>読取金額 {formatYen(data.expense.read_amount)}</span><span>＋ 調整額 {recordedAmount === null ? '入力中' : formatYen(adjustment)}</span></p>
+          {!isEditing && <SourceBadge source={data.expense.source} isEdited={data.expense.is_edited} />}
+          {recordedAmount !== null && recordedAmount < 0 && <small>返金などにより、今月の支出を減らす金額です。</small>}
+        </section>
+        <aside className={styles.receipt}><h2>レシート画像</h2><ReceiptImage expenseId={expenseId} initialUrl={data.expense.image_url} /></aside>
         <div className={styles.content}>
-          <section className={styles.amountSummary} aria-label="支出金額">
-            <div><span>{isEditing ? '保存後の計上額' : '計上額'}</span><strong className="amount">{recordedAmount === null ? '入力中' : formatYen(recordedAmount)}</strong></div>
-            <p><span>読取金額 {formatYen(data.expense.read_amount)}</span><span>＋ 調整額 {recordedAmount === null ? '入力中' : formatYen(adjustment)}</span></p>
-            {!isEditing && <SourceBadge source={data.expense.source} isEdited={data.expense.is_edited} />}
-            {recordedAmount !== null && recordedAmount < 0 && <small>返金などにより、今月の支出を減らす金額です。</small>}
-          </section>
-
           {!isEditing ? (
             <>
               <dl className={styles.metadata}><div><dt>店舗名</dt><dd>{data.expense.store_name}</dd></div><div><dt>購入日</dt><dd>{data.expense.purchase_date}</dd></div></dl>
@@ -144,7 +145,6 @@ export function ExpenseDetailContent({ expenseId }: Props) {
             </>
           )}
         </div>
-        <aside className={styles.receipt}><h2>レシート画像</h2><div><p>レシート画像は現在表示できません。</p><small>画像を表示する機能は準備中です。</small></div></aside>
       </div>
 
       {confirmOpen && <div className={styles.dialogBackdrop}><div className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="discard-title"><h2 id="discard-title">変更を破棄しますか？</h2><p>保存していない変更は失われます。</p><div><Button variant="secondary" autoFocus onClick={() => { setWantsCancel(false); blocker.reset?.() }}>編集を続ける</Button><Button variant="danger" onClick={() => { if (blocker.state === 'blocked') blocker.proceed(); else discard() }}>変更を破棄する</Button></div></div></div>}

@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,6 +16,7 @@ const original = {
   ],
 }
 const updated = { ...original, expense: { ...original.expense, adjustment_amount: -1000, recorded_amount: 2280, source: 'USER', is_edited: true, updated_at: '2026-09-22T01:00:00Z' } }
+const withImage = { ...original, expense: { ...original.expense, image_url: 'https://example.com/receipt.jpg' } }
 
 function renderPage() {
   const router = createMemoryRouter([{ path: '/expenses/:expenseId', element: <ExpenseDetailPage /> }, { path: '/months/:month', element: <h1>月別支出</h1> }], { initialEntries: ['/expenses/e1'] })
@@ -39,6 +40,36 @@ describe('ExpenseDetailPage', () => {
     await user.click(screen.getAllByRole('button', { name: 'AI解析について' })[0])
     expect(screen.getByRole('tooltip')).toHaveTextContent('AIがレシートを解析した結果です。')
     expect(screen.getByRole('button', { name: '編集する' })).toBeEnabled()
+  })
+
+  it('レシート画像を表示し、拡大ダイアログを操作できる', async () => {
+    mockFetch({ '/api/expenses/e1': withImage })
+    renderPage(); const user = userEvent.setup()
+    await screen.findByRole('heading', { level: 1, name: '支出詳細' })
+    await user.click(screen.getByRole('button', { name: 'レシート画像を確認' }))
+    const image = screen.getByRole('img', { name: 'この支出のレシート画像' })
+    expect(image).toHaveAttribute('src', 'https://example.com/receipt.jpg')
+    fireEvent.load(image)
+    const expand = screen.getByRole('button', { name: '拡大して見る' })
+    await user.click(expand)
+    expect(screen.getByRole('dialog', { name: 'レシート画像' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '拡大' }))
+    await user.click(screen.getByRole('button', { name: '全体を表示' }))
+    await user.click(screen.getByRole('button', { name: '閉じる' }))
+    expect(expand).toHaveFocus()
+  })
+
+  it('画像読込失敗時はGETだけを再試行して新しい署名URLを使う', async () => {
+    let getCount = 0
+    mockFetch({ '/api/expenses/e1': () => { getCount += 1; return jsonResponse({ ...withImage, expense: { ...withImage.expense, image_url: `https://example.com/receipt-${getCount}.jpg` } }) } })
+    renderPage(); const user = userEvent.setup()
+    await screen.findByRole('heading', { level: 1, name: '支出詳細' })
+    await user.click(screen.getByRole('button', { name: 'レシート画像を確認' }))
+    fireEvent.error(screen.getByRole('img', { name: 'この支出のレシート画像' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('画像を表示できません。')
+    await user.click(screen.getByRole('button', { name: '画像を再読み込み' }))
+    await waitFor(() => expect(screen.getByRole('img', { name: 'この支出のレシート画像' })).toHaveAttribute('src', 'https://example.com/receipt-2.jpg'))
+    expect(getCount).toBe(2)
   })
 
   it('入力中に計上額を再計算し、保存後のGETで閲覧表示を確定する', async () => {

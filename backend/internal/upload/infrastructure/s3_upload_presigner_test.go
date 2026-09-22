@@ -18,6 +18,10 @@ type fakePresigner struct {
 	expires time.Duration
 }
 
+func (f *fakePresigner) PresignGetObject(_ context.Context, _ *awss3.GetObjectInput, _ ...func(*awss3.PresignOptions)) (*libs3.PresignedRequest, error) {
+	return &libs3.PresignedRequest{URL: "https://example.com/signed", Method: http.MethodGet}, nil
+}
+
 func (f *fakePresigner) PresignPutObject(_ context.Context, in *awss3.PutObjectInput, optFns ...func(*awss3.PresignOptions)) (*libs3.PresignedRequest, error) {
 	f.in = in
 	opts := awss3.PresignOptions{}

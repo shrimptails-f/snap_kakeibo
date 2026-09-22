@@ -17,6 +17,8 @@ export const expenseSchema = z.object({
   source: expenseSourceSchema,
   is_edited: z.boolean(),
   updated_at: z.string(),
+  // backend / frontend の独立デプロイ中も詳細表示を壊さないため、移行期間は未返却を許容する。
+  image_url: z.string().url().optional(),
 })
 
 export const expenseDetailSchema = z.object({

@@ -347,7 +347,8 @@ Response:
     "recorded_amount": 2780,
     "source": "AI",
     "is_edited": false,
-    "updated_at": "2026-09-15T12:10:00Z"
+    "updated_at": "2026-09-15T12:10:00Z",
+    "image_url": "https://example.com/presigned-receipt-url"
   },
   "details": [
     {
@@ -366,15 +367,7 @@ Response:
 
 `details` は `detail_id`(ULID)の昇順 = 採番順。
 
-#### 画面設計に対して未対応の項目
-
-以下は画面設計にあるが API が返していない。対応するときは backend / frontend / 本書を合わせて変える。
-
-| 項目 | 用途 | 未対応の理由 |
-| --- | --- | --- |
-| `expense.image_url` | 画像プレビュー(AI の読み取り結果と見比べて修正する) | 元画像の署名付き GET URL の発行を実装していない |
-
-画像取得未対応の間は「レシート画像は現在表示できません」と表示し、拡大・再試行ボタンは出さない。対応後は画像領域だけの失敗と再試行を扱い、URLの再取得で編集中のフォームを上書きしない。
+`expense.image_url` は元画像を取得する15分有効の署名付きGET URL。画像の読込に失敗した場合、画面は同じGETを再実行してURLだけを更新し、編集中のフォーム値は上書きしない。backend / frontend の独立デプロイ中に旧backendがこのフィールドを返さない場合は、画像未取得の案内を表示して支出の確認・編集を継続できる。
 
 ### PATCH /expenses/{expense_id}
 

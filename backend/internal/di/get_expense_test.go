@@ -12,7 +12,7 @@ import (
 
 func TestNewGetExpenseContainerResolvesUsecases(t *testing.T) {
 	t.Parallel()
-	cfg := settings.Config{ExpensesTable: "expenses", ExpenseDetailsTable: "expense-details", JWTSecretParameter: "/test/jwt-secret", Stage: "test"}
+	cfg := settings.Config{ExpensesTable: "expenses", ExpenseDetailsTable: "expense-details", ReceiptBucket: "receipts", JWTSecretParameter: "/test/jwt-secret", Stage: "test"}
 	container, err := NewGetExpenseContainer(cfg, aws.Config{Region: "ap-northeast-1"}, oswrapper.New(), logger.NewNop())
 	if err != nil {
 		t.Fatalf("NewGetExpenseContainer() error = %v", err)
