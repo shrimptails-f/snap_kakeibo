@@ -4,6 +4,7 @@ import { Link, useBeforeUnload, useBlocker, useSearchParams } from 'react-router
 import { toFriendlyMessage } from '@/shared/api/errors'
 import { Button } from '@/shared/ui/Button'
 import { ReceiptPreviewDialog } from '../components/ReceiptPreviewDialog'
+import { ReloadButton } from '../components/ReloadButton'
 import { RetryAnalysisDialog } from '../components/RetryAnalysisDialog'
 import { useAnalysisRequests } from '../hooks/useAnalysisRequests'
 import { useReceiptUploadBatch } from '../hooks/useReceiptUploadBatch'
@@ -137,9 +138,7 @@ export function UploadPage() {
             <strong>{returnedRequest.file_name}</strong>
             <p>{analysisRequestStatus(returnedRequest).label} — {analysisRequestMessage(returnedRequest) ?? '支出として登録されています。'}</p>
           </div>
-          <Button variant="secondary" onClick={reload.reload} disabled={reload.isDisabled}>
-            {reload.isFetching ? '再読み込み中…' : '状態を再読み込み'}
-          </Button>
+          <ReloadButton reload={reload} idleLabel="状態を再読み込み" />
         </section>
       )}
 
@@ -197,9 +196,7 @@ export function UploadPage() {
               <p className={styles.summary}>{summary}</p>
               <p className={styles.checkedAt}>状態確認 {new Date(dataUpdatedAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}</p>
             </div>
-            <Button variant="secondary" onClick={reload.reload} disabled={reload.isDisabled}>
-              {reload.isFetching ? '再読み込み中…' : '再読み込み'}
-            </Button>
+            <ReloadButton reload={reload} />
           </div>
           {retryError && <p className={styles.errorNotice} role="alert">{retryError} 最新の状態を再読み込みしてから、もう一度お試しください。</p>}
           {reload.hasError && <p className={styles.errorNotice} role="alert">最新の状態を取得できませんでした。前回確認した状態を表示しています。</p>}
@@ -236,7 +233,7 @@ export function UploadPage() {
                       <Button variant="secondary" onClick={() => batch.retryCreating(upload.localId)} disabled={batch.isUploading}>再試行</Button>
                     )}
                     {isUnconfirmedUploadFailure && upload.analysisRequestId && (
-                      <Button variant="secondary" onClick={reload.reload} disabled={reload.isDisabled}>状態を確認</Button>
+                      <ReloadButton reload={reload} idleLabel="状態を確認" fetchingLabel="確認中…" />
                     )}
                   </div>
                 </li>

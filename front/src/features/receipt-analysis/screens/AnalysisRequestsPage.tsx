@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { toFriendlyMessage } from '@/shared/api/errors'
 import { Button } from '@/shared/ui/Button'
+import { ReloadButton } from '../components/ReloadButton'
 import { RetryAnalysisDialog } from '../components/RetryAnalysisDialog'
 import { useAnalysisRequests } from '../hooks/useAnalysisRequests'
 import { useReloadAnalysisRequests } from '../hooks/useReloadAnalysisRequests'
@@ -47,9 +48,7 @@ export function AnalysisRequestsPage() {
             <h2 id="history-heading">履歴</h2>
             <p>状態確認 {new Date(dataUpdatedAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}</p>
           </div>
-          <Button variant="secondary" onClick={reload.reload} disabled={reload.isDisabled}>
-            {reload.isFetching ? '再読み込み中…' : '再読み込み'}
-          </Button>
+          <ReloadButton reload={reload} />
         </div>
         {notice && <p className={styles.notice} role="status">{notice}</p>}
         {reload.hasError && <p className={styles.errorNotice} role="alert">最新の状態を取得できませんでした。前回確認した一覧を表示しています。</p>}

@@ -1,0 +1,55 @@
+.reloadButton {
+  position: relative;
+  isolation: isolate;
+  min-width: 148px;
+  gap: var(--space-2);
+  overflow: hidden;
+}
+
+.reloadButton:disabled {
+  opacity: 1;
+}
+
+.reloadButton::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--color-primary-subtle);
+  content: '';
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+.coolingDown::before {
+  animation: cooldownFill var(--cooldown-duration) linear forwards;
+}
+
+.label {
+  position: relative;
+  font-weight: 700;
+}
+
+.countdown {
+  position: relative;
+  min-width: 34px;
+  padding: 1px 6px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 24%, transparent);
+  border-radius: 999px;
+  color: var(--color-primary);
+  background: rgb(255 255 255 / 72%);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+@keyframes cooldownFill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@media (max-width: 420px) {
+  .reloadButton {
+    min-width: 0;
+  }
+}
