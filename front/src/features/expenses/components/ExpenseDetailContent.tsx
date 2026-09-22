@@ -7,6 +7,7 @@ import { getExpense } from '../api/expenses.api'
 import { expenseQueryKey, useExpense } from '../hooks/useExpense'
 import { useUpdateExpense } from '../hooks/useUpdateExpense'
 import { categoryLabel } from '../lib/categoryLabel'
+import { expenseBackLink, type ExpenseLocationState } from '../lib/expenseBackLink'
 import { updateExpenseRequestSchema } from '../types/expense.schema'
 import type { ExpenseDetail, GetExpenseResponse, UpdateExpenseRequest } from '../types/expense.types'
 import { formatYen } from '@/shared/lib/formatYen'
@@ -17,7 +18,6 @@ import styles from './ExpenseDetailContent.module.css'
 
 const CATEGORIES = ['food', 'daily_goods', 'medical', 'transport', 'utilities', 'entertainment', 'social', 'clothing', 'education', 'other', 'unknown'] as const
 
-type LocationState = { from?: string; backLabel?: string; detailId?: string; requestId?: string; scrollY?: number; analysisCursorHistory?: string[] }
 type Props = { expenseId: string }
 
 function defaultValues(data: GetExpenseResponse): UpdateExpenseRequest {
@@ -47,10 +47,7 @@ export function ExpenseDetailContent({ expenseId }: Props) {
   const queryClient = useQueryClient()
   const mutation = useUpdateExpense(expenseId)
   const location = useLocation()
-  const state = location.state as LocationState | null
-  const cameFromUpload = new URLSearchParams(location.search).get('from') === 'upload'
-  const backPath = state?.from ?? (cameFromUpload ? '/' : `/months/${data.expense.year_month}`)
-  const backLabel = state?.backLabel ?? (cameFromUpload ? 'レシート取り込みへ' : `${data.expense.year_month.replace('-', '年')}月の支出へ`)
+  const back = expenseBackLink(location.search, location.state as ExpenseLocationState | null, data.expense.year_month)
   const noticeRef = useRef<HTMLDivElement>(null)
 
   const form = useForm<UpdateExpenseRequest>({ resolver: zodResolver(updateExpenseRequestSchema), defaultValues: defaultValues(data), mode: 'onBlur' })
@@ -101,7 +98,7 @@ export function ExpenseDetailContent({ expenseId }: Props) {
 
   return (
     <>
-      <Link className={styles.back} to={backPath} state={state?.detailId ? { restoreDetailId: state.detailId, scrollY: state.scrollY } : state?.requestId ? { restoreRequestId: state.requestId, scrollY: state.scrollY, analysisCursorHistory: state.analysisCursorHistory } : undefined}>&lt; {backLabel}</Link>
+      <Link className={styles.back} to={back.to} state={back.state}>&lt; {back.label}</Link>
       <h1>{isEditing ? '支出を編集' : '支出詳細'}</h1>
       {notice && <div className={styles.success} role="status" tabIndex={-1} ref={noticeRef}>{notice}</div>}
       {isRefreshFailed && <div className={styles.warning} role="alert"><p>保存は完了しましたが、最新の表示を取得できませんでした。</p><Button variant="secondary" onClick={reloadLatest}>最新の内容を読み込む</Button></div>}
@@ -131,11 +128,26 @@ export function ExpenseDetailContent({ expenseId }: Props) {
               {form.formState.errors.root?.server && <p className={styles.error} role="alert">{form.formState.errors.root.server.message}</p>}
               {Object.keys(form.formState.errors).some((key) => key !== 'root') && <div className={styles.errorSummary} role="alert"><strong>入力内容を確認してください。</strong></div>}
               <fieldset disabled={mutation.isPending}>
-                <label>店舗名（必須）<input {...form.register('store_name')} aria-invalid={!!form.formState.errors.store_name} />{form.formState.errors.store_name && <span>{form.formState.errors.store_name.message}</span>}</label>
-                <label>購入日（必須）<input type="date" {...form.register('purchase_date')} aria-invalid={!!form.formState.errors.purchase_date} />{form.formState.errors.purchase_date && <span>{form.formState.errors.purchase_date.message}</span>}</label>
-                <label>調整額（必須）<small>減らす場合は「-500」、増やす場合は「500」。調整なしは0。</small><span className={styles.inputUnit}><input type="number" inputMode="numeric" {...form.register('adjustment_amount', { valueAsNumber: true })} aria-invalid={!!form.formState.errors.adjustment_amount} /><span>円</span></span>{form.formState.errors.adjustment_amount && <span>{form.formState.errors.adjustment_amount.message}</span>}</label>
+                <label>店舗名（必須）<input id="expense-store-name" className="field-control" {...form.register('store_name')} aria-invalid={!!form.formState.errors.store_name} aria-describedby={form.formState.errors.store_name ? 'expense-store-name-error' : undefined} />{form.formState.errors.store_name && <span id="expense-store-name-error">{form.formState.errors.store_name.message}</span>}</label>
+                <label>購入日（必須）<input id="expense-purchase-date" className="field-control" type="date" {...form.register('purchase_date')} aria-invalid={!!form.formState.errors.purchase_date} aria-describedby={form.formState.errors.purchase_date ? 'expense-purchase-date-error' : undefined} />{form.formState.errors.purchase_date && <span id="expense-purchase-date-error">{form.formState.errors.purchase_date.message}</span>}</label>
+                <label>調整額（必須）<small>減らす場合は「-500」、増やす場合は「500」。調整なしは0。</small><span className={styles.inputUnit}><input id="expense-adjustment" className="field-control" type="number" inputMode="numeric" {...form.register('adjustment_amount', { valueAsNumber: true })} aria-invalid={!!form.formState.errors.adjustment_amount} aria-describedby={form.formState.errors.adjustment_amount ? 'expense-adjustment-error' : undefined} /><span>円</span></span>{form.formState.errors.adjustment_amount && <span id="expense-adjustment-error">{form.formState.errors.adjustment_amount.message}</span>}</label>
                 <section className={styles.editDetails}><h2>支出明細 <span>{fields.length}件</span></h2>
-                  {fields.map((field, index) => { const error = form.formState.errors.details?.[index]; const saved = data.details[index]; return <fieldset className={styles.detailFields} key={field.id}><legend>{index + 1}. <SourceBadge source={saved?.source} isEdited={saved?.is_edited ?? false} /></legend><input type="hidden" {...form.register(`details.${index}.detail_id`)} /><label>商品名（必須）<input {...form.register(`details.${index}.name`)} aria-invalid={!!error?.name} />{error?.name && <span>{error.name.message}</span>}</label><div className={styles.fieldRow}><label>明細金額（必須）<span className={styles.inputUnit}><input type="number" inputMode="numeric" {...form.register(`details.${index}.amount`, { valueAsNumber: true })} aria-invalid={!!error?.amount} /><span>円</span></span>{error?.amount && <span>{error.amount.message}</span>}</label><label>数量（必須）<input type="number" inputMode="numeric" {...form.register(`details.${index}.quantity`, { valueAsNumber: true })} aria-invalid={!!error?.quantity} />{error?.quantity && <span>{error.quantity.message}</span>}</label></div><label>カテゴリ（必須）<select {...form.register(`details.${index}.category`)}>{CATEGORIES.map((category) => <option key={category} value={category}>{categoryLabel(category)}</option>)}</select></label><SourceBadge label="カテゴリ" source={saved?.category_source} isEdited={saved?.category_source === 'USER'} /></fieldset> })}
+                  {fields.map((field, index) => {
+                    const error = form.formState.errors.details?.[index]
+                    const saved = data.details[index]
+                    const prefix = `expense-detail-${index}`
+                    return <fieldset className={styles.detailFields} key={field.id}>
+                      <legend>{index + 1}. <SourceBadge source={saved?.source} isEdited={saved?.is_edited ?? false} /></legend>
+                      <input type="hidden" {...form.register(`details.${index}.detail_id`)} />
+                      <label>商品名（必須）<input id={`${prefix}-name`} className="field-control" {...form.register(`details.${index}.name`)} aria-invalid={!!error?.name} aria-describedby={error?.name ? `${prefix}-name-error` : undefined} />{error?.name && <span id={`${prefix}-name-error`}>{error.name.message}</span>}</label>
+                      <div className={styles.fieldRow}>
+                        <label>明細金額（必須）<span className={styles.inputUnit}><input id={`${prefix}-amount`} className="field-control" type="number" inputMode="numeric" {...form.register(`details.${index}.amount`, { valueAsNumber: true })} aria-invalid={!!error?.amount} aria-describedby={error?.amount ? `${prefix}-amount-error` : undefined} /><span>円</span></span>{error?.amount && <span id={`${prefix}-amount-error`}>{error.amount.message}</span>}</label>
+                        <label>数量（必須）<input id={`${prefix}-quantity`} className="field-control" type="number" inputMode="numeric" {...form.register(`details.${index}.quantity`, { valueAsNumber: true })} aria-invalid={!!error?.quantity} aria-describedby={error?.quantity ? `${prefix}-quantity-error` : undefined} />{error?.quantity && <span id={`${prefix}-quantity-error`}>{error.quantity.message}</span>}</label>
+                      </div>
+                      <label>カテゴリ（必須）<select id={`${prefix}-category`} className="field-control" {...form.register(`details.${index}.category`)} aria-invalid={!!error?.category} aria-describedby={error?.category ? `${prefix}-category-error` : undefined}>{CATEGORIES.map((category) => <option key={category} value={category}>{categoryLabel(category)}</option>)}</select>{error?.category && <span id={`${prefix}-category-error`}>{error.category.message}</span>}</label>
+                      <SourceBadge label="カテゴリ" source={saved?.category_source} isEdited={saved?.category_source === 'USER'} />
+                    </fieldset>
+                  })}
                 </section>
               </fieldset>
               <div className={styles.detailTotal}><span>明細合計</span><strong className="amount">{formatYen(detailTotal)}</strong></div>

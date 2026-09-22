@@ -93,7 +93,7 @@ export function MonthlyExpensesPage() {
 
       <nav className={styles.monthNav} aria-label="表示月">
         <Link to={`/months/${previous}`} aria-label={`${yearMonthLabel(previous)}を表示`}>‹ 前月</Link>
-        <label>表示する月<input type="month" value={yearMonth} onChange={(event) => moveTo(event.target.value)} /></label>
+        <label>表示する月<input className="field-control" type="month" value={yearMonth} onChange={(event) => moveTo(event.target.value)} /></label>
         <Link to={`/months/${next}`} aria-label={`${yearMonthLabel(next)}を表示`}>翌月 ›</Link>
         <Button variant="secondary" disabled={yearMonth === current} onClick={() => moveTo(current)}>今月</Button>
       </nav>

@@ -6,6 +6,7 @@ import { formatYen } from '@/shared/lib/formatYen'
 import { Button } from '@/shared/ui/Button'
 import { ErrorBoundary } from '@/shared/ui/ErrorBoundary'
 import { SpinnerBlock } from '@/shared/ui/Spinner'
+import { StatusBadge } from '@/shared/ui/StatusBadge'
 import { ReloadButton } from '../components/ReloadButton'
 import { RetryAnalysisDialog } from '../components/RetryAnalysisDialog'
 import { listAnalysisRequests } from '../api/analysis-requests.api'
@@ -150,8 +151,8 @@ function AnalysisRequestsContent() {
       <section className={styles.search} aria-labelledby="analysis-search-heading">
         <h2 id="analysis-search-heading">検索条件</h2>
         <div className={styles.searchFields}>
-          <label>受付月<input type="month" value={month} onChange={(event) => { if (event.target.value) moveTo(requestedMonth(event.target.value), filter) }} /></label>
-          <label>表示<select value={filter} onChange={(event) => moveTo(month, event.target.value as AnalysisRequestFilter)}>{Object.entries(FILTER_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+          <label>受付月<input className="field-control" type="month" value={month} onChange={(event) => { if (event.target.value) moveTo(requestedMonth(event.target.value), filter) }} /></label>
+          <label>表示<select className="field-control" value={filter} onChange={(event) => moveTo(month, event.target.value as AnalysisRequestFilter)}>{Object.entries(FILTER_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
           <Link className={styles.attentionLink} to={`/analysis-requests${historySearch(month, 'attention')}`} onClick={(event) => { event.preventDefault(); moveTo(month, 'attention') }}>要対応を見る <span aria-hidden="true">›</span></Link>
         </div>
         <p>受付月はレシートの購入月とは異なります。</p>
@@ -187,7 +188,7 @@ function AnalysisRequestsContent() {
                   <tr id={`analysis-request-${item.analysis_request_id}`} tabIndex={-1} key={item.analysis_request_id}>
                     <td data-label="受付日時"><time dateTime={item.created_at}>{new Date(item.created_at).toLocaleString('ja-JP')}</time></td>
                     <td data-label="ファイル名"><strong>{item.file_name}</strong></td>
-                    <td data-label="状態・理由"><span className={styles[`status${status.tone[0].toUpperCase()}${status.tone.slice(1)}`]}>{status.label}</span>{message && <p>{message}</p>}</td>
+                    <td data-label="状態・理由"><StatusBadge tone={status.tone}>{status.label}</StatusBadge>{message && <p>{message}</p>}</td>
                     <td data-label="店舗・計上額">{item.store_name !== undefined || item.recorded_amount !== undefined ? <><span>{item.store_name ?? '店舗名未取得'}</span>{item.recorded_amount !== undefined && <strong className="amount">{formatYen(item.recorded_amount)}</strong>}</> : <span className={styles.muted}>—</span>}</td>
                     <td data-label="操作" className={styles.actions}>
                       {!isBusy && item.status === 'SUCCEEDED' && item.expense_id && <Link to={detailPath} state={{ from: `${location.pathname}${location.search}`, backLabel: '解析履歴へ', requestId: item.analysis_request_id, scrollY: window.scrollY, analysisCursorHistory: cursorHistory }}>支出詳細を見る <span aria-hidden="true">›</span></Link>}

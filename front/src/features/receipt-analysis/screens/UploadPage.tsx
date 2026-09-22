@@ -3,6 +3,7 @@ import type { ChangeEvent } from 'react'
 import { Link, useBeforeUnload, useBlocker, useSearchParams } from 'react-router'
 import { toFriendlyMessage } from '@/shared/api/errors'
 import { Button } from '@/shared/ui/Button'
+import { StatusBadge } from '@/shared/ui/StatusBadge'
 import { ReceiptPreviewDialog } from '../components/ReceiptPreviewDialog'
 import { ReloadButton } from '../components/ReloadButton'
 import { RetryAnalysisDialog } from '../components/RetryAnalysisDialog'
@@ -168,9 +169,9 @@ export function UploadPage() {
                 <ReceiptThumbnail item={item} onPreview={setPreview} />
                 <div className={styles.fileInfo}>
                   <strong>{item.file.name}</strong>
-                  <span className={item.validationError ? styles.statusDanger : styles.statusNeutral}>
+                  <StatusBadge tone={item.validationError ? 'danger' : 'neutral'}>
                     {item.validationError ? '× 形式を確認' : '○ 選択済み'}
-                  </span>
+                  </StatusBadge>
                   {item.validationError && <p className={styles.errorText}>{item.validationError}</p>}
                 </div>
                 <Button variant="secondary" onClick={() => batch.removeSelected(item.localId)} disabled={batch.isUploading}>
@@ -214,7 +215,7 @@ export function UploadPage() {
                   <ReceiptThumbnail item={upload} onPreview={setPreview} />
                   <div className={styles.fileInfo}>
                     <strong>{upload.file.name}</strong>
-                    <span className={styles[`status${status.tone[0].toUpperCase()}${status.tone.slice(1)}`]}>{status.label}</span>
+                    <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
                     {message && <p>{message}</p>}
                   </div>
                   <div className={styles.rowActions}>
