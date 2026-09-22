@@ -9,6 +9,7 @@ import (
 func validListAnalysisRequestsEnv() map[string]string {
 	return map[string]string{
 		"ANALYSIS_REQUESTS_TABLE": "analysis-requests",
+		"EXPENSES_TABLE":          "expenses",
 		"SSM_JWT_SECRET":          "/dev/jwt",
 		"STAGE":                   "dev",
 	}
@@ -22,7 +23,7 @@ func TestLoadListAnalysisRequestsReadsRequiredAndOptionalValues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadListAnalysisRequests() error = %v", err)
 	}
-	want := ListAnalysisRequestsConfig{AnalysisRequestsTable: "analysis-requests", JWTSecretParameter: "/dev/jwt", Stage: "dev", LogLevel: "debug"}
+	want := ListAnalysisRequestsConfig{AnalysisRequestsTable: "analysis-requests", ExpensesTable: "expenses", JWTSecretParameter: "/dev/jwt", Stage: "dev", LogLevel: "debug"}
 	if cfg != want {
 		t.Errorf("cfg = %+v, want %+v", cfg, want)
 	}
@@ -35,6 +36,7 @@ func TestLoadListAnalysisRequestsRejectsMissingValues(t *testing.T) {
 		arrange func(env map[string]string)
 	}{
 		{"missing table", func(env map[string]string) { delete(env, "ANALYSIS_REQUESTS_TABLE") }},
+		{"missing expenses table", func(env map[string]string) { delete(env, "EXPENSES_TABLE") }},
 		{"missing jwt secret parameter", func(env map[string]string) { delete(env, "SSM_JWT_SECRET") }},
 		{"missing stage", func(env map[string]string) { delete(env, "STAGE") }},
 	}

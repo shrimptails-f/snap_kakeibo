@@ -4,6 +4,7 @@ import { z } from 'zod'
 // 型は analysis-request.types.ts が z.infer で導く
 
 export const analysisRequestStatusSchema = z.enum(['UPLOADING', 'ANALYZING', 'SUCCEEDED', 'NO_DATA', 'FAILED'])
+export const analysisRequestFilterSchema = z.enum(['all', 'attention', 'in_progress', 'succeeded', 'no_data'])
 
 export const analysisRequestItemSchema = z.object({
   analysis_request_id: z.string(),
@@ -16,6 +17,8 @@ export const analysisRequestItemSchema = z.object({
   error_code: z.string().optional(),
   error_message: z.string().optional(),
   failed_at: z.string().optional(),
+	store_name: z.string().optional(),
+	recorded_amount: z.number().int().optional(),
   created_at: z.string(),
   updated_at: z.string(),
 })
@@ -23,6 +26,7 @@ export const analysisRequestItemSchema = z.object({
 // GET /api/months/{yyyy-MM}/analysis-requests
 export const listAnalysisRequestsResponseSchema = z.object({
   items: z.array(analysisRequestItemSchema),
+	next_cursor: z.string().optional(),
 })
 
 // POST /api/uploads

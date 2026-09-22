@@ -143,7 +143,7 @@ erDiagram
 | 全端末からログアウトする | パスワード変更など(未実装) | user_idで未失効のrefresh tokenを一覧し失効 | refresh_tokens | GSI Query + UpdateItem |
 | 月ごとの合計を見る | ダッシュボード画面 | user_idで月次集計を一覧取得 | monthly_summaries | Query |
 | 指定月の支出内訳を見る | 月別支出画面 | user_id + year_monthで支出明細を金額降順取得 | expense_details | GSI Query |
-| 指定月の解析依頼を見る | 解析依頼一覧画面 | user_id + year_monthで解析依頼を日時降順取得 | analysis_requests | GSI Query |
+| 指定月の解析依頼を見る | 解析履歴画面 | user_id + year_monthで状態を絞り、解析依頼を日時降順・20件単位で取得。登録完了分の店舗名・計上額を補う | analysis_requests / expenses | GSI Query / BatchGetItem |
 | 支出詳細を見る | 支出詳細・編集画面 | user_id + expense_idで支出を1件取得 | expenses | GetItem |
 | 支出に含まれる支出明細を見る | 支出詳細・編集画面 | user_id + expense_idで支出明細を一覧取得 | expense_details | Query |
 | 複数画像のアップロード枠を作る | アップロード画面 | user_id配下にanalysis_request_idを画像ごとに作成 | analysis_requests | PutItem |

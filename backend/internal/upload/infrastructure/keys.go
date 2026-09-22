@@ -8,6 +8,9 @@ func UserPK(userID string) string { return "USER#" + userID }
 // AnalysisRequestSK は analysis_requests のソートキー。
 func AnalysisRequestSK(requestID string) string { return "ANALYSIS_REQUEST#" + requestID }
 
+// ExpenseSK は expenses テーブルから登録済み支出を引くためのソートキー。
+func ExpenseSK(expenseID string) string { return "EXPENSE#" + expenseID }
+
 // UserMonthPK は月ごとに一覧を引くための GSI1 パーティションキー(analysis_request_month_index)。
 func UserMonthPK(userID, month string) string { return "USER#" + userID + "#MONTH#" + month }
 

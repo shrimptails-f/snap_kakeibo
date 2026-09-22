@@ -137,9 +137,9 @@ func TestMarkRetryingAgainstDynamoDB(t *testing.T) {
 	}
 }
 
-// TestListByMonthAgainstDynamoDB は月ごとの一覧が analysis_request_month_index から作成日時の降順で返り、
+// TestListPageAgainstDynamoDB は月ごとの一覧が analysis_request_month_index から作成日時の降順で返り、
 // 別の月・別の利用者の解析依頼が混ざらず、analyze-receipt が書く expense_id / error_code / error_message から集約が復元できることを Floci で確認する。
-func TestListByMonthAgainstDynamoDB(t *testing.T) {
+func TestListPageAgainstDynamoDB(t *testing.T) {
 	t.Parallel()
 	env := dynamodbtest.Connect(t)
 	table := env.CreateTable(t, libdynamodb.AnalysisRequestsSchema)
@@ -166,10 +166,11 @@ func TestListByMonthAgainstDynamoDB(t *testing.T) {
 	setStatus(ctx, t, table, "user-1", "request-1", "FAILED", true)
 	setSucceeded(ctx, t, table, "user-1", "request-2", "expense-1")
 
-	got, err := repo.ListByMonth(ctx, "user-1", "2026-09")
+	page, err := repo.ListPage(ctx, application.AnalysisRequestListQuery{UserID: "user-1", YearMonth: "2026-09", Filter: application.AnalysisRequestFilterAll, PageSize: 20, Now: integrationNow})
 	if err != nil {
-		t.Fatalf("ListByMonth() error = %v", err)
+		t.Fatalf("ListPage() error = %v", err)
 	}
+	got := page.Requests
 	if len(got) != 3 {
 		t.Fatalf("ListByMonth() returned %d requests, want 3: %+v", len(got), got)
 	}
@@ -206,20 +207,56 @@ func TestListByMonthAgainstDynamoDB(t *testing.T) {
 	}
 
 	// 前の月には request-0 だけ
-	if got, err := repo.ListByMonth(ctx, "user-1", "2026-08"); err != nil || len(got) != 1 || got[0].ID() != "request-0" {
-		t.Errorf("ListByMonth(2026-08) = %+v, %v, want only request-0", got, err)
+	if page, err := repo.ListPage(ctx, application.AnalysisRequestListQuery{UserID: "user-1", YearMonth: "2026-08", Filter: application.AnalysisRequestFilterAll, PageSize: 20, Now: integrationNow}); err != nil || len(page.Requests) != 1 || page.Requests[0].ID() != "request-0" {
+		t.Errorf("ListPage(2026-08) = %+v, %v, want only request-0", page, err)
 	}
 	// 解析依頼の無い月と利用者は空のスライス(nil ではない)
 	for _, in := range [][2]string{{"user-1", "2026-07"}, {"user-3", "2026-09"}} {
-		if got, err := repo.ListByMonth(ctx, in[0], in[1]); err != nil || got == nil || len(got) != 0 {
-			t.Errorf("ListByMonth(%s, %s) = %+v, %v, want empty", in[0], in[1], got, err)
+		if page, err := repo.ListPage(ctx, application.AnalysisRequestListQuery{UserID: in[0], YearMonth: in[1], Filter: application.AnalysisRequestFilterAll, PageSize: 20, Now: integrationNow}); err != nil || page.Requests == nil || len(page.Requests) != 0 {
+			t.Errorf("ListPage(%s, %s) = %+v, %v, want empty", in[0], in[1], page, err)
 		}
+	}
+
+	// 登録完了だけを月全体から絞り込める。
+	completed, err := repo.ListPage(ctx, application.AnalysisRequestListQuery{UserID: "user-1", YearMonth: "2026-09", Filter: application.AnalysisRequestFilterSucceeded, PageSize: 20, Now: integrationNow})
+	if err != nil || len(completed.Requests) != 1 || completed.Requests[0].ID() != "request-2" {
+		t.Errorf("ListPage(succeeded) = %+v, %v", completed, err)
+	}
+
+	// 2件ずつのカーソルで重複なく次ページへ進む。
+	first, err := repo.ListPage(ctx, application.AnalysisRequestListQuery{UserID: "user-1", YearMonth: "2026-09", Filter: application.AnalysisRequestFilterAll, PageSize: 2, Now: integrationNow})
+	if err != nil || len(first.Requests) != 2 || first.NextCursor == "" {
+		t.Fatalf("ListPage(first) = %+v, %v", first, err)
+	}
+	second, err := repo.ListPage(ctx, application.AnalysisRequestListQuery{UserID: "user-1", YearMonth: "2026-09", Filter: application.AnalysisRequestFilterAll, Cursor: first.NextCursor, PageSize: 2, Now: integrationNow})
+	if err != nil || len(second.Requests) != 1 || second.Requests[0].ID() != "request-1" || second.NextCursor != "" {
+		t.Errorf("ListPage(second) = %+v, %v", second, err)
+	}
+	if _, err := repo.ListPage(ctx, application.AnalysisRequestListQuery{UserID: "user-2", YearMonth: "2026-09", Filter: application.AnalysisRequestFilterAll, Cursor: first.NextCursor, PageSize: 2, Now: integrationNow}); !errors.Is(err, application.ErrInvalidCursor) {
+		t.Errorf("ListPage(foreign cursor) error = %v, want ErrInvalidCursor", err)
+	}
+	if _, err := repo.ListPage(ctx, application.AnalysisRequestListQuery{UserID: "user-1", YearMonth: "2026-09", Filter: application.AnalysisRequestFilterAttention, Cursor: first.NextCursor, PageSize: 2, Now: integrationNow}); !errors.Is(err, application.ErrInvalidCursor) {
+		t.Errorf("ListPage(cursor for another filter) error = %v, want ErrInvalidCursor", err)
+	}
+
+	// 期限切れ・停滞・失敗は要対応、期限内・停滞前だけが進行中になる。
+	if err := repo.Save(ctx, newRequest(t, "user-1", "request-4", "", "", integrationNow.Add(3*time.Hour))); err != nil {
+		t.Fatal(err)
+	}
+	setStatus(ctx, t, table, "user-1", "request-4", "ANALYZING", false)
+	attention, err := repo.ListPage(ctx, application.AnalysisRequestListQuery{UserID: "user-1", YearMonth: "2026-09", Filter: application.AnalysisRequestFilterAttention, PageSize: 20, Now: integrationNow.Add(4 * time.Hour)})
+	if err != nil || len(attention.Requests) != 3 || attention.Requests[0].ID() != "request-4" || attention.Requests[1].ID() != "request-3" || attention.Requests[2].ID() != "request-1" {
+		t.Errorf("ListPage(attention) = %+v, %v", attention, err)
+	}
+	inProgress, err := repo.ListPage(ctx, application.AnalysisRequestListQuery{UserID: "user-1", YearMonth: "2026-09", Filter: application.AnalysisRequestFilterInProgress, PageSize: 20, Now: integrationNow.Add(3*time.Hour + 5*time.Minute)})
+	if err != nil || len(inProgress.Requests) != 1 || inProgress.Requests[0].ID() != "request-4" {
+		t.Errorf("ListPage(in_progress) = %+v, %v", inProgress, err)
 	}
 }
 
-// TestListByMonthRejectsInconsistentItemAgainstDynamoDB は状態と付随する値が食い違う項目(FAILED なのに error_code が無い)を
+// TestListPageRejectsInconsistentItemAgainstDynamoDB は状態と付随する値が食い違う項目(FAILED なのに error_code が無い)を
 // 集約として復元せず error にすることを Floci で確認する。
-func TestListByMonthRejectsInconsistentItemAgainstDynamoDB(t *testing.T) {
+func TestListPageRejectsInconsistentItemAgainstDynamoDB(t *testing.T) {
 	t.Parallel()
 	env := dynamodbtest.Connect(t)
 	table := env.CreateTable(t, libdynamodb.AnalysisRequestsSchema)
@@ -231,7 +268,7 @@ func TestListByMonthRejectsInconsistentItemAgainstDynamoDB(t *testing.T) {
 		t.Fatalf("Save() error = %v", err)
 	}
 	setStatus(ctx, t, table, "user-1", "request-1", "FAILED", false)
-	if _, err := repo.ListByMonth(ctx, "user-1", "2026-09"); !errors.Is(err, analysisdomain.ErrInvalidAnalysisRequest) {
+	if _, err := repo.ListPage(ctx, application.AnalysisRequestListQuery{UserID: "user-1", YearMonth: "2026-09", Filter: application.AnalysisRequestFilterAll, PageSize: 20, Now: integrationNow}); !errors.Is(err, analysisdomain.ErrInvalidAnalysisRequest) {
 		t.Errorf("ListByMonth() error = %v, want ErrInvalidAnalysisRequest", err)
 	}
 }

@@ -8,6 +8,8 @@ var (
 	ErrAnalysisRequestAlreadyExists = errors.New("analysis request already exists")
 	// ErrInvalidInput は利用者の識別子が欠けている、月が YYYY-MM でないなど、入力から解析依頼を作れない・引けない場合に返す。
 	ErrInvalidInput = errors.New("invalid upload input")
+	// ErrInvalidCursor は解析履歴の継続カーソルが復元できない、または別の利用者・月を指す場合に返す。
+	ErrInvalidCursor = errors.New("invalid analysis requests cursor")
 	// ErrAnalysisRequestNotRetryable は解析依頼が無い、または状態が再解析できない(UPLOADING / SUCCEEDED)場合にリポジトリが返す。
 	// 解析依頼の有無を区別しないのは、他人の analysis_request_id を当てても存在が分からないようにするため。
 	ErrAnalysisRequestNotRetryable = errors.New("analysis request cannot be retried")

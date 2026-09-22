@@ -92,7 +92,7 @@ describe('routes', () => {
   it('利用中にセッションが切れたら、画面の API の 401 を受けてログイン画面へ送る', async () => {
     const backend = mockBackend({ hasRefreshCookie: true })
     const router = renderAt('/analysis-requests')
-    await screen.findByRole('heading', { name: '解析履歴' })
+    await screen.findByRole('button', { name: '再読み込み' })
 
     backend.revokeSession()
     // 一覧の再読み込みが 401 → refresh も 401 になる

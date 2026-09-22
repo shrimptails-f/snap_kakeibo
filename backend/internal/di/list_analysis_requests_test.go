@@ -12,7 +12,7 @@ import (
 
 func TestNewListAnalysisRequestsContainerResolvesUsecases(t *testing.T) {
 	t.Parallel()
-	cfg := settings.ListAnalysisRequestsConfig{AnalysisRequestsTable: "analysis-requests", JWTSecretParameter: "/test/jwt-secret", Stage: "test"}
+	cfg := settings.ListAnalysisRequestsConfig{AnalysisRequestsTable: "analysis-requests", ExpensesTable: "expenses", JWTSecretParameter: "/test/jwt-secret", Stage: "test"}
 	container, err := NewListAnalysisRequestsContainer(cfg, aws.Config{Region: "ap-northeast-1"}, oswrapper.New(), logger.NewNop())
 	if err != nil {
 		t.Fatalf("NewListAnalysisRequestsContainer() error = %v", err)

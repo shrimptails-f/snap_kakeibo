@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createUpload, uploadToPresignedUrl } from '../api/uploads.api'
-import { analysisRequestsQueryKey } from './useAnalysisRequests'
+import { analysisRequestsQueryPrefix } from './useAnalysisRequests'
 
 type UploadReceiptInput = {
   file: File
@@ -19,7 +19,7 @@ export function useUploadReceipt() {
       return created
     },
     onSuccess: (_created, { yearMonth }) => {
-      return queryClient.invalidateQueries({ queryKey: analysisRequestsQueryKey(yearMonth) })
+      return queryClient.invalidateQueries({ queryKey: analysisRequestsQueryPrefix(yearMonth) })
     },
   })
 }

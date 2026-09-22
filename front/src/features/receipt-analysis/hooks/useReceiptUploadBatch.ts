@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createUpload, uploadToPresignedUrl } from '../api/uploads.api'
-import { analysisRequestsQueryKey } from './useAnalysisRequests'
+import { analysisRequestsQueryPrefix } from './useAnalysisRequests'
 
 export type SelectedReceipt = {
   localId: string
@@ -84,7 +84,7 @@ export function useReceiptUploadBatch(yearMonth: string) {
     setIsUploading(true)
     updateUpload(localId, { phase: 'creating', errorMessage: undefined })
     await uploadOne(item)
-    await queryClient.invalidateQueries({ queryKey: analysisRequestsQueryKey(yearMonth) })
+    await queryClient.invalidateQueries({ queryKey: analysisRequestsQueryPrefix(yearMonth) })
     setIsUploading(false)
   }
 
@@ -95,7 +95,7 @@ export function useReceiptUploadBatch(yearMonth: string) {
     setSelected((current) => current.filter((item) => item.validationError))
     setUploads((current) => [...current, ...valid.map((item): ReceiptUpload => ({ ...item, phase: 'creating' }))])
     await Promise.allSettled(valid.map(uploadOne))
-    await queryClient.invalidateQueries({ queryKey: analysisRequestsQueryKey(yearMonth) })
+    await queryClient.invalidateQueries({ queryKey: analysisRequestsQueryPrefix(yearMonth) })
     setIsUploading(false)
   }
 

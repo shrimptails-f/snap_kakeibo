@@ -757,13 +757,17 @@ GSI1PK = USER#{user_id}#MONTH#{yyyy-MM}
 
 ## GET /months/{yyyy-MM}/analysis-requests
 
-指定月の解析依頼を取得する。
+指定月の解析依頼を作成日時の降順で取得する。`filter` で月全体を状態区分へ絞り込み、20件と継続カーソルを返す。
 
 ```text
 analysis_request_month_index
 
 GSI1PK = USER#{user_id}#MONTH#{yyyy-MM}
 ```
+
+期限切れは `UPLOADING` と `upload_expires_at`、停滞は `ANALYZING` と `updated_at`（30分超）からリクエスト時刻で判定する。DynamoDBの `FilterExpression` は `Limit` の後に適用されるため、一致する21件目または月末までQueryを継続し、空の途中結果を最終結果としない。
+
+1ページの `SUCCEEDED` にある `expense_id` は `expenses` を `BatchGetItem` し、支出編集後の最新の `store_name` / `recorded_amount` を補う。解析依頼へ複製しないことで更新時の二重書き込みを避ける。
 
 ---
 

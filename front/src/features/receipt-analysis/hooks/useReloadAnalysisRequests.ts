@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useIsFetching, useQueryClient } from '@tanstack/react-query'
 import { analysisRequestsQueryKey } from './useAnalysisRequests'
+import type { AnalysisRequestFilter } from '../types/analysis-request.types'
 
 // 連打で API を叩かないよう、再読み込みのあと 5 秒はボタンを無効にする
 export const RELOAD_COOLDOWN_MS = 5000
@@ -16,9 +17,9 @@ export type ReloadAnalysisRequests = {
 }
 
 // 解析依頼一覧の再読み込み。再取得中は useAnalysisRequests が前回の一覧を保つので、画面が消えることはない
-export function useReloadAnalysisRequests(yearMonth: string): ReloadAnalysisRequests {
+export function useReloadAnalysisRequests(yearMonth: string, filter: AnalysisRequestFilter, cursor: string): ReloadAnalysisRequests {
   const queryClient = useQueryClient()
-  const queryKey = analysisRequestsQueryKey(yearMonth)
+  const queryKey = analysisRequestsQueryKey(yearMonth, filter, cursor)
   const isFetching = useIsFetching({ queryKey }) > 0
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null)
   const [cooldownRemainingMs, setCooldownRemainingMs] = useState(0)

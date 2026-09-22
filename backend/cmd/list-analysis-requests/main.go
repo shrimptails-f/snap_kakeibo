@@ -23,23 +23,26 @@ import (
 
 // item はレスポンスの 1 件。JSON キーは画面(front/src/App.tsx の AnalysisRequestItem)が読む名前。
 type item struct {
-	AnalysisRequestID string `json:"analysis_request_id"`
-	ExpenseID         string `json:"expense_id,omitempty"`
-	Status            string `json:"status"`
-	Attempt           int    `json:"attempt"`
-	FileName          string `json:"file_name"`
-	ContentType       string `json:"content_type"`
-	YearMonth         string `json:"year_month"`
-	UploadExpiresAt   string `json:"upload_expires_at"`
-	ErrorCode         string `json:"error_code,omitempty"`
-	ErrorMessage      string `json:"error_message,omitempty"`
-	FailedAt          string `json:"failed_at,omitempty"`
-	CreatedAt         string `json:"created_at"`
-	UpdatedAt         string `json:"updated_at"`
+	AnalysisRequestID string  `json:"analysis_request_id"`
+	ExpenseID         string  `json:"expense_id,omitempty"`
+	Status            string  `json:"status"`
+	Attempt           int     `json:"attempt"`
+	FileName          string  `json:"file_name"`
+	ContentType       string  `json:"content_type"`
+	YearMonth         string  `json:"year_month"`
+	UploadExpiresAt   string  `json:"upload_expires_at"`
+	ErrorCode         string  `json:"error_code,omitempty"`
+	ErrorMessage      string  `json:"error_message,omitempty"`
+	FailedAt          string  `json:"failed_at,omitempty"`
+	StoreName         *string `json:"store_name,omitempty"`
+	RecordedAmount    *int64  `json:"recorded_amount,omitempty"`
+	CreatedAt         string  `json:"created_at"`
+	UpdatedAt         string  `json:"updated_at"`
 }
 
 type response struct {
-	Items []item `json:"items"`
+	Items      []item `json:"items"`
+	NextCursor string `json:"next_cursor,omitempty"`
 }
 
 var (
@@ -95,23 +98,27 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	if month == "" {
 		return apigateway.Error(400, "month path parameter is required")
 	}
-	out, err := list.List(ctx, application.ListAnalysisRequestsInput{UserID: user.UserID, YearMonth: month})
+	out, err := list.List(ctx, application.ListAnalysisRequestsInput{
+		UserID: user.UserID, YearMonth: month,
+		Filter: req.QueryStringParameters["filter"], Cursor: req.QueryStringParameters["cursor"],
+	})
 	if err != nil {
-		if errors.Is(err, application.ErrInvalidInput) {
-			return apigateway.Error(400, "month must be YYYY-MM")
+		if errors.Is(err, application.ErrInvalidInput) || errors.Is(err, application.ErrInvalidCursor) {
+			return apigateway.Error(400, "month, filter, or cursor is invalid")
 		}
 		return events.APIGatewayV2HTTPResponse{StatusCode: 500}, err
 	}
 	// 0 件でも null ではなく [] を返す(画面は items をそのまま map する)
-	items := make([]item, 0, len(out.Requests))
-	for _, r := range out.Requests {
-		items = append(items, toItem(r))
+	items := make([]item, 0, len(out.Items))
+	for _, listItem := range out.Items {
+		items = append(items, toItem(listItem))
 	}
-	return apigateway.JSON(200, response{Items: items})
+	return apigateway.JSON(200, response{Items: items, NextCursor: out.NextCursor})
 }
 
 // toItem は解析依頼の集約を HTTP レスポンスの 1 件へ変換する。失敗理由は FAILED のときだけ付く。
-func toItem(r domain.AnalysisRequest) item {
+func toItem(listItem application.AnalysisRequestListItem) item {
+	r := listItem.Request
 	out := item{
 		AnalysisRequestID: r.ID().String(),
 		ExpenseID:         r.ExpenseID().String(),
@@ -129,6 +136,10 @@ func toItem(r domain.AnalysisRequest) item {
 	}
 	if failedAt, ok := r.FailedAt(); ok {
 		out.FailedAt = failedAt.UTC().Format(time.RFC3339)
+	}
+	if listItem.ExpenseSummary != nil {
+		out.StoreName = &listItem.ExpenseSummary.StoreName
+		out.RecordedAmount = &listItem.ExpenseSummary.RecordedAmount
 	}
 	return out
 }

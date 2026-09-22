@@ -58,15 +58,20 @@ func TestOperationsEmitSpans(t *testing.T) {
 	if _, err := table.Query(ctx, &awssdk.QueryInput{IndexName: aws.String("gsi")}); err != nil {
 		t.Fatalf("Query() error = %v", err)
 	}
+	if _, err := client.BatchGetItem(ctx, &awssdk.BatchGetItemInput{RequestItems: map[string]types.KeysAndAttributes{
+		"expenses": {Keys: []map[string]types.AttributeValue{key}},
+	}}); err != nil {
+		t.Fatalf("BatchGetItem() error = %v", err)
+	}
 	if _, err := client.TransactWriteItems(ctx, &awssdk.TransactWriteItemsInput{TransactItems: []types.TransactWriteItem{{}, {}}}); err == nil {
 		t.Fatal("TransactWriteItems() error = nil, want boom")
 	}
 
 	finished := finishedSpans(t, &buf)
-	if len(finished) != 3 {
-		t.Fatalf("span_finished = %d, want 3: %s", len(finished), buf.String())
+	if len(finished) != 4 {
+		t.Fatalf("span_finished = %d, want 4: %s", len(finished), buf.String())
 	}
-	update, query, transact := finished[0], finished[1], finished[2]
+	update, query, batch, transact := finished[0], finished[1], finished[2], finished[3]
 	assertField(t, update, "span_name", SpanUpdateItem)
 	assertField(t, update, "table_name", "scenario-uploads-1")
 	assertField(t, update, "status", logger.StatusOK)
@@ -74,6 +79,9 @@ func TestOperationsEmitSpans(t *testing.T) {
 	assertField(t, query, "span_name", SpanQuery)
 	assertField(t, query, "index_name", "gsi")
 	assertField(t, query, "item_count", float64(1))
+	assertField(t, batch, "span_name", SpanBatchGetItem)
+	assertField(t, batch, "item_count", float64(1))
+	assertField(t, batch, "table_count", float64(1))
 	assertField(t, transact, "span_name", SpanTransactWrite)
 	assertField(t, transact, "item_count", float64(2))
 	assertField(t, transact, "status", logger.StatusError)
@@ -87,6 +95,9 @@ func TestNilInputs(t *testing.T) {
 	client := NewWithAPI(&fakeAPI{}, nil)
 	if _, err := client.TransactWriteItems(context.Background(), nil); err == nil {
 		t.Fatal("nil TransactWriteItemsInput must be an error")
+	}
+	if _, err := client.BatchGetItem(context.Background(), nil); err == nil {
+		t.Fatal("nil BatchGetItemInput must be an error")
 	}
 	if _, err := client.Table("t").UpdateItem(context.Background(), nil); err == nil {
 		t.Fatal("nil UpdateItemInput must be an error")
@@ -136,9 +147,15 @@ func TestIsTransactionValidationFailed(t *testing.T) {
 }
 
 type fakeAPI struct {
+	batchGet    *awssdk.BatchGetItemInput
 	get         *awssdk.GetItemInput
 	query       *awssdk.QueryInput
 	transactErr error
+}
+
+func (f *fakeAPI) BatchGetItem(_ context.Context, in *awssdk.BatchGetItemInput, _ ...func(*awssdk.Options)) (*awssdk.BatchGetItemOutput, error) {
+	f.batchGet = in
+	return &awssdk.BatchGetItemOutput{}, nil
 }
 
 func (f *fakeAPI) GetItem(_ context.Context, in *awssdk.GetItemInput, _ ...func(*awssdk.Options)) (*awssdk.GetItemOutput, error) {

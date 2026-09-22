@@ -195,6 +195,12 @@ func TestStorageStackResources(t *testing.T) {
 	})
 	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{"RouteKey": "POST /api/analysis-requests/{analysisRequestId}/retry"})
 	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{"RouteKey": "GET /api/months/{month}/analysis-requests"})
+	app.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]any{
+		"FunctionName": "dev-snap-kakeibo-list-analysis-requests",
+		"Environment": map[string]any{"Variables": assertions.Match_ObjectLike(&map[string]any{
+			"ANALYSIS_REQUESTS_TABLE": assertions.Match_AnyValue(), "EXPENSES_TABLE": assertions.Match_AnyValue(),
+		})},
+	})
 	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{"RouteKey": "GET /api/expenses/{expenseId}"})
 	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{"RouteKey": "PATCH /api/expenses/{expenseId}"})
 	app.HasResourceProperties(jsii.String("AWS::ApiGatewayV2::Route"), map[string]any{"RouteKey": "POST /api/monthly-summaries/{month}/rebuild"})
