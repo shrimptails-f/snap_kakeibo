@@ -1,0 +1,65 @@
+.back { display: inline-flex; min-height: 44px; align-items: center; margin-bottom: var(--space-2); color: var(--color-primary); font-weight: 700; text-decoration: none; }
+.success, .warning, .error, .errorSummary { margin-top: var(--space-4); padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); }
+.success { color: var(--color-primary); background: var(--color-primary-subtle); }
+.warning { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); color: var(--color-warning); background: var(--color-warning-subtle); }
+.error, .errorSummary { color: var(--color-danger); background: var(--color-danger-subtle); }
+.layout { display: grid; grid-template-areas: 'amount' 'receipt' 'content'; gap: var(--space-6); margin-top: var(--space-6); }
+.content { grid-area: content; min-width: 0; }
+.receipt { grid-area: receipt; }
+.amountSummary { grid-area: amount; display: grid; gap: var(--space-3); padding: var(--space-4); border-top: 4px solid var(--color-primary); background: var(--color-surface-subtle); }
+.amountSummary > div { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); }
+.amountSummary > div > span { font-weight: 700; }
+.amountSummary strong { font-size: clamp(28px, 6vw, 34px); line-height: 1; }
+.amountSummary > p { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); color: var(--color-text-muted); }
+.metadata { margin: 0 0 var(--space-6); }
+.metadata > div { display: grid; grid-template-columns: 92px 1fr; gap: var(--space-4); padding: var(--space-3) 0; border-bottom: 1px solid var(--color-border); }
+.metadata dt { color: var(--color-text-muted); }
+.metadata dd { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+.detailsSection h2, .editDetails h2 { display: flex; justify-content: space-between; padding-bottom: var(--space-3); border-bottom: 2px solid var(--color-text); font-size: 18px; }
+.detailsSection h2 span, .editDetails h2 span { color: var(--color-text-muted); font-size: 14px; font-weight: 400; }
+.detailList { margin: 0; padding: 0; list-style: none; }
+.detailList li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-4); padding: var(--space-4) 0; border-bottom: 1px solid var(--color-border); }
+.detailList li > div { display: grid; gap: var(--space-1); min-width: 0; }
+.detailList li > div > strong { overflow-wrap: anywhere; }
+.detailList li > div > span { color: var(--color-text-muted); }
+.detailList li > strong { align-self: start; }
+.detailTotal { display: flex; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) 0; font-size: 18px; }
+.help { color: var(--color-text-muted); font-size: 14px; }
+.editButton { width: 100%; margin-top: var(--space-6); }
+.form { display: grid; gap: var(--space-4); }
+.form > h2 { margin: 0; font-size: 20px; }
+.unsaved, .unchanged { width: fit-content; padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); font-size: 14px; font-weight: 700; }
+.unsaved { color: var(--color-warning); background: var(--color-warning-subtle); }
+.unchanged { color: var(--color-text-muted); background: var(--color-surface-subtle); }
+.form fieldset { display: grid; gap: var(--space-4); min-width: 0; margin: 0; padding: 0; border: 0; }
+.form label { display: grid; gap: var(--space-2); font-weight: 700; }
+.form label small { color: var(--color-text-muted); font-weight: 400; }
+.form input, .form select { width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); background: var(--color-surface); }
+.form input[aria-invalid='true'], .form select[aria-invalid='true'] { border-color: var(--color-danger); }
+.form label > span:not(.inputUnit) { color: var(--color-danger); font-size: 14px; font-weight: 400; }
+.inputUnit { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: var(--space-2); font-weight: 400; }
+.editDetails { display: grid; gap: 0; margin-top: var(--space-4); }
+.detailFields { padding: var(--space-6) 0 !important; border-bottom: 1px solid var(--color-border) !important; }
+.detailFields legend { width: 100%; margin-bottom: var(--space-4); font-weight: 800; }
+.fieldRow { display: grid; grid-template-columns: minmax(0, 2fr) minmax(100px, 1fr); gap: var(--space-4); }
+.saveBar { position: sticky; z-index: 3; bottom: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); margin: var(--space-4) calc(var(--page-padding) * -1) calc(var(--space-12) * -1); padding: var(--space-3) var(--page-padding) max(var(--space-3), env(safe-area-inset-bottom)); border-top: 1px solid var(--color-border); background: rgb(255 255 255 / 96%); box-shadow: 0 -8px 24px rgb(27 31 36 / 8%); }
+.saveBar > span { font-size: 14px; font-weight: 700; }
+.saveBar > div { display: flex; gap: var(--space-2); }
+.dialogBackdrop { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: var(--space-4); background: rgb(27 31 36 / 48%); }
+.dialog { width: min(100%, 440px); padding: var(--space-6); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-card); }
+.dialog h2 { margin-bottom: var(--space-2); font-size: 20px; }
+.dialog > div { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-6); }
+
+@media (min-width: 960px) {
+  .layout { grid-template-columns: minmax(300px, 2fr) minmax(0, 3fr); grid-template-areas: 'receipt amount' 'receipt content'; gap: var(--space-6) var(--space-8); align-items: start; }
+  .receipt { position: sticky; top: var(--space-4); max-height: calc(100vh - var(--space-8)); }
+  .editButton { width: auto; float: right; }
+  .saveBar { margin-inline: 0; margin-bottom: calc(var(--space-12) * -1); padding-inline: var(--space-4); }
+}
+
+@media (max-width: 480px) {
+  .fieldRow { grid-template-columns: 1fr; }
+  .saveBar { align-items: stretch; }
+  .saveBar > div { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  .dialog > div { display: grid; }
+}

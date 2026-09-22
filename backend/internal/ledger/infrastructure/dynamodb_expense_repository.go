@@ -24,6 +24,7 @@ type expenseItem struct {
 	AnalysisRequestID string `dynamodbav:"analysis_request_id"`
 	StoreName         string `dynamodbav:"store_name"`
 	PurchaseDate      string `dynamodbav:"purchase_date"`
+	YearMonth         string `dynamodbav:"year_month"`
 	ReadAmount        int64  `dynamodbav:"read_amount"`
 	AdjustmentAmount  int64  `dynamodbav:"adjustment_amount"`
 	IsEdited          bool   `dynamodbav:"is_edited"`
@@ -33,6 +34,7 @@ type expenseItem struct {
 
 // expenseDetailItem は expense_details の項目のうち支出明細の復元に使う属性。
 type expenseDetailItem struct {
+	ExpenseID      string `dynamodbav:"expense_id"`
 	DetailID       string `dynamodbav:"detail_id"`
 	Name           string `dynamodbav:"name"`
 	Category       string `dynamodbav:"category"`
@@ -45,11 +47,13 @@ type expenseDetailItem struct {
 
 // DynamoDBExpenseRepository は expenses と expense_details から支出集約を復元する。
 type DynamoDBExpenseRepository struct {
+	Client         *libdynamodb.Client
 	Expenses       *libdynamodb.Table
 	ExpenseDetails *libdynamodb.Table
 }
 
 var _ application.ExpenseFinder = DynamoDBExpenseRepository{}
+var _ application.ExpenseRepository = DynamoDBExpenseRepository{}
 
 // FindByID は利用者と expense_id のキーで支出を GetItem し、支出のパーティション(USER#{user_id}#EXPENSE#{expense_id})を
 // Query して支出明細を detail_id の昇順(ULID の採番順)で集約へ復元する。
@@ -97,6 +101,95 @@ func (r DynamoDBExpenseRepository) listDetails(ctx context.Context, userID commo
 		details = append(details, detail)
 	}
 	return details, nil
+}
+
+// FindByMonth は支出テーブルを利用者単位で、明細テーブルを月別 GSI で読み、対象月の集約を復元する。
+func (r DynamoDBExpenseRepository) FindByMonth(ctx context.Context, userID common.UserID, month domain.YearMonth) ([]domain.Expense, error) {
+	expenseOut, err := r.Expenses.Query(ctx, &awssdk.QueryInput{
+		KeyConditionExpression:    aws.String("PK = :pk AND begins_with(SK, :sk)"),
+		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{":pk": stringValue(UserPK(userID.String())), ":sk": stringValue("EXPENSE#")},
+	})
+	if err != nil {
+		return nil, err
+	}
+	var expenseItems []expenseItem
+	if err := attributevalue.UnmarshalListOfMaps(expenseOut.Items, &expenseItems); err != nil {
+		return nil, fmt.Errorf("unmarshal expenses: %w", err)
+	}
+	detailOut, err := r.ExpenseDetails.Query(ctx, &awssdk.QueryInput{
+		IndexName: aws.String("detail_month_amount_index"), KeyConditionExpression: aws.String("GSI1PK = :pk"),
+		ExpressionAttributeValues: map[string]ddbtypes.AttributeValue{":pk": stringValue(UserMonthPK(userID.String(), month.String()))},
+	})
+	if err != nil {
+		return nil, err
+	}
+	var detailItems []expenseDetailItem
+	if err := attributevalue.UnmarshalListOfMaps(detailOut.Items, &detailItems); err != nil {
+		return nil, fmt.Errorf("unmarshal monthly expense details: %w", err)
+	}
+	grouped := make(map[string][]domain.ExpenseDetail)
+	for _, item := range detailItems {
+		detail, err := restoreDetail(item)
+		if err != nil {
+			return nil, fmt.Errorf("restore expense detail %s: %w", item.DetailID, err)
+		}
+		grouped[item.ExpenseID] = append(grouped[item.ExpenseID], detail)
+	}
+	expenses := make([]domain.Expense, 0, len(expenseItems))
+	for _, item := range expenseItems {
+		if item.YearMonth != month.String() {
+			continue
+		}
+		expenseID, ok := common.NewExpenseID(item.ExpenseID)
+		if !ok {
+			return nil, fmt.Errorf("restore expense: invalid expense ID")
+		}
+		expense, err := restoreExpense(userID, expenseID, item, grouped[item.ExpenseID])
+		if err != nil {
+			return nil, err
+		}
+		expenses = append(expenses, expense)
+	}
+	return expenses, nil
+}
+
+// Save は支出と全明細を一つの DynamoDB transaction で更新する。
+func (r DynamoDBExpenseRepository) Save(ctx context.Context, expense domain.Expense, updatedAt time.Time) error {
+	if r.Client == nil {
+		return fmt.Errorf("save expense: dynamodb client is nil")
+	}
+	timestamp := updatedAt.UTC().Format(time.RFC3339)
+	userID, expenseID := expense.UserID().String(), expense.ID().String()
+	values := map[string]ddbtypes.AttributeValue{
+		":store": stringValue(expense.StoreName()), ":date": stringValue(expense.PurchaseDate().String()),
+		":month": stringValue(expense.PurchaseDate().YearMonth().String()), ":adjustment": numberValue(expense.AdjustmentAmount().Yen()),
+		":recorded": numberValue(expense.RecordedAmount().Yen()), ":source": stringValue(expense.Source().String()),
+		":edited": boolValue(expense.Edited()), ":updated": stringValue(timestamp),
+	}
+	items := []ddbtypes.TransactWriteItem{{Update: &ddbtypes.Update{
+		TableName: aws.String(r.Expenses.Name()), Key: map[string]ddbtypes.AttributeValue{"PK": stringValue(UserPK(userID)), "SK": stringValue(ExpenseSK(expenseID))},
+		UpdateExpression:    aws.String("SET store_name=:store,purchase_date=:date,year_month=:month,adjustment_amount=:adjustment,recorded_amount=:recorded,#source=:source,is_edited=:edited,updated_at=:updated"),
+		ConditionExpression: aws.String("attribute_exists(PK)"), ExpressionAttributeNames: map[string]string{"#source": "source"}, ExpressionAttributeValues: values,
+	}}}
+	for _, detail := range expense.Details() {
+		values := map[string]ddbtypes.AttributeValue{
+			":gpk": stringValue(UserMonthPK(userID, expense.PurchaseDate().YearMonth().String())), ":gsk": stringValue(DetailMonthSK(detail.Amount().Yen(), expense.PurchaseDate().String(), detail.ID().String())),
+			":name": stringValue(detail.Name()), ":category": stringValue(detail.Category().String()), ":categorySource": stringValue(detail.CategorySource().String()),
+			":amount": numberValue(detail.Amount().Yen()), ":quantity": numberValue(detail.Quantity().Int64()), ":source": stringValue(detail.Source().String()),
+			":store": stringValue(expense.StoreName()), ":date": stringValue(expense.PurchaseDate().String()), ":month": stringValue(expense.PurchaseDate().YearMonth().String()),
+			":edited": boolValue(detail.Edited()), ":updated": stringValue(timestamp),
+		}
+		items = append(items, ddbtypes.TransactWriteItem{Update: &ddbtypes.Update{
+			TableName: aws.String(r.ExpenseDetails.Name()), Key: map[string]ddbtypes.AttributeValue{"PK": stringValue(DetailPK(userID, expenseID)), "SK": stringValue(DetailSK(detail.ID().String()))},
+			UpdateExpression:    aws.String("SET GSI1PK=:gpk,GSI1SK=:gsk,#name=:name,category=:category,category_source=:categorySource,amount=:amount,quantity=:quantity,#source=:source,store_name=:store,purchase_date=:date,year_month=:month,is_edited=:edited,updated_at=:updated"),
+			ConditionExpression: aws.String("attribute_exists(PK)"), ExpressionAttributeNames: map[string]string{"#name": "name", "#source": "source"}, ExpressionAttributeValues: values,
+		}})
+	}
+	_, err := r.Client.TransactWriteItems(ctx, &awssdk.TransactWriteItemsInput{TransactItems: items})
+	if libdynamodb.IsConditionalCheckFailed(err) {
+		return application.ErrExpenseNotFound
+	}
+	return err
 }
 
 // restoreExpense は永続化された属性を値オブジェクトへ変換し、集約の不変条件を検証して復元する。
@@ -159,3 +252,7 @@ func restoreDetail(item expenseDetailItem) (domain.ExpenseDetail, error) {
 }
 
 func stringValue(v string) ddbtypes.AttributeValue { return &ddbtypes.AttributeValueMemberS{Value: v} }
+func numberValue(v int64) ddbtypes.AttributeValue {
+	return &ddbtypes.AttributeValueMemberN{Value: fmt.Sprintf("%d", v)}
+}
+func boolValue(v bool) ddbtypes.AttributeValue { return &ddbtypes.AttributeValueMemberBOOL{Value: v} }

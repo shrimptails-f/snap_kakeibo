@@ -171,8 +171,8 @@ shared HTTP client
 初期の検証実装(認証、アップロード、ポーリング、一覧、詳細表示を一つに持つ `App.tsx`)を、一括リライトではなく次の順で分離する。
 
 1. 純粋な型・表示変換・HTTP クライアントを分離する(完了: `shared/api`、`shared/auth`、`shared/lib`)
-2. 認証と解析依頼を feature に分離する(認証は完了: `features/auth`。アップロード・解析依頼一覧・支出表示は `features/receipt-analysis/screens/ReceiptIntakePage.tsx` に検証実装のまま残る)
-3. Router とページ共通レイアウトを導入する(完了: `app/router`、`app/layouts`。`/months/:yearMonth`、`/analysis-requests`、`/expenses/:expenseId` は画面の実装時に追加する)
+2. 認証と解析依頼を feature に分離する(認証は完了: `features/auth`。支出詳細・編集は `features/expenses` の `/expenses/:expenseId` へ分離済み。アップロード・解析依頼一覧・支出の簡易表示は `features/receipt-analysis/screens/ReceiptIntakePage.tsx` に検証実装として残る)
+3. Router とページ共通レイアウトを導入する(完了: `app/router`、`app/layouts`、`/expenses/:expenseId`。`/months/:yearMonth`、`/analysis-requests` は各画面の実装時に追加する)
 4. API データ取得をサーバー状態管理層へ移す(完了: TanStack Query。取得は feature の `hooks`、初回 loading はレイアウトの `Suspense`)
 5. 共通化の実績ができた UI だけを `shared/ui` へ移す(完了: `Spinner`、`ErrorBoundary`、`Button`。TextField や状態バッジなどは画面仕様の確定後に判断する)
 

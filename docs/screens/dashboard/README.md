@@ -254,6 +254,33 @@
 
 APIから得られない予算・収入・残高・AI精度・未確認件数は追加しない。`POST /monthly-summaries/{yyyy-MM}/rebuild` はダッシュボードの通常操作に含めない。
 
+### POST /monthly-summaries/{yyyy-MM}/rebuild
+
+保存済みの支出と支出明細から指定月の月次集計を再構築する。支出編集からの反映と集計復旧に利用し、ダッシュボードの通常操作には表示しない。レスポンスは `GET /monthly-summaries` の要素1件と同じ形で、定義済みの全カテゴリを `category_totals` に含める。
+
+```json
+{
+  "year_month": "2026-09",
+  "total_recorded_amount": 128500,
+  "expense_count": 25,
+  "detail_count": 120,
+  "category_totals": {
+    "food": 86000,
+    "daily_goods": 22500,
+    "medical": 0,
+    "transport": 0,
+    "utilities": 0,
+    "entertainment": 0,
+    "social": 15000,
+    "clothing": 0,
+    "education": 0,
+    "other": 5000,
+    "unknown": 12000
+  },
+  "updated_at": "2026-09-22T01:00:00Z"
+}
+```
+
 ## 11. 実装時の確認項目
 
 以下はアプリ実装後の確認項目。HTMLモックでの表示・操作確認とは別に、実際のAPIや画面遷移と接続した状態で検証する。

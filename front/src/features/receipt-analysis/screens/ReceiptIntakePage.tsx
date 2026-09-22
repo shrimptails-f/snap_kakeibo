@@ -120,6 +120,9 @@ export function ReceiptIntakePage() {
             >
               <Suspense fallback={<SpinnerBlock label="支出を読み込んでいます" />}>
                 <ExpenseDetailPanel expenseId={selectedExpenseId} />
+                <a className={styles.detailLink} href={`/expenses/${encodeURIComponent(selectedExpenseId)}?from=upload`}>
+                  支出詳細を開く
+                </a>
               </Suspense>
             </ErrorBoundary>
           )}

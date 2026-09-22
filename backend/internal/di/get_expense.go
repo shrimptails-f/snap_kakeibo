@@ -9,6 +9,7 @@ import (
 	libdynamodb "snap_kakeibo/backend/internal/library/dynamodb"
 	"snap_kakeibo/backend/internal/library/logger"
 	"snap_kakeibo/backend/internal/library/oswrapper"
+	libs3 "snap_kakeibo/backend/internal/library/s3"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"go.uber.org/dig"
@@ -27,6 +28,9 @@ func NewGetExpenseContainer(cfg settings.Config, awsCfg aws.Config, osw oswrappe
 		func() settings.Config { return cfg },
 		func(client *libdynamodb.Client, cfg settings.Config) application.ExpenseFinder {
 			return infrastructure.DynamoDBExpenseRepository{Expenses: client.Table(cfg.ExpensesTable), ExpenseDetails: client.Table(cfg.ExpenseDetailsTable)}
+		},
+		func(client *libs3.Client, cfg settings.Config) application.ReceiptImageURLPresigner {
+			return infrastructure.S3ReceiptImageURLPresigner{Bucket: client.Bucket(cfg.ReceiptBucket)}
 		},
 		application.NewGetExpenseUsecase,
 	); err != nil {

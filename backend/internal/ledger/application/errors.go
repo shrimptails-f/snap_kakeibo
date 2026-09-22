@@ -8,4 +8,6 @@ var (
 	// ErrExpenseNotFound は利用者の支出に expense_id が無い場合にリポジトリが返す。
 	// 他人の expense_id も同じエラーにし、存在の有無が分からないようにする。
 	ErrExpenseNotFound = errors.New("expense not found")
+	// ErrConcurrentUpdate は月次集計の version が再構築中に変化したことを表す。
+	ErrConcurrentUpdate = errors.New("monthly summary was updated concurrently")
 )

@@ -31,6 +31,40 @@ type fakeAPI struct {
 	err     error
 }
 
+type fakePresigner struct {
+	getIn      *awss3.GetObjectInput
+	putIn      *awss3.PutObjectInput
+	getExpires time.Duration
+	putExpires time.Duration
+	err        error
+}
+
+func (f *fakePresigner) PresignGetObject(_ context.Context, in *awss3.GetObjectInput, optFns ...func(*awss3.PresignOptions)) (*PresignedRequest, error) {
+	f.getIn = in
+	opts := awss3.PresignOptions{}
+	for _, fn := range optFns {
+		fn(&opts)
+	}
+	f.getExpires = opts.Expires
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &PresignedRequest{URL: "https://example.com/get", Method: http.MethodGet}, nil
+}
+
+func (f *fakePresigner) PresignPutObject(_ context.Context, in *awss3.PutObjectInput, optFns ...func(*awss3.PresignOptions)) (*PresignedRequest, error) {
+	f.putIn = in
+	opts := awss3.PresignOptions{}
+	for _, fn := range optFns {
+		fn(&opts)
+	}
+	f.putExpires = opts.Expires
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &PresignedRequest{URL: "https://example.com/put", Method: http.MethodPut}, nil
+}
+
 func newFakeAPI() *fakeAPI { return &fakeAPI{objects: map[string][]byte{}} }
 
 func (f *fakeAPI) GetObject(_ context.Context, in *awss3.GetObjectInput, _ ...func(*awss3.Options)) (*awss3.GetObjectOutput, error) {
@@ -161,6 +195,28 @@ func TestBucketBindsName(t *testing.T) {
 	}
 }
 
+func TestPresignedObjectURLs(t *testing.T) {
+	t.Parallel()
+	presigner := &fakePresigner{}
+	b := NewWithAPI(newFakeAPI(), presigner, nil).Bucket("receipts")
+
+	getURL, err := b.PresignGetObject(context.Background(), "receipts/u1/r1/original.jpg", 15*time.Minute)
+	if err != nil || getURL != "https://example.com/get" {
+		t.Fatalf("PresignGetObject() = %q, %v", getURL, err)
+	}
+	if aws.ToString(presigner.getIn.Bucket) != "receipts" || aws.ToString(presigner.getIn.Key) != "receipts/u1/r1/original.jpg" || presigner.getExpires != 15*time.Minute {
+		t.Errorf("get input = %+v, expires = %v", presigner.getIn, presigner.getExpires)
+	}
+
+	putURL, err := b.PresignPutObject(context.Background(), "receipts/u1/r1/original.jpg", "image/jpeg", 10*time.Minute)
+	if err != nil || putURL != "https://example.com/put" {
+		t.Fatalf("PresignPutObject() = %q, %v", putURL, err)
+	}
+	if aws.ToString(presigner.putIn.Bucket) != "receipts" || presigner.putExpires != 10*time.Minute {
+		t.Errorf("put input = %+v, expires = %v", presigner.putIn, presigner.putExpires)
+	}
+}
+
 func TestNilInputs(t *testing.T) {
 	t.Parallel()
 	c := NewWithAPI(newFakeAPI(), nil, nil)
@@ -171,6 +227,9 @@ func TestNilInputs(t *testing.T) {
 		t.Fatal("nil PutObjectInput")
 	}
 	if _, err := c.PresignPutObject(context.Background(), "b", "k", "image/jpeg", time.Minute); err == nil {
+		t.Fatal("nil presigner must be an error")
+	}
+	if _, err := c.PresignGetObject(context.Background(), "b", "k", time.Minute); err == nil {
 		t.Fatal("nil presigner must be an error")
 	}
 }
@@ -237,7 +296,7 @@ func TestFlociRoundTrip(t *testing.T) {
 		t.Fatalf("missing: err=%v", err)
 	}
 
-	// 署名付き URL に PUT → GetBytes で読める
+	// 署名付き URL に PUT → GET で読める
 	url, err := bound.PresignPutObject(ctx, "receipts/1.jpg", "image/jpeg", 5*time.Minute)
 	if err != nil {
 		t.Fatalf("PresignPutObject: %v", err)
@@ -259,6 +318,23 @@ func TestFlociRoundTrip(t *testing.T) {
 	got, err = c.GetBytes(ctx, bucket, "receipts/1.jpg", 1<<20)
 	if err != nil || !bytes.Equal(got, jpeg) {
 		t.Fatalf("GetBytes after presigned PUT: %v err=%v", got, err)
+	}
+	getURL, err := bound.PresignGetObject(ctx, "receipts/1.jpg", 5*time.Minute)
+	if err != nil {
+		t.Fatalf("PresignGetObject: %v", err)
+	}
+	getReq, err := http.NewRequestWithContext(ctx, http.MethodGet, getURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	getResp, err := http.DefaultClient.Do(getReq)
+	if err != nil {
+		t.Fatalf("GET presigned URL: %v", err)
+	}
+	defer func() { _ = getResp.Body.Close() }()
+	got, err = io.ReadAll(getResp.Body)
+	if err != nil || getResp.StatusCode != http.StatusOK || !bytes.Equal(got, jpeg) {
+		t.Fatalf("GET presigned URL: status=%d body=%v err=%v", getResp.StatusCode, got, err)
 	}
 
 	// ログ: 各操作が span_finished に bucket / s3_key 付きで出る

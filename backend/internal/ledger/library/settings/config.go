@@ -5,8 +5,10 @@ import "snap_kakeibo/backend/internal/library/oswrapper"
 
 // Config は get-expense に必要な設定値。
 type Config struct {
-	ExpensesTable       string
-	ExpenseDetailsTable string
+	ExpensesTable         string
+	ExpenseDetailsTable   string
+	MonthlySummariesTable string
+	ReceiptBucket         string
 	// JWTSecretParameter は access token の検証鍵を持つ SSM SecureString パラメータ名。署名鍵自体は環境変数で受け取らない。
 	JWTSecretParameter string
 	Stage              string
@@ -23,6 +25,8 @@ func Load(osw oswrapper.Interface) (Config, error) {
 	}{
 		{"EXPENSES_TABLE", &cfg.ExpensesTable},
 		{"EXPENSE_DETAILS_TABLE", &cfg.ExpenseDetailsTable},
+		{"MONTHLY_SUMMARIES_TABLE", &cfg.MonthlySummariesTable},
+		{"RECEIPT_BUCKET", &cfg.ReceiptBucket},
 		{"SSM_JWT_SECRET", &cfg.JWTSecretParameter},
 		{"STAGE", &cfg.Stage},
 	} {

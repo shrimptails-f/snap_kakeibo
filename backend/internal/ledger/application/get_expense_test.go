@@ -4,11 +4,25 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	common "snap_kakeibo/backend/internal/common/domain"
 	"snap_kakeibo/backend/internal/ledger/application"
 	"snap_kakeibo/backend/internal/ledger/domain"
 )
+
+type imagePresigner struct {
+	userID    common.UserID
+	requestID common.AnalysisRequestID
+	expires   time.Duration
+	url       string
+	err       error
+}
+
+func (p *imagePresigner) PresignGet(_ context.Context, userID common.UserID, requestID common.AnalysisRequestID, expires time.Duration) (string, error) {
+	p.userID, p.requestID, p.expires = userID, requestID, expires
+	return p.url, p.err
+}
 
 type finder struct {
 	userID    common.UserID
@@ -50,7 +64,8 @@ func sampleExpense(t *testing.T) domain.Expense {
 func TestGetReturnsExpenseWithDetails(t *testing.T) {
 	t.Parallel()
 	expenses := &finder{expense: sampleExpense(t)}
-	out, err := application.NewGetExpenseUsecase(expenses).Get(context.Background(), application.GetExpenseInput{UserID: "u1", ExpenseID: "e1"})
+	images := &imagePresigner{url: "https://example.com/receipt.jpg"}
+	out, err := application.NewGetExpenseUsecase(expenses, images).Get(context.Background(), application.GetExpenseInput{UserID: "u1", ExpenseID: "e1"})
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
 	}
@@ -59,6 +74,9 @@ func TestGetReturnsExpenseWithDetails(t *testing.T) {
 	}
 	if out.Expense.ID() != "e1" || out.Expense.RecordedAmount().Yen() != 1200 || len(out.Expense.Details()) != 1 {
 		t.Errorf("Get().Expense = %+v", out.Expense)
+	}
+	if out.ImageURL != images.url || images.userID != "u1" || images.requestID != "req1" || images.expires != 15*time.Minute {
+		t.Errorf("image URL = %q, args = %q / %q / %s", out.ImageURL, images.userID, images.requestID, images.expires)
 	}
 }
 
@@ -71,7 +89,7 @@ func TestGetRejectsMissingIDs(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			expenses := &finder{}
-			if _, err := application.NewGetExpenseUsecase(expenses).Get(context.Background(), in); !errors.Is(err, application.ErrInvalidInput) {
+			if _, err := application.NewGetExpenseUsecase(expenses, &imagePresigner{}).Get(context.Background(), in); !errors.Is(err, application.ErrInvalidInput) {
 				t.Fatalf("Get() error = %v, want ErrInvalidInput", err)
 			}
 			if expenses.called {
@@ -84,7 +102,7 @@ func TestGetRejectsMissingIDs(t *testing.T) {
 func TestGetPassesThroughNotFound(t *testing.T) {
 	t.Parallel()
 	expenses := &finder{err: application.ErrExpenseNotFound}
-	if _, err := application.NewGetExpenseUsecase(expenses).Get(context.Background(), application.GetExpenseInput{UserID: "u1", ExpenseID: "e1"}); !errors.Is(err, application.ErrExpenseNotFound) {
+	if _, err := application.NewGetExpenseUsecase(expenses, &imagePresigner{}).Get(context.Background(), application.GetExpenseInput{UserID: "u1", ExpenseID: "e1"}); !errors.Is(err, application.ErrExpenseNotFound) {
 		t.Fatalf("Get() error = %v, want ErrExpenseNotFound", err)
 	}
 }
@@ -92,7 +110,16 @@ func TestGetPassesThroughNotFound(t *testing.T) {
 func TestGetPassesThroughRepositoryFailure(t *testing.T) {
 	t.Parallel()
 	cause := errors.New("boom")
-	if _, err := application.NewGetExpenseUsecase(&finder{err: cause}).Get(context.Background(), application.GetExpenseInput{UserID: "u1", ExpenseID: "e1"}); !errors.Is(err, cause) {
+	if _, err := application.NewGetExpenseUsecase(&finder{err: cause}, &imagePresigner{}).Get(context.Background(), application.GetExpenseInput{UserID: "u1", ExpenseID: "e1"}); !errors.Is(err, cause) {
+		t.Fatalf("Get() error = %v, want %v", err, cause)
+	}
+}
+
+func TestGetWrapsImageURLFailure(t *testing.T) {
+	t.Parallel()
+	cause := errors.New("signing failed")
+	_, err := application.NewGetExpenseUsecase(&finder{expense: sampleExpense(t)}, &imagePresigner{err: cause}).Get(context.Background(), application.GetExpenseInput{UserID: "u1", ExpenseID: "e1"})
+	if !errors.Is(err, cause) {
 		t.Fatalf("Get() error = %v, want %v", err, cause)
 	}
 }

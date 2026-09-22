@@ -43,7 +43,7 @@ var routes = []route{
 	{method: http.MethodPost, path: "/api/uploads", function: "upload", transform: rewritePutURL},
 	{method: http.MethodPost, path: "/api/analysis-requests/{analysisRequestId}/retry", function: "retry-analysis"},
 	{method: http.MethodGet, path: "/api/months/{month}/analysis-requests", function: "list-analysis-requests"},
-	{method: http.MethodGet, path: "/api/expenses/{expenseId}", function: "get-expense"},
+	{method: http.MethodGet, path: "/api/expenses/{expenseId}", function: "get-expense", transform: rewriteExpenseImageURL},
 }
 
 // s3ProxyPrefix はブラウザからの presigned PUT を Floci へ中継するパス。

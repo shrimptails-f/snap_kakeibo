@@ -179,3 +179,11 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+.detailLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: var(--space-4);
+  color: var(--color-primary);
+  font-weight: 700;
+}
