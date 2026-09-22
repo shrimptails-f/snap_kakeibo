@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryRouter, RouterProvider } from 'react-router'
@@ -72,24 +72,24 @@ describe('routes', () => {
     expect(screen.queryByRole('button', { name: 'ログアウト' })).not.toBeInTheDocument()
   })
 
-  it('Cookie からセッションを復元できたときは / をそのまま表示する', async () => {
+  it('Cookie からセッションを復元できたときは /upload を表示する', async () => {
     const { calls } = mockBackend({ hasRefreshCookie: true })
 
-    renderAt('/')
+    const router = renderAt('/')
 
-    expect(await screen.findByRole('heading', { level: 1, name: /のレシート取り込み$/ })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: 'レシートを取り込む' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'snap_kakeibo' })).toHaveAttribute('href', '/')
     expect(screen.queryByText('user@example.com')).not.toBeInTheDocument()
     expect(screen.getByRole('contentinfo')).toHaveTextContent('snap_kakeibo')
-    expect(await screen.findByText('まだ解析依頼がありません。')).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/upload')
     // メモリに token が無いので refresh → check の 2 リクエストで復元する
     expect(calls.slice(0, 2).map((call) => call.url)).toEqual(['/api/auth/refresh', '/api/auth/check'])
   })
 
   it('利用中にセッションが切れたら、画面の API の 401 を受けてログイン画面へ送る', async () => {
     const backend = mockBackend({ hasRefreshCookie: true })
-    const router = renderAt('/')
-    await screen.findByText('まだ解析依頼がありません。')
+    const router = renderAt('/analysis-requests')
+    await screen.findByRole('heading', { name: '解析履歴' })
 
     backend.revokeSession()
     // 一覧の再読み込みが 401 → refresh も 401 になる
@@ -106,7 +106,7 @@ describe('routes', () => {
     const router = renderAt('/login')
 
     expect(await screen.findByRole('button', { name: 'ログアウト' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/upload'))
   })
 
   it('ログインすると元の URL へ戻り、ログアウトするとログイン画面へ戻る', async () => {
@@ -120,8 +120,8 @@ describe('routes', () => {
     await user.click(screen.getByRole('button', { name: 'ログイン' }))
 
     expect(await screen.findByRole('button', { name: 'ログアウト' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/')
-    expect(router.state.location.search).toBe('?tab=recent')
+    expect(router.state.location.pathname).toBe('/upload')
+    expect(router.state.location.search).toBe('')
 
     await user.click(screen.getByRole('button', { name: 'ログアウト' }))
 
@@ -135,7 +135,7 @@ describe('routes', () => {
     const router = renderAt('/no-such-page')
 
     expect(await screen.findByRole('button', { name: 'ログアウト' })).toBeInTheDocument()
-    expect(router.state.location.pathname).toBe('/')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/upload'))
   })
 
   it('パスワードを間違えるとログイン画面に留まり、誤りを案内する', async () => {

@@ -10,6 +10,7 @@ export type ReloadAnalysisRequests = {
   // 取得中またはクールタイム中
   isDisabled: boolean
   isFetching: boolean
+  hasError: boolean
 }
 
 // 解析依頼一覧の再読み込み。再取得中は useAnalysisRequests が前回の一覧を保つので、画面が消えることはない
@@ -18,6 +19,7 @@ export function useReloadAnalysisRequests(yearMonth: string): ReloadAnalysisRequ
   const queryKey = analysisRequestsQueryKey(yearMonth)
   const isFetching = useIsFetching({ queryKey }) > 0
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null)
+  const [hasError, setHasError] = useState(false)
 
   // クールタイムが明けたら再描画してボタンを戻す
   useEffect(() => {
@@ -29,9 +31,12 @@ export function useReloadAnalysisRequests(yearMonth: string): ReloadAnalysisRequ
   function reload() {
     if (cooldownUntil !== null) return
     setCooldownUntil(Date.now() + RELOAD_COOLDOWN_MS)
-    // 失敗しても前回の一覧を保ち、次の再読み込みに任せる(useSuspenseQuery の再取得は throw しない)
-    void queryClient.refetchQueries({ queryKey })
+    setHasError(false)
+    // 失敗しても前回の一覧を保ち、取得結果だけを案内する
+    void queryClient.refetchQueries({ queryKey }).then(() => {
+      setHasError(queryClient.getQueryState(queryKey)?.error != null)
+    })
   }
 
-  return { reload, isDisabled: isFetching || cooldownUntil !== null, isFetching }
+  return { reload, isDisabled: isFetching || cooldownUntil !== null, isFetching, hasError }
 }

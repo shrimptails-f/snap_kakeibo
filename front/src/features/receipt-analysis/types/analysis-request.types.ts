@@ -4,6 +4,7 @@ import type {
   analysisRequestStatusSchema,
   createUploadResponseSchema,
   listAnalysisRequestsResponseSchema,
+  retryAnalysisResponseSchema,
 } from './analysis-request.schema'
 
 // receipt-analysis の通信 DTO。形の定義は analysis-request.schema.ts
@@ -20,3 +21,5 @@ export type CreateUploadRequest = {
 }
 
 export type CreateUploadResponse = z.infer<typeof createUploadResponseSchema>
+
+export type RetryAnalysisResponse = z.infer<typeof retryAnalysisResponseSchema>

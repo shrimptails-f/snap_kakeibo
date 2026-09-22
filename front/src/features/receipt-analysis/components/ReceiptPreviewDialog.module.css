@@ -1,0 +1,5 @@
+.backdrop { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: var(--space-4); background: rgb(16 36 30 / 72%); }
+.dialog { width: min(920px, 100%); max-height: calc(100vh - 32px); display: grid; gap: var(--space-4); overflow: auto; padding: var(--space-6); border-radius: var(--radius-lg); background: var(--color-surface); box-shadow: var(--shadow-card); }
+.header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
+.header h2 { min-width: 0; overflow-wrap: anywhere; font-size: 18px; }
+.dialog img { width: 100%; max-height: calc(100vh - 140px); object-fit: contain; background: var(--color-surface-subtle); }

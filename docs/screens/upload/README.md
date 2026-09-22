@@ -4,7 +4,7 @@
 
 スマートフォンでレシートを撮影・複数選択し、画像ごとの進行を確認して、登録できたものから支出詳細へ進む。
 
-設計対象: [Issue #77](https://github.com/shrimptails-f/snap_kakeibo/issues/77) のアップロード画面と解析状況の導線。本書は記号ベースの画面設計案であり、実装済みの画面ではない。
+実装対象: [Issue #81](https://github.com/shrimptails-f/snap_kakeibo/issues/81)（親: [#77](https://github.com/shrimptails-f/snap_kakeibo/issues/77)）のアップロード画面と解析状況の導線。本書の記号ベース設計と `/upload` の実装を対応させる。
 
 ## 設計方針
 
@@ -47,7 +47,7 @@
                       支出詳細 / 再解析 / 再アップロード
 ```
 
-`/upload` は今回の設計で追加するURL。既存の `/` の検証画面からの移行、アプリ全体のナビゲーション実装は別途行う。履歴へのリンクは対象の受付月を渡す。月をまたいで送信した場合も、今回の一覧は画像ごとの依頼IDで追う。
+`/upload` を取り込みの入口とし、`/` から転送する。ヘッダーには「取り込む」「解析履歴」の導線を置く。履歴へのリンクは対象の受付月を渡す。月をまたいで送信した場合も、今回の一覧は画像ごとの依頼IDで追う。
 
 ## 記号の凡例
 
@@ -285,22 +285,14 @@ PCでは検索条件カードの月・状態を横並びにし、履歴カード
 
 ### POST /uploads
 
-複数画像のアップロード先を作成する。
+1画像のアップロード先を作成する。画面上の一括送信では画像ごとにこのAPIを呼び、1枚の失敗で他を止めない。
 
 Request:
 
 ```json
 {
-  "files": [
-    {
-      "file_name": "receipt-1.jpg",
-      "content_type": "image/jpeg"
-    },
-    {
-      "file_name": "receipt-2.jpg",
-      "content_type": "image/jpeg"
-    }
-  ]
+  "file_name": "receipt-1.jpg",
+  "content_type": "image/jpeg"
 }
 ```
 
@@ -308,14 +300,10 @@ Response:
 
 ```json
 {
-  "uploads": [
-    {
-      "analysis_request_id": "01JREQUESTXXX",
-      "s3_key": "receipts/01JUSERXXX/01JREQUESTXXX/original.jpg",
-      "upload_url": "https://example.com/presigned-url",
-      "expires_at": "2026-09-15T12:15:00Z"
-    }
-  ]
+  "analysis_request_id": "01JREQUESTXXX",
+  "s3_key": "receipts/01JUSERXXX/01JREQUESTXXX/original.jpg",
+  "put_url": "https://example.com/presigned-url",
+  "expires_at": "2026-09-15T12:15:00Z"
 }
 ```
 
@@ -325,13 +313,13 @@ Response:
 
 ## 実装との対応・未確定事項
 
-上記の複数ファイルAPIは従来の設計契約。現在の `useUploadReceipt` / `createUploadResponseSchema` とバックエンドの `CreateUploadUsecase` は1枚ずつの作成を扱い、フロントは `put_url` を読む。現行画面も単一選択であり、複数選択・撮影・今回の一覧は未実装。
+`UploadPage` は現行の単一ファイルAPIを画像ごとに並行して呼び、複数選択・撮影・今回の一覧を実装する。作成済み依頼IDと月一覧APIの結果を照合して、送信後のサーバー状態を表示する。
 
-- 画面上の一括操作は、現行の単一ファイルAPIを画像ごとに呼ぶ形でも実現できる。実装時に単一APIの継続か複数APIへの更新を決め、上記API節と型を一致させる。
+- 対応形式は、バックエンドの画像デコード契約に合わせて JPEG / PNG とする。容量上限はAPIで未定義のため画面でも数値を案内しない。
 - 受付月は購入月とは別。月境界で今回の依頼を見失わないよう、APIの月の算出規則と受付日時の取得方法を実装時に確認する。
-- 対応画像形式・容量・枚数上限、アップロード応答喪失時の重複防止はAPIとの確認事項。本設計で対応済みとはしない。
+- 容量・枚数上限、アップロード応答喪失時の重複防止はAPIとの確認事項。本設計で対応済みとはしない。
 - 履歴のページネーション・月全体の絞り込み・店舗名と計上額の取得にはAPI対応が必要。[解析履歴の未対応項目](../analysis-requests/README.md#画面設計に対して未対応の項目) に従う。
-- `ReceiptIntakePage` の送信・依頼一覧・支出表示を、アップロード画面、解析履歴画面、支出詳細画面に分ける。状態判定・回復操作・再読み込みは画面間で共通化する。
+- 旧 `ReceiptIntakePage` の送信・依頼一覧・支出表示は、アップロード画面、解析履歴画面、支出詳細画面に分離済み。状態判定・回復操作・再読み込みは画面間で共通化する。
 
 ## 設計レビュー項目
 

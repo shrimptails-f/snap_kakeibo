@@ -6,7 +6,7 @@
 
 取り込み後に画面を離れた利用者が、画像ごとの解析状況を見つけ直し、支出の確認や失敗からの回復へ進む。
 
-設計対象: [Issue #77](https://github.com/shrimptails-f/snap_kakeibo/issues/77) のアップロード画面と解析状況の導線。本書は記号ベースの設計案であり、実装済みの画面ではない。[アップロード画面](../upload/README.md) と合わせて読む。
+設計対象: [Issue #77](https://github.com/shrimptails-f/snap_kakeibo/issues/77) の解析依頼一覧画面。`/analysis-requests` には現行APIで表示できる受付月の履歴、状態、再解析・再アップロード・支出詳細への導線を実装済み。月選択、状態絞り込み、ページネーション、店舗名・計上額はAPI拡張を伴う後続実装とする。[アップロード画面](../upload/README.md) と合わせて読む。
 
 ## 操作できるモック
 

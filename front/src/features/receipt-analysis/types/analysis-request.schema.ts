@@ -29,4 +29,11 @@ export const listAnalysisRequestsResponseSchema = z.object({
 export const createUploadResponseSchema = z.object({
   put_url: z.string(),
   analysis_request_id: z.string(),
+  expires_at: z.string(),
+})
+
+export const retryAnalysisResponseSchema = z.object({
+  analysis_request_id: z.string(),
+  status: z.literal('ANALYZING'),
+  attempt: z.number(),
 })
