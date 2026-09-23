@@ -8,13 +8,16 @@ import (
 	common "snap_kakeibo/backend/internal/common/domain"
 )
 
-// ReceiptReading は OpenAI が画像から読み取った、検証前の店名・購入日・読取金額・明細。読めなかった項目は nil。
+// ReceiptReading は画像から読み取った店名・購入日・印字金額候補・税区分・商品行。
+// ReadAmount は旧形式の読み取り用で、候補がある場合は候補から選択する。
 // OpenAI のレスポンス形式(JSON Schema)は infrastructure が解釈し、ここには載せない。
 type ReceiptReading struct {
-	StoreName    *string
-	PurchaseDate *string
-	ReadAmount   *int64
-	Details      []ReadDetail
+	StoreName        *string
+	PurchaseDate     *string
+	ReadAmount       *int64
+	AmountCandidates []AmountCandidate
+	TaxBreakdown     []TaxBreakdown
+	Details          []ReadDetail
 }
 
 // ReadDetail は読み取った商品行。
@@ -23,6 +26,8 @@ type ReadDetail struct {
 	Amount   int64
 	Quantity int64
 	Category string
+	TaxRate  *int64
+	TaxMode  string
 }
 
 // analysis_requests.error_code に載せる失敗コード。
@@ -71,10 +76,15 @@ func ValidateReading(r ReceiptReading, now time.Time) (AnalysisResult, *FailureR
 	if err != nil {
 		return AnalysisResult{}, ptr(failure(FailureInvalidDate, "購入日が有効な範囲ではありません"))
 	}
-	if r.ReadAmount == nil {
+	evidence := ReconcileAmounts(r)
+	var selectedAmount *int64
+	if evidence.Selected != nil {
+		selectedAmount = &evidence.Selected.Amount
+	}
+	if selectedAmount == nil {
 		return AnalysisResult{}, ptr(failure(FailureNoTotalAmount, "合計金額を取得できませんでした"))
 	}
-	readAmount, err := common.NewReadAmount(*r.ReadAmount)
+	readAmount, err := common.NewReadAmount(*selectedAmount)
 	if err != nil {
 		return AnalysisResult{}, ptr(failure(FailureInvalidAmount, "合計金額が有効な範囲ではありません"))
 	}
@@ -110,6 +120,7 @@ func ValidateReading(r ReceiptReading, now time.Time) (AnalysisResult, *FailureR
 	if err != nil {
 		return AnalysisResult{}, ptr(failure(FailureInternal, "解析結果を組み立てられませんでした"))
 	}
+	result.evidence = evidence
 	return result, nil
 }
 

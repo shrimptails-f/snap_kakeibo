@@ -40,6 +40,7 @@ type expenseRecord struct {
 	CreatedAt         string `dynamodbav:"created_at"`
 	UpdatedAt         string `dynamodbav:"updated_at"`
 	ReadAmount        int64  `dynamodbav:"read_amount"`
+	AnalysisEvidence  string `dynamodbav:"analysis_evidence,omitempty"`
 	AdjustmentAmount  int64  `dynamodbav:"adjustment_amount"`
 	RecordedAmount    int64  `dynamodbav:"recorded_amount"`
 	IsEdited          bool   `dynamodbav:"is_edited"`
@@ -114,7 +115,7 @@ func (r DynamoDBExpenseRegistrar) transactItems(job domain.AnalysisJob, expense 
 	expenseItem, err := attributevalue.MarshalMap(expenseRecord{
 		PK: UserPK(userID), SK: ExpenseSK(expenseID), Type: recordTypeExpense,
 		ExpenseID: expenseID, AnalysisRequestID: expense.SourceRequestID().String(), StoreName: expense.StoreName(), PurchaseDate: purchaseDate, YearMonth: month,
-		ReadAmount: expense.ReadAmount().Yen(), AdjustmentAmount: expense.AdjustmentAmount().Yen(), RecordedAmount: expense.RecordedAmount().Yen(),
+		ReadAmount: expense.ReadAmount().Yen(), AnalysisEvidence: expense.AnalysisEvidence(), AdjustmentAmount: expense.AdjustmentAmount().Yen(), RecordedAmount: expense.RecordedAmount().Yen(),
 		IsEdited: expense.Edited(), Source: sourceAI, CreatedAt: timestamp, UpdatedAt: timestamp,
 	})
 	if err != nil {

@@ -338,6 +338,7 @@ type AnalysisResult struct {
 	purchaseDate PurchaseDate
 	readAmount   ReadAmount
 	details      []AnalyzedDetail
+	evidence     AmountEvidence
 }
 
 // NewAnalysisResult は支出へ変換可能な解析結果を生成する。明細0件はNO_DATA判定のため許容する。
@@ -356,6 +357,9 @@ func (r AnalysisResult) PurchaseDate() PurchaseDate { return r.purchaseDate }
 
 // ReadAmount は読取金額を返す。
 func (r AnalysisResult) ReadAmount() ReadAmount { return r.readAmount }
+
+// Evidence は支払合計の選択根拠を返す。
+func (r AnalysisResult) Evidence() AmountEvidence { return r.evidence }
 
 // Details は解析明細のコピーを返す。
 func (r AnalysisResult) Details() []AnalyzedDetail {

@@ -468,6 +468,7 @@ expense_details.amount を category ごとに合計
   "year_month": "2026-09", // 月次集計や月別表示で使う年月
 
   "read_amount": 3280, // 読取金額。レシートに記載された最終支払合計(店舗側の値引き・税は反映済み)
+  "analysis_evidence": "{...}", // AI解析時のみ。採用した金額候補、税区分、照合状態と根拠のJSON
   "adjustment_amount": -500, // 調整額。利用者が加減する符号付き金額。減額は負数、増額は正数
   "recorded_amount": 2780, // 計上額。read_amount + adjustment_amount。月次集計に反映し、負数を許容する
 

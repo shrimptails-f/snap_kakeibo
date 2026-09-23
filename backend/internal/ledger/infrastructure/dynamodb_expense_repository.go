@@ -26,6 +26,7 @@ type expenseItem struct {
 	PurchaseDate      string `dynamodbav:"purchase_date"`
 	YearMonth         string `dynamodbav:"year_month"`
 	ReadAmount        int64  `dynamodbav:"read_amount"`
+	AnalysisEvidence  string `dynamodbav:"analysis_evidence"`
 	AdjustmentAmount  int64  `dynamodbav:"adjustment_amount"`
 	IsEdited          bool   `dynamodbav:"is_edited"`
 	Source            string `dynamodbav:"source"`
@@ -309,7 +310,7 @@ func restoreExpense(userID common.UserID, expenseID domain.ExpenseID, item expen
 	}
 	expense, err := domain.RestoreExpense(domain.ExpenseState{
 		ID: expenseID, UserID: userID, SourceRequestID: sourceRequestID,
-		StoreName: item.StoreName, PurchaseDate: purchaseDate, ReadAmount: readAmount,
+		StoreName: item.StoreName, PurchaseDate: purchaseDate, ReadAmount: readAmount, AnalysisEvidence: item.AnalysisEvidence,
 		Adjustment: domain.NewAdjustmentAmount(item.AdjustmentAmount), Details: details, Edited: item.IsEdited, Source: source, UpdatedAt: updatedAt,
 	})
 	if err != nil {

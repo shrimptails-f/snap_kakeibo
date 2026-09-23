@@ -101,6 +101,7 @@ func TestRegisterBuildsOneTransactionAcrossTables(t *testing.T) {
 		detailSpec{"d1", "a", common.CategoryFood, 100, 1},
 		detailSpec{"d2", "b", common.CategoryFood, 200, 1},
 	)
+	expense.SetAnalysisEvidence(`{"selected":{"amount":300},"status":"strong"}`)
 	if err := newRegistrar(api).Register(context.Background(), domain.AnalysisJob{UserID: "u1", AnalysisRequestID: "req1", Attempt: 1}, expense, "raw.json", testTime); err != nil {
 		t.Fatalf("Register() error = %v", err)
 	}
@@ -119,7 +120,7 @@ func TestRegisterBuildsOneTransactionAcrossTables(t *testing.T) {
 	if err := attributevalue.UnmarshalMap(items[1].Put.Item, &record); err != nil {
 		t.Fatalf("unmarshal expense record: %v", err)
 	}
-	if record.Type != "EXPENSE" || record.ExpenseID != "e1" || record.AnalysisRequestID != "req1" || record.PurchaseDate != "2026-09-18" || record.YearMonth != "2026-09" || record.ReadAmount != 300 || record.AdjustmentAmount != 0 || record.RecordedAmount != 300 || record.IsEdited {
+	if record.Type != "EXPENSE" || record.ExpenseID != "e1" || record.AnalysisRequestID != "req1" || record.PurchaseDate != "2026-09-18" || record.YearMonth != "2026-09" || record.ReadAmount != 300 || record.AnalysisEvidence != expense.AnalysisEvidence() || record.AdjustmentAmount != 0 || record.RecordedAmount != 300 || record.IsEdited {
 		t.Errorf("expense record = %+v", record)
 	}
 	summary := items[4].Update

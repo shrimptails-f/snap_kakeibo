@@ -190,13 +190,15 @@ expenses は作成済みだがカテゴリだけ未反映、という中間状�
 model                = 環境変数 OPENAI_MODEL の値(初期値 gpt-5.6-terra)
 reasoning.effort     = 環境変数 OPENAI_REASONING_EFFORT の値(初期値 medium)
 store                = false(レシートを OpenAI 側に保存させない)
-max_output_tokens    = 4096
+max_output_tokens    = 8192
 text.format          = json_schema(strict)
 
 instructions(固定文。cached input を効かせるため毎回同じにする)
   レシート画像から店名・購入日・合計金額・明細を読み取り、明細を固定カテゴリに分類する
   読めない項目は null にする。推測で埋めない
-  金額は税込の整数(円)。合計金額はレシートの「合計」「お買上げ計」など支払額の行を使う
+  商品行の金額は印字額の整数(円)とし、根拠なく税込みへ換算しない
+  金額候補はラベル・位置・役割を付け、小計・税額・対象額・預り金と最終支払合計を区別する
+  税率別内訳と内税・外税区分を読み取る。読めない値は推測しない
   明細は商品行のみ。小計・税・割引・預り金・お釣りの行は明細に含めない
   レシートでない画像なら details を空にする
 
@@ -218,13 +220,16 @@ Structured Outputs(JSON Schema、`strict: true`)で固定形式のJSONで受け�
 {
   "store_name": "ファミリーマート",
   "purchase_date": "2024-01-05",
-  "total_amount": 106,
+  "amount_candidates": [{"amount": 106, "label": "合計", "role": "final_total", "position": 8}],
+  "tax_breakdown": [{"rate": 8, "taxable_amount": 98, "tax_amount": 8, "mode": "included"}],
   "details": [
     {
       "name": "スイートオレンジ&温州",
       "amount": 106,
       "quantity": 1,
-      "category": "food"
+      "category": "food",
+      "tax_rate": 8,
+      "tax_mode": "included"
     }
   ]
 }
@@ -234,11 +239,13 @@ Structured Outputs(JSON Schema、`strict: true`)で固定形式のJSONで受け�
 | --- | --- | --- |
 | store_name | string / null | 読めなければ null。null でも登録は続ける |
 | purchase_date | string(YYYY-MM-DD) / null | 時刻を含めない。JSON Schemaでも形式を制約する。null なら `NO_DATE` |
-| total_amount | integer / null | レシートの支払合計。ドメインでは読取金額(`read_amount`)として扱う。null なら `NO_TOTAL_AMOUNT` |
+| amount_candidates | array | 印字された金額行。`amount`、`label`、`role`、上からの順番 `position` を保持する。候補が読めなければ空配列 |
+| tax_breakdown | array | 税率 `rate`、対象額 `taxable_amount`、税額 `tax_amount`、内税・外税 `mode`。読めない個別値は null |
 | details[].name | string | レシート表記のまま |
 | details[].amount | integer | 行の金額(数量をかけた後) |
 | details[].quantity | integer | 読めなければ 1 |
 | details[].category | enum | 下記の固定カテゴリ |
+| details[].tax_rate / tax_mode | integer / null、enum | 商品行の税率と `included` / `external` / `mixed` / `unknown` |
 
 ### 検証
 
@@ -250,15 +257,15 @@ JSON Schema に合っていてもレシートとして正しい値とは限ら�
 | purchase_date | `YYYY-MM-DD` として実在する日付(2月30日などを弾く) | `INVALID_DATE` |
 | purchase_date | 未来でない(タイムゾーン差を考慮して翌日まで許容) | `INVALID_DATE` |
 | purchase_date | 5年より前でない | `INVALID_DATE` |
-| total_amount | null でない | `NO_TOTAL_AMOUNT` |
-| total_amount | 1 以上 10,000,000 以下 | `INVALID_AMOUNT` |
+| 最終合計候補 | 税額・対象額・預り金などを除外して少なくとも1件ある | `NO_TOTAL_AMOUNT` |
+| 採用した最終合計 | 1 以上 10,000,000 以下 | `INVALID_AMOUNT` |
 | details | 50件以下 | `TOO_MANY_DETAILS` |
 | details[].amount | 0 以上 10,000,000 以下 | `INVALID_AMOUNT` |
 | details[].quantity | 1 以上 999 以下 | `INVALID_AMOUNT` |
 | details[].name | 空でない | 該当明細を捨てる(他の明細は登録する) |
 | store_name / details[].name | 100 文字を超える分は切り詰める | 失敗にしない |
 
-明細の合計と `total_amount` が一致しなくても `FAILED` にしない。値引きや税の丸めで一致しないことが多く、月次集計には `total_amount` 由来の `expenses.recorded_amount` を使うため明細の誤差は集計に影響しない。
+印字ラベルと位置、小計・値引き・記載された外税額、商品行との照合で最終合計を選ぶ。内税は再加算しない。照合が弱い場合も候補を採用して `analysis_evidence.status=weak` と記録する。候補、税区分、採用理由は同属性の JSON に残し、生の OpenAI 応答は従来の S3 経路で保存する。明細の合計と選択した最終合計が一致しなくても `FAILED` にしない。商品行の読取漏れがあり得るため、金額の辻褄合わせはしない。
 
 `INVALID_DATE` / `INVALID_AMOUNT` は読み取りミスの可能性が高いので、解析依頼一覧画面から再解析できる。再解析でも直らない場合は画像側の問題(手ブレ、見切れ)として扱う。
 
@@ -315,7 +322,7 @@ Structured Outputs でも「JSON が返る」以外の終わり方がある。`s
 | HTTP 400 系(画像サイズ超過など) | 恒久失敗 `ANALYSIS_FAILED` |
 | JSON Schema でパース失敗 | 恒久失敗 `ANALYSIS_FAILED` |
 
-`max_output_tokens` は明細 50 件 + 余裕で足りる値(4,096)にする。思考トークンも `max_output_tokens` に含まれるため、reasoning effort を上げるときは合わせて見直す。
+`max_output_tokens` は明細 50 件と金額候補・税率別内訳の余裕を見て 8,192 にする。思考トークンも `max_output_tokens` に含まれるため、reasoning effort を上げるときは合わせて見直す。
 
 OpenAI APIの失敗は `ERROR` レベルで、`analysis_request_id`、`attempt`、HTTP status、OpenAIのerror type/code/message、`response_id`、生レスポンスのS3キーをログに出す。画像や生レスポンス本文そのものはログに出さない。refusalなど本文性の高い内容はerror codeとS3キーだけを出す。
 

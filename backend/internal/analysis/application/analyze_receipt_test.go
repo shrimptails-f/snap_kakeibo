@@ -112,6 +112,27 @@ func TestAnalyzeRegistersExpenseOnSuccess(t *testing.T) {
 	}
 }
 
+func TestAnalyzePersistsSelectedTotalEvidence(t *testing.T) {
+	t.Parallel()
+	f := newFixture()
+	f.analyzer.response.Reading.AmountCandidates = []domain.AmountCandidate{{Amount: 8, Label: "8%税額", Role: "tax", Position: 5}, {Amount: 108, Label: "合計", Role: "final_total", Position: 9}}
+	f.analyzer.response.Reading.TaxBreakdown = []domain.TaxBreakdown{{Rate: ptr(int64(8)), TaxableAmount: ptr(int64(100)), TaxAmount: ptr(int64(8)), Mode: "external"}}
+	_, err := f.build().Analyze(context.Background(), application.AnalyzeReceiptInput{Job: testJob})
+	if err != nil {
+		t.Fatalf("Analyze() error=%v", err)
+	}
+	if f.expenses.registered.ReadAmount().Yen() != 108 {
+		t.Fatalf("read amount=%d", f.expenses.registered.ReadAmount().Yen())
+	}
+	var evidence domain.AmountEvidence
+	if err := json.Unmarshal([]byte(f.expenses.registered.AnalysisEvidence()), &evidence); err != nil {
+		t.Fatalf("evidence JSON: %v", err)
+	}
+	if evidence.Selected == nil || evidence.Selected.Amount != 108 || len(evidence.Taxes) != 1 || evidence.Status != "strong" {
+		t.Fatalf("evidence=%+v", evidence)
+	}
+}
+
 func TestAnalyzeSkipsWhenRequestIsNotAnalyzable(t *testing.T) {
 	t.Parallel()
 	f := newFixture()
