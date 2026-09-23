@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="680" viewBox="0 0 480 680" role="img" aria-labelledby="title desc">
+  <title id="title">サンプルレシート</title>
+  <desc id="desc">Sample マーケットの食品と日用品のレシート</desc>
+  <rect width="480" height="680" fill="#e9e8e1"/>
+  <rect x="42" y="24" width="396" height="632" rx="4" fill="#fffefa"/>
+  <g fill="#29332f" font-family="monospace" font-size="22">
+    <text x="240" y="92" text-anchor="middle" font-size="30" font-weight="bold">SAMPLE</text>
+    <text x="240" y="128" text-anchor="middle">Sample マーケット</text>
+    <text x="70" y="185">お買い上げありがとうございます</text>
+    <text x="70" y="238">{{name0}}</text><text x="410" y="238" text-anchor="end">{{amount0}}</text>
+    <text x="70" y="283">{{name1}}</text><text x="410" y="283" text-anchor="end">{{amount1}}</text>
+    <text x="70" y="328">{{name2}}</text><text x="410" y="328" text-anchor="end">{{amount2}}</text>
+    <text x="70" y="373">{{name3}}</text><text x="410" y="373" text-anchor="end">{{amount3}}</text>
+    <path d="M70 400h340" stroke="#29332f" stroke-dasharray="8 8"/>
+    <text x="70" y="443">小計</text><text x="410" y="443" text-anchor="end">{{subtotal}}</text>
+    <text x="70" y="488">その他</text><text x="410" y="488" text-anchor="end">¥50</text>
+    <text x="70" y="533">値引き</text><text x="410" y="533" text-anchor="end">−¥50</text>
+    <path d="M70 554h340" stroke="#29332f"/>
+    <text x="70" y="601" font-weight="bold">合計</text><text x="410" y="601" text-anchor="end" font-weight="bold">{{subtotal}}</text>
+    <text x="240" y="631" text-anchor="middle" font-size="17">開発用サンプル画像</text>
+  </g>
+</svg>

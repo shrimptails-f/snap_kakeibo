@@ -1,32 +1,11 @@
-# React + TypeScript + Vite
+# フロントエンドのローカル起動
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
-
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+cd front
+pnpm install
+pnpm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+表示されたローカル URL を開くと、サンプルの認証でダッシュボードに入れます。当月を含む8か月分・全11カテゴリの支出、解析履歴、支出詳細のレシート画像を確認できます。サンプルは開発サーバー内だけで返され、ビルドには含まれません。取り込みや編集を試す場合は実際の API を接続してください。
+
+既存の `front/.env` に `VITE_DEV_API_PROXY` がある場合は、その行をコメントアウトしてください。実際の API に接続する場合は、`VITE_DEV_API_PROXY` に API の URL を設定して `/api` を転送するか、`VITE_API_BASE_URL` を設定してください。その場合はサンプル API を使いません。

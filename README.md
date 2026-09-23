@@ -18,6 +18,10 @@ Floci を同じ Compose 構成で起動し、開発コンテナ内の標準の A
 
 ## ローカルで画面を動かす
 
+画面をすぐ確認する場合は、`cd front && pnpm run dev` を実行します。API の接続先を設定していなければ、開発サーバーが閲覧用のサンプル認証・支出・レシート画像を返します。既存の `front/.env` に `VITE_DEV_API_PROXY` がある場合は、その行をコメントアウトしてください。詳しくは [front/README.md](front/README.md) を参照してください。
+
+実際の登録・編集や解析状態まで確認する場合は、以下のローカル API を使います。
+
 API Gateway と Lambda の代わりに `backend/tools/localapi` が HTTP を受け、`backend/cmd/*` の各 Lambda を子プロセス(aws-lambda-go のローカル RPC モード)として呼び出します。DynamoDB / S3 / SQS / SSM は Floci を使うので、実 AWS には繋ぎません。
 
 ```bash
