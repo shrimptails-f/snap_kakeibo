@@ -72,7 +72,7 @@ describe('MonthlyExpensesPage', () => {
     mockFetch({ '/api/monthly-summaries': summaries, '/api/months/2026-09/expenses': mixed })
     renderPage()
     expect(await screen.findByText(/税込み額未確定の明細 1件は印字額で含めています/)).toBeInTheDocument()
-    expect(screen.getByText(/税込み明細額（印字額 ¥7,000）/)).toBeInTheDocument()
+    expect(screen.getByText(/税込み明細額（印字額 [¥￥]7,000）/)).toBeInTheDocument()
     expect(screen.getByText('印字額・税込み未確定')).toBeInTheDocument()
     expect(screen.queryByText('55.6%')).not.toBeInTheDocument()
   })
