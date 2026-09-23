@@ -6,7 +6,7 @@ import "snap_kakeibo/backend/internal/library/oswrapper"
 // Config は upload に必要な設定値。
 type Config struct {
 	AnalysisRequestsTable string
-	// ReceiptBucket は元画像を PUT するバケット。
+	// ReceiptBucket は元画像を POST するバケット。
 	ReceiptBucket string
 	// JWTSecretParameter は access token の検証鍵を持つ SSM SecureString パラメータ名。署名鍵自体は環境変数で受け取らない。
 	JWTSecretParameter string

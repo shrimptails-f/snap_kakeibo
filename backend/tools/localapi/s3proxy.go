@@ -35,7 +35,7 @@ func newS3Proxy(prefix string, endpoint *url.URL) http.Handler {
 
 func setCORS(h http.Header) {
 	h.Set("Access-Control-Allow-Origin", "*")
-	h.Set("Access-Control-Allow-Methods", "GET, PUT, OPTIONS")
+	h.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 	h.Set("Access-Control-Allow-Headers", "content-type")
 	h.Set("Access-Control-Expose-Headers", "etag")
 }

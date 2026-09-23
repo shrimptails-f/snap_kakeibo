@@ -78,7 +78,7 @@ Request:
 
 ## 画像アップロード
 
-画像アップロードはPresigned URLを使って行う。
+画像アップロードは署名済み POST フォームを使って行う。
 
 ユーザー操作としては複数画像を一括選択できる。ただし解析は画像1枚単位で実行する。
 
@@ -89,13 +89,13 @@ Request:
 2. Backend
    analysis_request_idを画像ごとに生成
    analysis_requestsレコード作成
-   S3 Presigned PUT URLを画像ごとに発行
+   S3 Presigned POST フォームを画像ごとに発行
 
 3. React
-   Presigned URLへ画像ごとにPUT
+   署名済みフォームで画像ごとにPOST
 ```
 
-S3キーはクライアントから指定しない。
+S3キーは `POST /uploads` のリクエストでは指定せず、応答の署名済みフォーム項目をそのまま S3 へ送る。
 
 ---
 

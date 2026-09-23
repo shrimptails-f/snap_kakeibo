@@ -34,12 +34,12 @@ type presigner struct {
 	err         error
 }
 
-func (p *presigner) PresignPut(_ context.Context, key, contentType string, expires time.Duration) (string, error) {
+func (p *presigner) PresignPost(_ context.Context, key, contentType string, expires time.Duration) (application.UploadForm, error) {
 	p.key, p.contentType, p.expires = key, contentType, expires
 	if p.err != nil {
-		return "", p.err
+		return application.UploadForm{}, p.err
 	}
-	return "https://example.com/" + key, nil
+	return application.UploadForm{URL: "https://example.com/" + key, Fields: map[string]string{"key": key}}, nil
 }
 
 type ids struct{ err error }
@@ -66,8 +66,8 @@ func TestCreateRegistersRequestThenPresigns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
-	want := application.CreateUploadOutput{AnalysisRequestID: "req1", S3Key: "receipts/u1/req1/original.jpg", PutURL: "https://example.com/receipts/u1/req1/original.jpg", ExpiresAt: now.Add(15 * time.Minute)}
-	if out != want {
+	want := application.CreateUploadOutput{AnalysisRequestID: "req1", S3Key: "receipts/u1/req1/original.jpg", PostForm: application.UploadForm{URL: "https://example.com/receipts/u1/req1/original.jpg", Fields: map[string]string{"key": "receipts/u1/req1/original.jpg"}}, ExpiresAt: now.Add(15 * time.Minute)}
+	if out.AnalysisRequestID != want.AnalysisRequestID || out.S3Key != want.S3Key || out.PostForm.URL != want.PostForm.URL || out.PostForm.Fields["key"] != want.PostForm.Fields["key"] || !out.ExpiresAt.Equal(want.ExpiresAt) {
 		t.Errorf("Create() = %+v, want %+v", out, want)
 	}
 	if len(f.requests.saved) != 1 {
@@ -115,7 +115,7 @@ func TestCreateDoesNotPresignWhenSaveFails(t *testing.T) {
 		t.Fatalf("Create() error = %v, want ErrAnalysisRequestAlreadyExists", err)
 	}
 	if f.urls.key != "" {
-		t.Errorf("PresignPut should not be called, got key %q", f.urls.key)
+		t.Errorf("PresignPost should not be called, got key %q", f.urls.key)
 	}
 }
 

@@ -45,7 +45,7 @@ func TestCustomDomains(t *testing.T) {
 
 	storage.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]any{
 		"CorsConfiguration": map[string]any{"CorsRules": assertions.Match_ArrayWith(&[]any{assertions.Match_ObjectLike(&map[string]any{
-			"AllowedMethods": []string{"PUT"},
+			"AllowedMethods": []string{"POST"},
 			"AllowedOrigins": []string{"https://dev.snap-kakeibo.shrimptail.net"},
 		})})},
 	})

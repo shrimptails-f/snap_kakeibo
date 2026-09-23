@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { createUpload, uploadToPresignedUrl } from '../api/uploads.api'
+import { createUpload, uploadToPresignedPost } from '../api/uploads.api'
 import { analysisRequestsQueryPrefix } from './useAnalysisRequests'
 
 export type SelectedReceipt = {
@@ -18,13 +18,17 @@ export type ReceiptUpload = SelectedReceipt & {
 }
 
 const ACCEPTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png'])
+// 署名ポリシーの 30 MiB は multipart 全体に適用されるため、フォーム分の余裕を確保する。
+const MAX_FILE_BYTES = 29 << 20
 
 function selectedReceipt(file: File): SelectedReceipt {
   return {
     localId: crypto.randomUUID(),
     file,
     previewUrl: URL.createObjectURL(file),
-    validationError: ACCEPTED_IMAGE_TYPES.has(file.type) ? undefined : 'JPEG または PNG の画像を選んでください。',
+    validationError: !ACCEPTED_IMAGE_TYPES.has(file.type)
+      ? 'JPEG または PNG の画像を選んでください。'
+      : file.size > MAX_FILE_BYTES ? '画像は 29 MiB 以下にしてください。' : undefined,
   }
 }
 
@@ -68,7 +72,7 @@ export function useReceiptUploadBatch(yearMonth: string) {
         expiresAt: created.expires_at,
         phase: 'uploading',
       })
-      await uploadToPresignedUrl(created.put_url, item.file, item.file.type)
+      await uploadToPresignedPost(created.post_url, created.post_fields, item.file)
       updateUpload(item.localId, { phase: 'sent' })
     } catch {
       updateUpload(item.localId, {

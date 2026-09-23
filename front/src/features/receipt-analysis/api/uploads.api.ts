@@ -8,12 +8,14 @@ export async function createUpload(body: CreateUploadRequest): Promise<CreateUpl
   return parseResponse(createUploadResponseSchema, raw, 'POST /api/uploads')
 }
 
-// Presigned URL への PUT は送信先が S3 で認証も URL に含まれるため、apiClient を通さず素の fetch で送る
-export async function uploadToPresignedUrl(putUrl: string, file: File, contentType: string): Promise<void> {
-  const response = await fetch(putUrl, {
-    method: 'PUT',
-    headers: { 'content-type': contentType },
-    body: file,
+// S3 への POST は署名済みフィールドをそのまま送る。Content-Type はブラウザに multipart 境界を付けさせる。
+export async function uploadToPresignedPost(postUrl: string, fields: Record<string, string>, file: File): Promise<void> {
+  const body = new FormData()
+  Object.entries(fields).forEach(([key, value]) => body.append(key, value))
+  body.append('file', file)
+  const response = await fetch(postUrl, {
+    method: 'POST',
+    body,
   })
   if (!response.ok) {
     throw new Error(`presigned upload failed: ${response.status}`)

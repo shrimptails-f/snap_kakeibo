@@ -17,7 +17,7 @@ type Config struct {
 	Region    string
 	// AlertEmail は DLQ アラートの通知先。空なら購読を作らない
 	AlertEmail string
-	// CORSAllowedOrigins は S3 Presigned PUT を許可するオリジン
+	// CORSAllowedOrigins は S3 Presigned POST を許可するオリジン
 	CORSAllowedOrigins []string
 	// Domains は既存の共有 Hosted Zone と、この stage で使う名前。
 	Domains DomainConfig

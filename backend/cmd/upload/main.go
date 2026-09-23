@@ -27,10 +27,11 @@ type request struct {
 }
 
 type response struct {
-	AnalysisRequestID string `json:"analysis_request_id"`
-	S3Key             string `json:"s3_key"`
-	PutURL            string `json:"put_url"`
-	ExpiresAt         string `json:"expires_at"`
+	AnalysisRequestID string            `json:"analysis_request_id"`
+	S3Key             string            `json:"s3_key"`
+	PostURL           string            `json:"post_url"`
+	PostFields        map[string]string `json:"post_fields"`
+	ExpiresAt         string            `json:"expires_at"`
 }
 
 var (
@@ -98,7 +99,8 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	return apigateway.JSON(200, response{
 		AnalysisRequestID: out.AnalysisRequestID,
 		S3Key:             out.S3Key,
-		PutURL:            out.PutURL,
+		PostURL:           out.PostForm.URL,
+		PostFields:        out.PostForm.Fields,
 		ExpiresAt:         out.ExpiresAt.UTC().Format(time.RFC3339),
 	})
 }
