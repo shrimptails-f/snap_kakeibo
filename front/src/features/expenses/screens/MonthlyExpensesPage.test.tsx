@@ -63,6 +63,16 @@ describe('MonthlyExpensesPage', () => {
     expect(router.state.location.state).toEqual(expect.objectContaining({ from: '/months/2026-09', detailId: 'd1' }))
   })
 
+  it('前月・翌月ボタンで表示月を移動する', async () => {
+    mockFetch({ '/api/monthly-summaries': summaries, '/api/months/2026-09/expenses': expenses, '/api/months/2026-08/expenses': { year_month: '2026-08', items: [] } })
+    const router = renderPage(); const user = userEvent.setup()
+    await screen.findByRole('heading', { name: '月別支出' })
+    expect(screen.queryByText('2026年9月に購入した支出')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '2026年8月を表示' }))
+    expect(router.state.location.pathname).toBe('/months/2026-08')
+    expect(screen.getByRole('button', { name: '2026年9月を表示' })).toBeInTheDocument()
+  })
+
   it('集計だけ失敗しても明細を残し、領域単位の再試行を表示する', async () => {
     mockFetch({ '/api/monthly-summaries': () => jsonResponse({ error: 'boom' }, 500), '/api/months/2026-09/expenses': expenses })
     renderPage()

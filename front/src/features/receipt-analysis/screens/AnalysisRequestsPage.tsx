@@ -7,6 +7,7 @@ import { Button } from '@/shared/ui/Button'
 import { ErrorBoundary } from '@/shared/ui/ErrorBoundary'
 import { SpinnerBlock } from '@/shared/ui/Spinner'
 import { StatusBadge } from '@/shared/ui/StatusBadge'
+import { InfoTooltip } from '@/shared/ui/InfoTooltip'
 import { ReloadButton } from '../components/ReloadButton'
 import { RetryAnalysisDialog } from '../components/RetryAnalysisDialog'
 import { listAnalysisRequests } from '../api/analysis-requests.api'
@@ -179,7 +180,7 @@ function AnalysisRequestsContent() {
         ) : (
           <div className={styles.tableScroll}>
             <table className={styles.table}>
-              <thead><tr><th scope="col">受付日時</th><th scope="col">ファイル名</th><th scope="col">状態・理由</th><th scope="col">店舗・計上額</th><th scope="col">操作</th></tr></thead>
+              <thead><tr><th scope="col">受付日時</th><th scope="col">ファイル名</th><th scope="col">状態・理由</th><th scope="col"><InfoTooltip label="店舗・計上額" description="計上額は支出ごとの読取金額と調整額から算出した金額です。明細金額の合計とは一致しない場合があります。" /></th><th scope="col">操作</th></tr></thead>
               <tbody>{requests.items.map((item) => {
                 const status = analysisRequestStatus(item)
                 const message = analysisRequestMessage(item)
@@ -189,7 +190,7 @@ function AnalysisRequestsContent() {
                     <td data-label="受付日時"><time dateTime={item.created_at}>{new Date(item.created_at).toLocaleString('ja-JP')}</time></td>
                     <td data-label="ファイル名"><strong>{item.file_name}</strong></td>
                     <td data-label="状態・理由"><StatusBadge tone={status.tone}>{status.label}</StatusBadge>{message && <p>{message}</p>}</td>
-                    <td data-label="店舗・計上額">{item.store_name !== undefined || item.recorded_amount !== undefined ? <><span>{item.store_name ?? '店舗名未取得'}</span>{item.recorded_amount !== undefined && <strong className="amount">{formatYen(item.recorded_amount)}</strong>}</> : <span className={styles.muted}>—</span>}</td>
+                    <td className={styles.recordedCell}><span className={styles.mobileRecordedLabel}><InfoTooltip label="店舗・計上額" description="計上額は支出ごとの読取金額と調整額から算出した金額です。明細金額の合計とは一致しない場合があります。" /></span>{item.store_name !== undefined || item.recorded_amount !== undefined ? <><span>{item.store_name ?? '店舗名未取得'}</span>{item.recorded_amount !== undefined && <strong className="amount">{formatYen(item.recorded_amount)}</strong>}</> : <span className={styles.muted}>—</span>}</td>
                     <td data-label="操作" className={styles.actions}>
                       {!isBusy && item.status === 'SUCCEEDED' && item.expense_id && <Link to={detailPath} state={{ from: `${location.pathname}${location.search}`, backLabel: '解析履歴へ', requestId: item.analysis_request_id, scrollY: window.scrollY, analysisCursorHistory: cursorHistory }}>支出詳細を見る <span aria-hidden="true">›</span></Link>}
                       {!isBusy && canRetryAnalysis(item) && <Button variant="secondary" aria-label={`${item.file_name}を再解析する`} onClick={() => setRetryTarget(item)}>再解析する</Button>}

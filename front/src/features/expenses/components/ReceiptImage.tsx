@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { getExpense } from '../api/expenses.api'
 import { Button } from '@/shared/ui/Button'
 import styles from './ReceiptImage.module.css'
@@ -106,7 +107,7 @@ export function ReceiptImage({ expenseId, initialUrl }: Props) {
         )}
       </div>
 
-      {isDialogOpen && imageUrl && (
+      {isDialogOpen && imageUrl && createPortal((
         <div className={styles.dialogBackdrop} onMouseDown={(event) => { if (event.target === event.currentTarget) closeDialog() }}>
           <div ref={dialogRef} className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="receipt-dialog-title">
             <div className={styles.dialogToolbar}>
@@ -123,7 +124,7 @@ export function ReceiptImage({ expenseId, initialUrl }: Props) {
             </div>
           </div>
         </div>
-      )}
+      ), document.body)}
     </div>
   )
 }

@@ -186,6 +186,21 @@
   min-width: 2px;
 }
 
+.categoryButton {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.categoryButton[aria-pressed="true"] {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 .recordedLink {
   position: absolute;
   z-index: 3;
@@ -253,8 +268,9 @@
   justify-content: space-between;
   gap: var(--space-4);
   padding-block: var(--space-2);
-  border-bottom: 1px solid var(--color-border);
 }
+
+.categoryList div { border-bottom: 1px solid var(--color-border); }
 
 .categoryList dd,
 .summaryList dd {
@@ -264,9 +280,13 @@
 
 .summaryList {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding-top: var(--space-2);
-  border-top: 2px solid var(--color-text);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-subtle);
 }
+
+.summaryList div:first-child { font-weight: 700; }
 
 .referenceEmpty {
   margin-block: var(--space-4);
