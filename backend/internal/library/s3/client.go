@@ -50,6 +50,7 @@ type API interface {
 type Presigner interface {
 	PresignGetObject(ctx context.Context, params *awss3.GetObjectInput, optFns ...func(*awss3.PresignOptions)) (*PresignedRequest, error)
 	PresignPutObject(ctx context.Context, params *awss3.PutObjectInput, optFns ...func(*awss3.PresignOptions)) (*PresignedRequest, error)
+	PresignPostObject(ctx context.Context, params *awss3.PutObjectInput, optFns ...func(*awss3.PresignPostOptions)) (*awss3.PresignedPostRequest, error)
 }
 
 // PresignedRequest は SDK の署名付きリクエスト型の別名。呼び出し側が signer パッケージに依存しないようにする。
@@ -174,6 +175,31 @@ func (c *Client) PresignPutObject(ctx context.Context, bucket, key, contentType 
 		return "", fmt.Errorf("s3: unexpected presigned method %s", req.Method)
 	}
 	return req.URL, nil
+}
+
+// PresignPostObject は最大 maxBytes の multipart POST を許す署名済みフォームを返す。
+// content-length-range はファイルだけでなく multipart 全体のサイズに適用される。
+func (c *Client) PresignPostObject(ctx context.Context, bucket, key, contentType string, maxBytes int64, expires time.Duration) (*awss3.PresignedPostRequest, error) {
+	if c.presigner == nil {
+		return nil, fmt.Errorf("s3: presigner is not configured")
+	}
+	if maxBytes <= 0 {
+		return nil, fmt.Errorf("s3: maxBytes must be positive")
+	}
+	req, err := c.presigner.PresignPostObject(ctx, &awss3.PutObjectInput{
+		Bucket: aws.String(bucket), Key: aws.String(key), ContentType: aws.String(contentType),
+	}, func(o *awss3.PresignPostOptions) {
+		o.Expires = expires
+		o.Conditions = []any{
+			[]any{"content-length-range", 1, maxBytes},
+			map[string]string{"Content-Type": contentType},
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+	req.Values["Content-Type"] = contentType
+	return req, nil
 }
 
 // PresignGetObject はブラウザなどがオブジェクトを直接 GET するための署名付き URL を返す。

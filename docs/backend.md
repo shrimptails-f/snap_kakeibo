@@ -91,13 +91,13 @@ expenses.recorded_amount    計上額
    analysis_requestsレコードを画像ごとに作成
    status = UPLOADING
    attempt = 1
-   upload_expires_at = Presigned URLの有効期限
+   upload_expires_at = 署名済みフォームの有効期限
 
 4. Lambda
-   S3 Presigned PUT URLを画像ごとに発行
+   S3 Presigned POST フォームを画像ごとに発行（content-length-range: multipart 全体で 1〜30 MiB）
 
 5. React
-   Presigned URLへ画像ごとにPUT
+   署名済みフォームで画像ごとにPOST
 
 6. S3
    ObjectCreatedイベント発火
@@ -788,7 +788,7 @@ GSI1PK = USER#{user_id}#MONTH#{yyyy-MM}
 
 | 段階 | ケース | 対応 |
 | --- | --- | --- |
-| アップロード | Presigned URL発行後にPUTされない | `UPLOADING` のまま残す。画面が `upload_expires_at` 超過で「期限切れ」表示 |
+| アップロード | Presigned URL発行後にPOSTされない | `UPLOADING` のまま残す。画面が `upload_expires_at` 超過で「期限切れ」表示 |
 | 解析 | S3イベント重複 / 古いメッセージの遅延配信 | 開始条件 `status IN (UPLOADING, ANALYZING) AND attempt = :attempt` で古い試行を弾く。同じ試行の並行は OpenAI を二重に呼ぶが、登録は条件で1回になる |
 | 解析 | OpenAI の refusal / incomplete(max_output_tokens, content_filter) | `FAILED` (`ANALYSIS_FAILED`)。`error_message` に理由 |
 | 解析 | OpenAI APIの一時エラー(429 / 5xx) | 120秒の予算内でリトライ。尽きたらエラーを返してSQSリトライ |

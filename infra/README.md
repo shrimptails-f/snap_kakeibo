@@ -68,9 +68,9 @@ task infra:deploy:certificate                     # DNS 検証が終わるまで
 task infra:deploy:app -- -c keepExecuteApiEndpoint=true -c keepExecuteApiOrigin=true
 # 新 API ドメインの /api/hello と公開 URL の画面・/api/* を確認
 task infra:deploy:app -- -c keepExecuteApiEndpoint=true
-# CloudFront の新オリジンへの切替完了後、ログイン Cookie・Presigned PUT を確認
+# CloudFront の新オリジンへの切替完了後、ログイン Cookie・Presigned POST を確認
 task infra:deploy:storage                         # S3 CORS を新しいブラウザ origin に更新
-# 新しい URL の Presigned PUT を再確認
+# 新しい URL の Presigned POST を再確認
 task infra:deploy:app                             # 既定 execute-api URL を無効化
 ```
 
@@ -129,7 +129,7 @@ DLQ アラートの通知先 `AlertEmail` は空だと購読を作らず警告�
 | `Functions[].Repository.MaxImageCount` | 10 | 各 ECR に残す世代数。超えた古いイメージはライフサイクルルールで消える |
 | `Functions[].Repository.ImageTagMutability` | `IMMUTABLE` | 同じタグの再 push をエラーにする |
 | `AlertEmail` | 未設定 | DLQ アラートの通知先 |
-| `CORSAllowedOrigins` | `https://dev.snap-kakeibo.shrimptail.net` | S3 Presigned PUT を許可するオリジン |
+| `CORSAllowedOrigins` | `https://dev.snap-kakeibo.shrimptail.net` | S3 Presigned POST を許可するオリジン |
 
 ## Lambda イメージの規約
 

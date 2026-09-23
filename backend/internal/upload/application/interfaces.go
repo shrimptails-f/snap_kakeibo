@@ -13,10 +13,15 @@ type AnalysisRequestRepository interface {
 	Save(ctx context.Context, request domain.AnalysisRequest) error
 }
 
-// UploadURLPresigner はクライアントが元画像を直接 PUT するための署名付き URL を発行する。
-// PUT する側は同じ Content-Type を付ける必要がある。
-type UploadURLPresigner interface {
-	PresignPut(ctx context.Context, key, contentType string, expires time.Duration) (string, error)
+// UploadForm は S3 へ直接 POST する署名済みフォーム。
+type UploadForm struct {
+	URL    string
+	Fields map[string]string
+}
+
+// UploadFormPresigner は元画像を直接 POST するための署名済みフォームを発行する。
+type UploadFormPresigner interface {
+	PresignPost(ctx context.Context, key, contentType string, expires time.Duration) (UploadForm, error)
 }
 
 // IDGenerator は analysis_request_id を採番する。

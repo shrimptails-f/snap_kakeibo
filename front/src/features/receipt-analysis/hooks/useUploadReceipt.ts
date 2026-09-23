@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { createUpload, uploadToPresignedUrl } from '../api/uploads.api'
+import { createUpload, uploadToPresignedPost } from '../api/uploads.api'
 import { analysisRequestsQueryPrefix } from './useAnalysisRequests'
 
 type UploadReceiptInput = {
@@ -15,7 +15,7 @@ export function useUploadReceipt() {
     mutationFn: async ({ file }: UploadReceiptInput) => {
       const contentType = file.type || 'image/jpeg'
       const created = await createUpload({ file_name: file.name, content_type: contentType })
-      await uploadToPresignedUrl(created.put_url, file, contentType)
+      await uploadToPresignedPost(created.post_url, created.post_fields, file)
       return created
     },
     onSuccess: (_created, { yearMonth }) => {

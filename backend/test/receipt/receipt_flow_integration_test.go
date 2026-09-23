@@ -10,6 +10,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"testing"
 	"time"
@@ -36,7 +37,7 @@ import (
 
 var scenarioNow = time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
 
-// TestReceiptUploadAnalysisAndRetrieval は署名付き URL 発行 → 画像 PUT → 解析 → 保存 → 支出取得を、
+// TestReceiptUploadAnalysisAndRetrieval は署名済みフォーム発行 → 画像 POST → 解析 → 保存 → 支出取得を、
 // OpenAI 以外は本番と同じ application / infrastructure 実装と Floci の一時リソースで実行する。
 func TestReceiptUploadAnalysisAndRetrieval(t *testing.T) {
 	t.Parallel()
@@ -67,10 +68,10 @@ func TestReceiptUploadAnalysisAndRetrieval(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create upload: %v", err)
 	}
-	if uploaded.S3Key != "receipts/scenario-user/request-receipt-flow/original.jpg" || uploaded.PutURL == "" {
+	if uploaded.S3Key != "receipts/scenario-user/request-receipt-flow/original.jpg" || uploaded.PostForm.URL == "" {
 		t.Fatalf("upload output = %+v", uploaded)
 	}
-	putPresigned(t, ctx, uploaded.PutURL, "image/png", receiptPNG(t))
+	postPresigned(t, ctx, uploaded.PostForm, receiptPNG(t))
 
 	storage := analysisinfra.S3ReceiptStorage{Client: s3Client, Results: bucket}
 	analyze := analysisapp.NewAnalyzeReceiptUsecase(
@@ -177,21 +178,38 @@ func receiptPNG(t *testing.T) []byte {
 	return buf.Bytes()
 }
 
-func putPresigned(t *testing.T, ctx context.Context, url, contentType string, body []byte) {
+func postPresigned(t *testing.T, ctx context.Context, form uploadapp.UploadForm, image []byte) {
 	t.Helper()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(body))
-	if err != nil {
-		t.Fatalf("create presigned PUT request: %v", err)
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for key, value := range form.Fields {
+		if err := writer.WriteField(key, value); err != nil {
+			t.Fatal(err)
+		}
 	}
-	req.Header.Set("Content-Type", contentType)
+	part, err := writer.CreateFormFile("file", "receipt.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write(image); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, form.URL, &body)
+	if err != nil {
+		t.Fatalf("create presigned POST request: %v", err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		t.Fatalf("PUT presigned URL: %v", err)
+		t.Fatalf("POST presigned URL: %v", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		message, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		t.Fatalf("PUT presigned URL: status %d: %s", resp.StatusCode, message)
+		t.Fatalf("POST presigned URL: status %d: %s", resp.StatusCode, message)
 	}
 }
 

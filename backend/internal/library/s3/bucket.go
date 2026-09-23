@@ -3,6 +3,8 @@ package s3
 import (
 	"context"
 	"time"
+
+	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 // Bucket は特定のバケットに束縛した Client。
@@ -37,6 +39,11 @@ func (b *Bucket) PutBytes(ctx context.Context, key string, body []byte, contentT
 // PresignPutObject は Client.PresignPutObject をこのバケットに対して行う。
 func (b *Bucket) PresignPutObject(ctx context.Context, key, contentType string, expires time.Duration) (string, error) {
 	return b.client.PresignPutObject(ctx, b.name, key, contentType, expires)
+}
+
+// PresignPostObject はサイズ制限付きの署名済みフォームを返す。
+func (b *Bucket) PresignPostObject(ctx context.Context, key, contentType string, maxBytes int64, expires time.Duration) (*awss3.PresignedPostRequest, error) {
+	return b.client.PresignPostObject(ctx, b.name, key, contentType, maxBytes, expires)
 }
 
 // PresignGetObject は Client.PresignGetObject をこのバケットに対して行う。

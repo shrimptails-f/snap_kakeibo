@@ -165,7 +165,7 @@ func constructID(name string) string {
 }
 
 // newReceiptBucket はレシート画像と OpenAI 生レスポンス JSON を置くバケットを作る。
-// ブラウザから Presigned PUT する前提なので CORS を許可する。
+// ブラウザから Presigned POST する前提なので CORS を許可する。
 func newReceiptBucket(scope constructs.Construct, cfg config.Config) awss3.Bucket {
 	return awss3.NewBucket(scope, jsii.String("ReceiptBucket"), &awss3.BucketProps{
 		BucketName:        jsii.String(cfg.Buckets.Receipts),
@@ -179,7 +179,7 @@ func newReceiptBucket(scope constructs.Construct, cfg config.Config) awss3.Bucke
 		}},
 		Cors: &[]*awss3.CorsRule{{
 			AllowedOrigins: jsii.Strings(cfg.CORSAllowedOrigins...),
-			AllowedMethods: &[]awss3.HttpMethods{awss3.HttpMethods_PUT},
+			AllowedMethods: &[]awss3.HttpMethods{awss3.HttpMethods_POST},
 			AllowedHeaders: jsii.Strings("*"),
 			MaxAge:         jsii.Number(3000),
 		}},

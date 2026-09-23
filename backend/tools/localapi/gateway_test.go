@@ -38,29 +38,29 @@ func TestToEventMatchesAPIGatewayV2Shape(t *testing.T) {
 	}
 }
 
-func TestRewritePutURLReplacesEndpointOnly(t *testing.T) {
+func TestRewritePostURLReplacesEndpointOnly(t *testing.T) {
 	t.Parallel()
 	tc := transformContext{endpoint: "http://floci:4566", publicS3URL: "http://localhost:8080/s3"}
-	in := `{"analysis_request_id":"id","put_url":"http://floci:4566/bucket/key?X-Amz-Signature=sig","s3_key":"key"}`
+	in := `{"analysis_request_id":"id","post_url":"http://floci:4566/bucket","post_fields":{"policy":"signed"},"s3_key":"key"}`
 
-	out, err := rewritePutURL(tc, []byte(in))
+	out, err := rewritePostURL(tc, []byte(in))
 	if err != nil {
-		t.Fatalf("rewritePutURL() error = %v", err)
+		t.Fatalf("rewritePostURL() error = %v", err)
 	}
-	var res map[string]string
+	var res map[string]json.RawMessage
 	if err := json.Unmarshal(out, &res); err != nil {
 		t.Fatalf("output is not JSON: %v", err)
 	}
-	if res["put_url"] != "http://localhost:8080/s3/bucket/key?X-Amz-Signature=sig" || res["analysis_request_id"] != "id" || res["s3_key"] != "key" {
+	if string(res["post_url"]) != `"http://localhost:8080/s3/bucket"` || string(res["analysis_request_id"]) != `"id"` || string(res["post_fields"]) != `{"policy":"signed"}` {
 		t.Errorf("rewritten = %v", res)
 	}
 }
 
-func TestRewritePutURLRejectsUnexpectedOrigin(t *testing.T) {
+func TestRewritePostURLRejectsUnexpectedOrigin(t *testing.T) {
 	t.Parallel()
 	tc := transformContext{endpoint: "http://floci:4566", publicS3URL: "http://localhost:8080/s3"}
-	if _, err := rewritePutURL(tc, []byte(`{"put_url":"https://s3.amazonaws.com/bucket/key"}`)); err == nil {
-		t.Error("expected an error for a put_url outside the local endpoint")
+	if _, err := rewritePostURL(tc, []byte(`{"post_url":"https://s3.amazonaws.com/bucket"}`)); err == nil {
+		t.Error("expected an error for a post_url outside the local endpoint")
 	}
 }
 

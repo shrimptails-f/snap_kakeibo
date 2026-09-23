@@ -187,25 +187,24 @@ func writeResponse(w http.ResponseWriter, res events.APIGatewayV2HTTPResponse) {
 	_, _ = w.Write(body)
 }
 
-// rewritePutURL は upload が返す presigned URL の向き先を、Lambda から見た Floci からブラウザから見た localapi の
-// S3 中継に差し替える。Floci は署名の Host を検証しないので、URL の origin を変えても PUT は通る。
-func rewritePutURL(tc transformContext, body []byte) ([]byte, error) {
+// rewritePostURL は署名済み POST の送信先を、Floci からブラウザ用の localapi S3 中継へ差し替える。
+func rewritePostURL(tc transformContext, body []byte) ([]byte, error) {
 	var res map[string]json.RawMessage
 	if err := json.Unmarshal(body, &res); err != nil {
 		return nil, err
 	}
-	var putURL string
-	if err := json.Unmarshal(res["put_url"], &putURL); err != nil {
-		return nil, fmt.Errorf("put_url: %w", err)
+	var postURL string
+	if err := json.Unmarshal(res["post_url"], &postURL); err != nil {
+		return nil, fmt.Errorf("post_url: %w", err)
 	}
-	if !strings.HasPrefix(putURL, tc.endpoint) {
-		return nil, fmt.Errorf("put_url %q does not start with %s", putURL, tc.endpoint)
+	if !strings.HasPrefix(postURL, tc.endpoint) {
+		return nil, fmt.Errorf("post_url %q does not start with %s", postURL, tc.endpoint)
 	}
-	rewritten, err := json.Marshal(tc.publicS3URL + strings.TrimPrefix(putURL, tc.endpoint))
+	rewritten, err := json.Marshal(tc.publicS3URL + strings.TrimPrefix(postURL, tc.endpoint))
 	if err != nil {
 		return nil, err
 	}
-	res["put_url"] = rewritten
+	res["post_url"] = rewritten
 	return json.Marshal(res)
 }
 

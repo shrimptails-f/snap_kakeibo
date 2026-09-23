@@ -63,7 +63,7 @@ describe('UploadPage', () => {
       [listPath]: () => jsonResponse({ items: ++listCount === 1 ? [] : [succeeded, uploadPending] }),
       '/api/uploads': () => {
         createCount += 1
-        return jsonResponse({ analysis_request_id: `req${createCount}`, put_url: `https://s3.example.com/${createCount}`, expires_at: '2099-09-22T12:15:00Z' })
+        return jsonResponse({ analysis_request_id: `req${createCount}`, post_url: `https://s3.example.com/${createCount}`, post_fields: { key: `receipts/req${createCount}/original.jpg`, policy: 'signed' }, expires_at: '2099-09-22T12:15:00Z' })
       },
       'https://s3.example.com/1': () => new Response(null, { status: 200 }),
       'https://s3.example.com/2': () => new Response(null, { status: 500 }),
@@ -92,6 +92,17 @@ describe('UploadPage', () => {
     await user.upload(screen.getByLabelText('画像を選ぶ（複数可）'), new File(['pdf'], 'receipt.pdf', { type: 'application/pdf' }))
     expect(screen.getByText('JPEG または PNG の画像を選んでください。')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '0枚をアップロード' })).toBeDisabled()
+  })
+
+  it('29 MiB を超える画像は送信前に拒否する', async () => {
+    const { calls } = mockFetch({ [listPath]: { items: [] } })
+    renderPage()
+    await screen.findByRole('heading', { name: 'レシートを取り込む' })
+    const file = new File([new Uint8Array((29 << 20) + 1)], 'large.jpg', { type: 'image/jpeg' })
+    await userEvent.setup().upload(screen.getByLabelText('画像を選ぶ（複数可）'), file)
+    expect(screen.getByText('画像は 29 MiB 以下にしてください。')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '0枚をアップロード' })).toBeDisabled()
+    expect(calls.filter((call) => call.url === '/api/uploads')).toHaveLength(0)
   })
 
   it('未送信の画像があるときはアプリ内の移動前に確認する', async () => {

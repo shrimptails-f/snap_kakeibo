@@ -32,6 +32,10 @@ func (p *receiptURLPresigner) PresignPutObject(_ context.Context, _ *awss3.PutOb
 	return &libs3.PresignedRequest{URL: "https://example.com/upload", Method: http.MethodPut}, nil
 }
 
+func (p *receiptURLPresigner) PresignPostObject(_ context.Context, _ *awss3.PutObjectInput, _ ...func(*awss3.PresignPostOptions)) (*awss3.PresignedPostRequest, error) {
+	return &awss3.PresignedPostRequest{URL: "https://example.com/upload", Values: map[string]string{}}, nil
+}
+
 func TestS3ReceiptImageURLPresignerUsesOwnedReceiptKey(t *testing.T) {
 	t.Parallel()
 	presigner := &receiptURLPresigner{}

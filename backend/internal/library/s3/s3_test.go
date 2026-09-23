@@ -3,6 +3,7 @@ package s3
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +20,7 @@ import (
 	"snap_kakeibo/backend/internal/library/stage"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
@@ -63,6 +65,10 @@ func (f *fakePresigner) PresignPutObject(_ context.Context, in *awss3.PutObjectI
 		return nil, f.err
 	}
 	return &PresignedRequest{URL: "https://example.com/put", Method: http.MethodPut}, nil
+}
+
+func (f *fakePresigner) PresignPostObject(_ context.Context, in *awss3.PutObjectInput, _ ...func(*awss3.PresignPostOptions)) (*awss3.PresignedPostRequest, error) {
+	return &awss3.PresignedPostRequest{URL: "https://example.com/post", Values: map[string]string{"key": aws.ToString(in.Key)}}, nil
 }
 
 func newFakeAPI() *fakeAPI { return &fakeAPI{objects: map[string][]byte{}} }
@@ -231,6 +237,42 @@ func TestNilInputs(t *testing.T) {
 	}
 	if _, err := c.PresignGetObject(context.Background(), "b", "k", time.Minute); err == nil {
 		t.Fatal("nil presigner must be an error")
+	}
+}
+
+func TestPresignPostObjectSignsSizeKeyAndContentType(t *testing.T) {
+	t.Parallel()
+	c := New(aws.Config{Region: "ap-northeast-2", Credentials: credentials.NewStaticCredentialsProvider("test", "secret", "")}, nil)
+	form, err := c.PresignPostObject(context.Background(), "receipts-test", "receipts/u1/r1/original.jpg", "image/png", 30<<20, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if form.URL == "" || form.Values["key"] != "receipts/u1/r1/original.jpg" || form.Values["Content-Type"] != "image/png" || form.Values["X-Amz-Signature"] == "" {
+		t.Fatalf("form = %+v", form)
+	}
+	raw, err := base64.StdEncoding.DecodeString(form.Values["policy"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var policy struct {
+		Conditions []any `json:"conditions"`
+	}
+	if err := json.Unmarshal(raw, &policy); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{`["content-length-range",1,31457280]`, `{"Content-Type":"image/png"}`, `{"key":"receipts/u1/r1/original.jpg"}`}
+	for _, expected := range want {
+		found := false
+		for _, condition := range policy.Conditions {
+			encoded, err := json.Marshal(condition)
+			if err == nil && string(encoded) == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("policy missing %s: %s", expected, raw)
+		}
 	}
 }
 

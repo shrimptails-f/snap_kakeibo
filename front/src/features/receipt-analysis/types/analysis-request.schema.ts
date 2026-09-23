@@ -31,7 +31,8 @@ export const listAnalysisRequestsResponseSchema = z.object({
 
 // POST /api/uploads
 export const createUploadResponseSchema = z.object({
-  put_url: z.string(),
+  post_url: z.string(),
+  post_fields: z.record(z.string(), z.string()),
   analysis_request_id: z.string(),
   expires_at: z.string(),
 })

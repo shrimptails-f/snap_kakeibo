@@ -31,7 +31,7 @@ func NewUploadContainer(cfg settings.Config, awsCfg aws.Config, osw oswrapper.In
 		func(client *libdynamodb.Client, cfg settings.Config) application.AnalysisRequestRepository {
 			return infrastructure.DynamoDBAnalysisRequestRepository{Table: client.Table(cfg.AnalysisRequestsTable)}
 		},
-		func(client *libs3.Client, cfg settings.Config) application.UploadURLPresigner {
+		func(client *libs3.Client, cfg settings.Config) application.UploadFormPresigner {
 			return infrastructure.S3UploadPresigner{Bucket: client.Bucket(cfg.ReceiptBucket)}
 		},
 		func(clock timewrapper.Interface) application.IDGenerator { return ulid.New(clock) },
