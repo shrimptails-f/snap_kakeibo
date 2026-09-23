@@ -81,7 +81,8 @@ classDiagram
         <<読み取り内容>>
         +string storeName
         +string purchaseDate
-        +int64 readAmount
+        +List~AmountCandidate~ amountCandidates
+        +List~TaxBreakdown~ taxBreakdown
         +List~ReadDetail~ details
     }
 
@@ -90,6 +91,7 @@ classDiagram
         +StoreName storeName
         +PurchaseDate purchaseDate
         +ReadAmount readAmount
+        +AmountEvidence evidence
         +List~AnalyzedDetail~ details
         +hasData() bool
     }
@@ -111,7 +113,7 @@ classDiagram
     AnalysisResult *-- "0..50" AnalyzedDetail : 検証後
 ```
 
-読み取り内容(`ReceiptReading`)はOpenAIのレスポンスを解釈した検証前の値で、読めなかった項目を持たないことがある。`validateReading`が業務上の検証を行い、検証済みの解析結果(`AnalysisResult`)か失敗理由(`FailureReason`)を返す。明細が0件の場合は支出を作らず、解析依頼を`NO_DATA`にする。
+読み取り内容(`ReceiptReading`)はOpenAIのレスポンスを解釈した検証前の値で、読めなかった項目を持たないことがある。`validateReading`が印字金額候補と税区分を照合し、検証済みの解析結果(`AnalysisResult`)か失敗理由(`FailureReason`)を返す。採用候補と照合根拠は`AmountEvidence`として支出にも保存する。明細が0件の場合は支出を作らず、解析依頼を`NO_DATA`にする。
 
 解析中の依頼を再解析可能とする条件と、停滞と判定する時間は未決定のため、図では`retry`の詳細な事前条件を固定しない。
 
@@ -129,6 +131,7 @@ classDiagram
         +StoreName storeName
         +PurchaseDate purchaseDate
         +ReadAmount readAmount
+        +string analysisEvidence
         +AdjustmentAmount adjustmentAmount
         +RecordedAmount recordedAmount
         +bool edited

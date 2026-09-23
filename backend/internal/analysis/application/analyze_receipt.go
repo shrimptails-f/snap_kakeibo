@@ -3,6 +3,7 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -229,5 +230,10 @@ func (u *AnalyzeReceiptUsecase) newExpense(job domain.AnalysisJob, result domain
 	if err != nil {
 		return ledgerdomain.Expense{}, fmt.Errorf("build expense: %w", err)
 	}
+	evidence, err := json.Marshal(result.Evidence())
+	if err != nil {
+		return ledgerdomain.Expense{}, fmt.Errorf("marshal analysis evidence: %w", err)
+	}
+	expense.SetAnalysisEvidence(string(evidence))
 	return expense, nil
 }

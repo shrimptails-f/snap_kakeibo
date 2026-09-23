@@ -16,7 +16,7 @@ dev 環境では次を使用する。
 | `reasoning.effort` | `medium` |
 | API | Responses API |
 | 画像 | 長辺2048px以下のJPEG、`detail: high` |
-| 出力 | Structured Outputs、`strict: true`、最大4096トークン |
+| 出力 | Structured Outputs、`strict: true`、最大8192トークン |
 
 モデルと effort は `infra/config/dev.go` を正とし、Analyze Lambda の `OPENAI_MODEL` と `OPENAI_REASONING_EFFORT` に渡す。
 
@@ -84,6 +84,8 @@ effortを上げても、ぼけ、白飛び、文字の画素不足など入力�
 | 店名一致率 | 正規化後の店名が正解と一致した割合 |
 | 購入日一致率 | `YYYY-MM-DD`の完全一致率 |
 | 合計金額一致率 | 支払額の完全一致率。小計・預り金との取り違えを個別集計する |
+| 税額・小計との取り違え | 税額、税抜対象額、小計を `read_amount` に採用した件数 |
+| 税区分と低確度 | 内税・外税・混在・不明の判定一致率と `analysis_evidence.status=weak` の件数 |
 | 明細精度 | 商品行の過不足、商品名、金額、数量の一致率 |
 | カテゴリ一致率 | 定義済みカテゴリとの一致率 |
 | 終端状態 | `SUCCEEDED` / `NO_DATA` / `FAILED`の妥当性、refusal、incomplete、Schema不一致率 |

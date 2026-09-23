@@ -105,34 +105,36 @@ func (d ExpenseDetail) Edited() bool { return d.edited }
 
 // Expense は家計へ金額上の影響を与える1件の支出を管理する集約ルート。
 type Expense struct {
-	id              ExpenseID
-	userID          common.UserID
-	sourceRequestID AnalysisRequestID
-	storeName       string
-	purchaseDate    PurchaseDate
-	readAmount      ReadAmount
-	adjustment      AdjustmentAmount
-	recordedAmount  RecordedAmount
-	details         []ExpenseDetail
-	edited          bool
-	source          RecordSource
-	updatedAt       time.Time
+	id               ExpenseID
+	userID           common.UserID
+	sourceRequestID  AnalysisRequestID
+	storeName        string
+	purchaseDate     PurchaseDate
+	readAmount       ReadAmount
+	analysisEvidence string
+	adjustment       AdjustmentAmount
+	recordedAmount   RecordedAmount
+	details          []ExpenseDetail
+	edited           bool
+	source           RecordSource
+	updatedAt        time.Time
 }
 
 // ExpenseState は永続化された支出を復元するためのドメイン状態。
 // RecordedAmountは読取金額と調整額から再導出し、永続値を正として受け取らない。
 type ExpenseState struct {
-	ID              ExpenseID
-	UserID          common.UserID
-	SourceRequestID AnalysisRequestID
-	StoreName       string
-	PurchaseDate    PurchaseDate
-	ReadAmount      ReadAmount
-	Adjustment      AdjustmentAmount
-	Details         []ExpenseDetail
-	Edited          bool
-	Source          RecordSource
-	UpdatedAt       time.Time
+	ID               ExpenseID
+	UserID           common.UserID
+	SourceRequestID  AnalysisRequestID
+	StoreName        string
+	PurchaseDate     PurchaseDate
+	ReadAmount       ReadAmount
+	AnalysisEvidence string
+	Adjustment       AdjustmentAmount
+	Details          []ExpenseDetail
+	Edited           bool
+	Source           RecordSource
+	UpdatedAt        time.Time
 }
 
 // NewExpense は検証済み解析結果などから支出を生成する。
@@ -172,7 +174,8 @@ func restoreExpense(state ExpenseState) (Expense, error) {
 		id: state.ID, userID: state.UserID, sourceRequestID: state.SourceRequestID,
 		storeName: strings.TrimSpace(state.StoreName), purchaseDate: state.PurchaseDate,
 		readAmount: state.ReadAmount, adjustment: state.Adjustment, recordedAmount: recorded,
-		details: append([]ExpenseDetail(nil), state.Details...), edited: state.Edited, source: state.Source, updatedAt: state.UpdatedAt,
+		analysisEvidence: state.AnalysisEvidence,
+		details:          append([]ExpenseDetail(nil), state.Details...), edited: state.Edited, source: state.Source, updatedAt: state.UpdatedAt,
 	}, nil
 }
 
@@ -306,6 +309,12 @@ func (e Expense) PurchaseDate() PurchaseDate { return e.purchaseDate }
 
 // ReadAmount は読取金額を返す。
 func (e Expense) ReadAmount() ReadAmount { return e.readAmount }
+
+// AnalysisEvidence は解析時に採用した金額の根拠を JSON で返す。手入力と旧データでは空。
+func (e Expense) AnalysisEvidence() string { return e.analysisEvidence }
+
+// SetAnalysisEvidence は解析済み支出の登録前に金額の根拠を保持する。
+func (e *Expense) SetAnalysisEvidence(evidence string) { e.analysisEvidence = evidence }
 
 // AdjustmentAmount は符号付き調整額を返す。
 func (e Expense) AdjustmentAmount() AdjustmentAmount { return e.adjustment }

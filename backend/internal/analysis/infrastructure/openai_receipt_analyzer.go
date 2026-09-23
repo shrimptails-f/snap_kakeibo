@@ -16,10 +16,11 @@ import (
 // receiptOutput は OpenAI の構造化出力(ReceiptSchema)の JSON。読めなかった項目は null。
 // OpenAI 固有の形式なので domain には置かず、ここで domain.ReceiptReading へ変換する。
 type receiptOutput struct {
-	StoreName    *string        `json:"store_name"`
-	PurchaseDate *string        `json:"purchase_date"`
-	TotalAmount  *int64         `json:"total_amount"`
-	Details      []detailOutput `json:"details"`
+	StoreName        *string                  `json:"store_name"`
+	PurchaseDate     *string                  `json:"purchase_date"`
+	AmountCandidates []domain.AmountCandidate `json:"amount_candidates"`
+	TaxBreakdown     []domain.TaxBreakdown    `json:"tax_breakdown"`
+	Details          []detailOutput           `json:"details"`
 }
 
 type detailOutput struct {
@@ -27,24 +28,26 @@ type detailOutput struct {
 	Amount   int64  `json:"amount"`
 	Quantity int64  `json:"quantity"`
 	Category string `json:"category"`
+	TaxRate  *int64 `json:"tax_rate"`
+	TaxMode  string `json:"tax_mode"`
 }
 
 func (o receiptOutput) toReading() domain.ReceiptReading {
 	details := make([]domain.ReadDetail, 0, len(o.Details))
 	for _, d := range o.Details {
-		details = append(details, domain.ReadDetail{Name: d.Name, Amount: d.Amount, Quantity: d.Quantity, Category: d.Category})
+		details = append(details, domain.ReadDetail{Name: d.Name, Amount: d.Amount, Quantity: d.Quantity, Category: d.Category, TaxRate: d.TaxRate, TaxMode: d.TaxMode})
 	}
-	return domain.ReceiptReading{StoreName: o.StoreName, PurchaseDate: o.PurchaseDate, ReadAmount: o.TotalAmount, Details: details}
+	return domain.ReceiptReading{StoreName: o.StoreName, PurchaseDate: o.PurchaseDate, AmountCandidates: o.AmountCandidates, TaxBreakdown: o.TaxBreakdown, Details: details}
 }
 
 // Instructions は OpenAI に渡すプロンプト。
-const Instructions = `レシート画像から店名・購入日・合計金額・明細を読み取り、明細を固定カテゴリに分類する。読めない項目はnullにし、推測で埋めない。購入日は時刻を含めずYYYY-MM-DD形式にする。金額は税込の整数（円）。合計金額は「合計」「お買上げ計」など支払額の行を使う。明細は商品行のみとし、小計・税・割引・預り金・お釣りは含めない。レシートでない画像ならdetailsを空にする。`
+const Instructions = `レシート画像から店名・購入日・商品行・印字された金額行・税率別内訳を読み取る。読めない値はnullにし、推測で補わない。購入日はYYYY-MM-DD。金額は印字額の整数円で、商品行を根拠なく税込みに換算しない。amount_candidatesには最終支払合計、商品代金・商品合計、小計、個別値引きと値引合計、税額、税率別対象額、預り金、お釣り、支払方法別の決済額を印字ラベル・上からの順番(position)・役割(role)とともに列挙する。金額行の見出しが別行なら直前の見出しもlabelに含め、役割の判定に使う。最終支払額の候補も複数あればすべて残す。roleはfinal_total,subtotal,discount,tax,taxable,deposit,change,payment,unknownから選ぶ。tax_breakdownには8%・10%など税率ごとの税抜対象額と税額、商品行が税抜で最後に税を加える外税(external)か、税込の商品行に税を内訳表示する内税(included)か不明(unknown)かを記す。税抜小計と合計後の税込対象額が両方ある場合、taxable_amountには税抜小計を入れ、税込対象額はamount_candidatesに別行で残す。税込対象額だけが印字され税抜対象額がなければtaxable_amountはnullにする。「内消費税」と書かれた合計後の内訳だけで商品行を内税と決めない。detailsは商品行のみで、amountは印字された行金額、税率と内外税が分かる場合だけ記す。明細を固定カテゴリに分類する。レシート以外ならdetailsを空にする。`
 
 const (
 	// DefaultRequestTimeout は 1 ジョブあたりの OpenAI 呼び出し(リトライ込み)の上限。
 	// 5 分の試行 2 回と 1 秒の待機を収め、Lambda の 11 分上限より短くする
 	DefaultRequestTimeout = 10*time.Minute + 30*time.Second
-	maxOutputTokens       = 4096
+	maxOutputTokens       = 8192
 	imageDetail           = "high"
 	schemaName            = "receipt"
 	responseStatusDone    = "completed"
@@ -154,15 +157,17 @@ func categoryEnum() []string {
 
 // ReceiptSchema は構造化出力に要求する JSON Schema。receiptOutput と同じ形。
 func ReceiptSchema() map[string]any {
-	detail := map[string]any{"type": "object", "additionalProperties": false, "required": []string{"name", "amount", "quantity", "category"}, "properties": map[string]any{
-		"name": map[string]any{"type": "string"}, "amount": map[string]any{"type": "integer"}, "quantity": map[string]any{"type": "integer"}, "category": map[string]any{"type": "string", "enum": categoryEnum()},
+	detail := map[string]any{"type": "object", "additionalProperties": false, "required": []string{"name", "amount", "quantity", "category", "tax_rate", "tax_mode"}, "properties": map[string]any{
+		"name": map[string]any{"type": "string"}, "amount": map[string]any{"type": "integer"}, "quantity": map[string]any{"type": "integer"}, "category": map[string]any{"type": "string", "enum": categoryEnum()}, "tax_rate": map[string]any{"type": []string{"integer", "null"}}, "tax_mode": map[string]any{"type": "string", "enum": []string{"included", "external", "mixed", "unknown"}},
 	}}
-	return map[string]any{"type": "object", "additionalProperties": false, "required": []string{"store_name", "purchase_date", "total_amount", "details"}, "properties": map[string]any{
+	candidate := map[string]any{"type": "object", "additionalProperties": false, "required": []string{"amount", "label", "role", "position"}, "properties": map[string]any{"amount": map[string]any{"type": "integer"}, "label": map[string]any{"type": "string"}, "role": map[string]any{"type": "string", "enum": []string{"final_total", "subtotal", "discount", "tax", "taxable", "deposit", "change", "payment", "unknown"}}, "position": map[string]any{"type": "integer"}}}
+	tax := map[string]any{"type": "object", "additionalProperties": false, "required": []string{"rate", "taxable_amount", "tax_amount", "mode"}, "properties": map[string]any{"rate": map[string]any{"type": []string{"integer", "null"}}, "taxable_amount": map[string]any{"type": []string{"integer", "null"}}, "tax_amount": map[string]any{"type": []string{"integer", "null"}}, "mode": map[string]any{"type": "string", "enum": []string{"included", "external", "unknown"}}}}
+	return map[string]any{"type": "object", "additionalProperties": false, "required": []string{"store_name", "purchase_date", "amount_candidates", "tax_breakdown", "details"}, "properties": map[string]any{
 		"store_name": map[string]any{"type": []string{"string", "null"}},
 		"purchase_date": map[string]any{"anyOf": []any{
 			map[string]any{"type": "string", "pattern": `^\d{4}-\d{2}-\d{2}$`, "description": "購入日。時刻を含めないYYYY-MM-DD形式"},
 			map[string]any{"type": "null"},
 		}},
-		"total_amount": map[string]any{"type": []string{"integer", "null"}}, "details": map[string]any{"type": "array", "items": detail},
+		"amount_candidates": map[string]any{"type": "array", "items": candidate}, "tax_breakdown": map[string]any{"type": "array", "items": tax}, "details": map[string]any{"type": "array", "items": detail},
 	}}
 }

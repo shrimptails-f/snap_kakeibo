@@ -33,7 +33,7 @@ func completedResponse(text string) *openai.Response {
 
 func TestAnalyzeSendsImageWithSchema(t *testing.T) {
 	t.Parallel()
-	client := &fakeResponses{resp: completedResponse(`{"store_name":null,"purchase_date":"2026-09-18","total_amount":100,"details":[]}`)}
+	client := &fakeResponses{resp: completedResponse(`{"store_name":null,"purchase_date":"2026-09-18","amount_candidates":[{"amount":100,"label":"合計","role":"final_total","position":3}],"tax_breakdown":[],"details":[]}`)}
 	analyzer := OpenAIReceiptAnalyzer{Client: client, Model: "gpt-5-mini", ReasoningEffort: "low"}
 
 	before := time.Now()
@@ -44,7 +44,7 @@ func TestAnalyzeSendsImageWithSchema(t *testing.T) {
 	if result.Failure != nil || result.ResponseID != "resp_1" || string(result.Raw) != `{"id":"resp_1"}` {
 		t.Fatalf("result = %+v", result)
 	}
-	if result.Reading.PurchaseDate == nil || *result.Reading.PurchaseDate != "2026-09-18" || *result.Reading.ReadAmount != 100 || result.Reading.StoreName != nil {
+	if result.Reading.PurchaseDate == nil || *result.Reading.PurchaseDate != "2026-09-18" || len(result.Reading.AmountCandidates) != 1 || result.Reading.AmountCandidates[0].Amount != 100 || result.Reading.StoreName != nil {
 		t.Errorf("reading = %+v", result.Reading)
 	}
 	if result.Usage.InputTokens != 10 || result.Usage.OutputTokens != 5 || result.Usage.ReasoningTokens != 2 {
@@ -153,22 +153,45 @@ func TestReceiptSchemaRequiresDateOnly(t *testing.T) {
 	if !slices.Contains(enum, "social") {
 		t.Errorf("category enum must include social: %v", enum)
 	}
+	roles := properties["amount_candidates"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)["role"].(map[string]any)["enum"].([]string)
+	if !slices.Contains(roles, "payment") {
+		t.Errorf("amount roles must include payment: %v", roles)
+	}
 }
 
-// TestAnalyzeConvertsDetailsIncludingSocial は OpenAI の出力(purchase_date / total_amount)が
+// TestAnalyzeConvertsDetailsIncludingSocial は OpenAI の出力が
 // domain.ReceiptReading の読み取り内容へ変換され、social カテゴリがそのまま通ることを確認する。
 func TestAnalyzeConvertsDetailsIncludingSocial(t *testing.T) {
 	t.Parallel()
-	client := &fakeResponses{resp: completedResponse(`{"store_name":"居酒屋","purchase_date":"2026-09-18","total_amount":5000,"details":[{"name":"飲み会","amount":5000,"quantity":1,"category":"social"}]}`)}
+	client := &fakeResponses{resp: completedResponse(`{"store_name":"居酒屋","purchase_date":"2026-09-18","amount_candidates":[{"amount":5000,"label":"合計","role":"final_total","position":3}],"tax_breakdown":[],"details":[{"name":"飲み会","amount":5000,"quantity":1,"category":"social","tax_rate":null,"tax_mode":"unknown"}]}`)}
 	result, err := OpenAIReceiptAnalyzer{Client: client}.Analyze(context.Background(), []byte("jpeg"))
 	if err != nil || result.Failure != nil {
 		t.Fatalf("Analyze() = %+v, %v", result, err)
 	}
 	reading := result.Reading
-	if *reading.StoreName != "居酒屋" || *reading.PurchaseDate != "2026-09-18" || *reading.ReadAmount != 5000 {
+	if *reading.StoreName != "居酒屋" || *reading.PurchaseDate != "2026-09-18" || len(reading.AmountCandidates) != 1 || reading.AmountCandidates[0].Amount != 5000 {
 		t.Errorf("reading = %+v", reading)
 	}
-	if len(reading.Details) != 1 || reading.Details[0] != (domain.ReadDetail{Name: "飲み会", Amount: 5000, Quantity: 1, Category: "social"}) {
+	if len(reading.Details) != 1 || reading.Details[0] != (domain.ReadDetail{Name: "飲み会", Amount: 5000, Quantity: 1, Category: "social", TaxMode: "unknown"}) {
 		t.Errorf("details = %+v", reading.Details)
+	}
+}
+
+func TestAnalyzeConvertsAmountEvidence(t *testing.T) {
+	t.Parallel()
+	client := &fakeResponses{resp: completedResponse(`{"store_name":"コンビニ","purchase_date":"2026-09-18","amount_candidates":[{"amount":8,"label":"8%税額","role":"tax","position":5},{"amount":108,"label":"合計","role":"final_total","position":8}],"tax_breakdown":[{"rate":8,"taxable_amount":100,"tax_amount":8,"mode":"external"}],"details":[{"name":"食品","amount":100,"quantity":1,"category":"food","tax_rate":8,"tax_mode":"external"}]}`)}
+	result, err := OpenAIReceiptAnalyzer{Client: client}.Analyze(context.Background(), []byte("jpeg"))
+	if err != nil || result.Failure != nil {
+		t.Fatalf("Analyze()=%+v, %v", result, err)
+	}
+	r := result.Reading
+	if len(r.AmountCandidates) != 2 || r.AmountCandidates[1].Amount != 108 || len(r.TaxBreakdown) != 1 || *r.TaxBreakdown[0].TaxAmount != 8 || r.Details[0].Amount != 100 || *r.Details[0].TaxRate != 8 || r.Details[0].TaxMode != "external" {
+		t.Fatalf("reading=%+v", r)
+	}
+	properties := ReceiptSchema()["properties"].(map[string]any)
+	for _, field := range []string{"amount_candidates", "tax_breakdown", "details"} {
+		if _, ok := properties[field]; !ok {
+			t.Errorf("schema missing %s", field)
+		}
 	}
 }
