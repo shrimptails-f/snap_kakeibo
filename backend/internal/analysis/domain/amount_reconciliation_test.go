@@ -142,3 +142,29 @@ func TestValidateReadingSeiyuWithSeparateTaxHeadings(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateReadingFamilyMartIncludedTaxAfterDiscount(t *testing.T) {
+	t.Parallel()
+	r := ReceiptReading{PurchaseDate: strPtr("2026-09-19"), Details: []ReadDetail{
+		{Name: "パン", Amount: 190, Quantity: 1, TaxRate: intPtr(8), TaxMode: "included"},
+		{Name: "パン", Amount: 170, Quantity: 1, TaxRate: intPtr(8), TaxMode: "included"},
+		{Name: "パン", Amount: 158, Quantity: 1, TaxRate: intPtr(8), TaxMode: "included"},
+		{Name: "カレー", Amount: 170, Quantity: 1, TaxRate: intPtr(8), TaxMode: "included"},
+		{Name: "パン", Amount: 140, Quantity: 1, TaxRate: intPtr(8), TaxMode: "included"},
+	}, AmountCandidates: []AmountCandidate{
+		{Amount: 828, Label: "商品合計", Role: "final_total", Position: 20},
+		{Amount: -20, Label: "値引合計", Role: "discount", Position: 21},
+		{Amount: 808, Label: "合計", Role: "final_total", Position: 25},
+		{Amount: 808, Label: "8%対象", Role: "final_total", Position: 30},
+		{Amount: 59, Label: "内消費税等", Role: "final_total", Position: 31},
+		{Amount: 808, Label: "PayPay支払", Role: "final_total", Position: 32},
+	}, TaxBreakdown: []TaxBreakdown{{Rate: intPtr(8), TaxableAmount: nil, TaxAmount: intPtr(59), Mode: "included"}}}
+	result, f := ValidateReading(r, time.Date(2026, 9, 19, 20, 0, 0, 0, time.UTC))
+	if f != nil {
+		t.Fatalf("failure=%v", f)
+	}
+	e := result.Evidence()
+	if result.ReadAmount().Yen() != 808 || e.Selected == nil || e.Selected.Label != "合計" || e.Status != "strong" || e.TaxMode != "included" {
+		t.Fatalf("read amount=%d evidence=%+v", result.ReadAmount().Yen(), e)
+	}
+}

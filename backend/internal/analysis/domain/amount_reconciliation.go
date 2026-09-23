@@ -242,7 +242,7 @@ func candidateRole(c AmountCandidate) string {
 		return "taxable"
 	case (strings.Contains(label, "税率") || strings.Contains(label, "%")) && strings.Contains(label, "対象"):
 		return "taxable"
-	case strings.Contains(label, "小計"), strings.Contains(label, "商品代金"), strings.Contains(label, "subtotal"):
+	case strings.Contains(label, "小計"), strings.Contains(label, "商品代金"), strings.Contains(label, "商品合計"), strings.Contains(label, "subtotal"):
 		return "subtotal"
 	case strings.Contains(label, "合計"), strings.Contains(label, "お買上"), strings.Contains(label, "お支払"), strings.Contains(label, "請求額"), strings.Contains(label, "total"):
 		return "final_total"
