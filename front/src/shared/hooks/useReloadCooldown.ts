@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-export const RELOAD_COOLDOWN_MS = 5000
+export const RELOAD_COOLDOWN_MS = 3000
 
 export function useReloadCooldown() {
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null)

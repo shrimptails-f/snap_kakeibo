@@ -261,7 +261,7 @@
     month.addEventListener('change', applyConditions); filter.addEventListener('change', applyConditions);
     document.querySelector('#attentionLink').addEventListener('click', () => { filter.value = 'attention'; applyConditions(); });
     document.querySelector('#emptyAction').addEventListener('click', event => { if (event.currentTarget.getAttribute('href').startsWith('#')) { event.preventDefault(); filter.value = 'all'; applyConditions(); } });
-    document.querySelector('#reload').addEventListener('click', event => { const button = event.currentTarget; button.disabled = true; button.textContent = '再読み込み中…'; setTimeout(() => { button.textContent = '再読み込み'; document.querySelector('#checkedAt').textContent = '状態確認 ' + new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }); setTimeout(() => button.disabled = false, 5000); }, 700); });
+    document.querySelector('#reload').addEventListener('click', event => { const button = event.currentTarget; button.disabled = true; button.textContent = '再読み込み中…'; setTimeout(() => { button.textContent = '再読み込み'; document.querySelector('#checkedAt').textContent = '状態確認 ' + new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }); setTimeout(() => button.disabled = false, 2300); }, 700); });
     function movePage(nextPage) { page = nextPage; render(); const heading = document.querySelector('#historyHeading'); heading.focus(); heading.scrollIntoView(); }
     document.querySelector('#prev').addEventListener('click', () => movePage(Math.max(1, page - 1)));
     document.querySelector('#next').addEventListener('click', () => movePage(page + 1));
