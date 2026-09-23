@@ -63,13 +63,15 @@ describe('DashboardPage', () => {
 
     expect(screen.getByRole('status', { name: '月ごとの支出を読み込み中' })).toBeInTheDocument()
     expect(await screen.findByRole('heading', { level: 1, name: 'ダッシュボード' })).toBeInTheDocument()
-    expect(screen.getByText('表示期間：2026年4月〜2026年9月')).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: '表示開始月' })).toHaveValue('2026-04')
+    expect(screen.getByRole('combobox', { name: '表示終了月' })).toHaveValue('2026-09')
+    expect(screen.queryByText(/表示期間：/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'カテゴリ別（明細）' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('list', { name: '月ごとのカテゴリ別明細合計' })).toBeInTheDocument()
     expect(screen.getByText('明細合計').parentElement).toHaveTextContent(/[¥￥]140,500/)
     expect(screen.getByText('対象月の計上額').parentElement).toHaveTextContent(/[¥￥]128,500/)
     expect(screen.getByText('前月からの変化').parentElement).toHaveTextContent(/\+[¥￥]18,500/)
-    expect(screen.getByText(/集計更新：2026年9月15日 21:01/)).toBeInTheDocument()
+    expect(screen.queryByText(/集計更新：/)).not.toBeInTheDocument()
   })
 
   it('積み上げ棒を選ぶとカテゴリ別内訳の月が切り替わる', async () => {
@@ -86,29 +88,33 @@ describe('DashboardPage', () => {
     expect(router.state.location.search).toContain('reference=2026-08')
   })
 
-  it('計上額表示では棒から月別支出へ移動できる', async () => {
+  it('計上額表示の棒でもカテゴリ別内訳の月だけが切り替わる', async () => {
     mockFetch({ '/api/monthly-summaries': summaries })
     const router = renderPage()
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
 
     await screen.findByRole('heading', { name: '月ごとの支出' })
     await user.click(screen.getByRole('button', { name: '計上額' }))
-    const monthLink = screen.getByRole('link', { name: /2026年9月、計上額.*月別支出を見る/ })
-    await user.click(monthLink)
-    expect(router.state.location.pathname).toBe('/months/2026-09')
+    const monthButton = screen.getByRole('button', { name: /2026年8月のカテゴリ別内訳を表示（計上額/ })
+    await user.click(monthButton)
+    expect(router.state.location.pathname).toBe('/')
+    expect(monthButton).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('link', { name: '2026年8月の明細を見る ›' })).toHaveAttribute('href', '/months/2026-08')
   })
 
-  it('前の6か月へ移動し、負数と集計のない月を区別する', async () => {
+  it('開始月または終了月を変えると6か月幅を保ち、負数と集計なしを区別する', async () => {
     mockFetch({ '/api/monthly-summaries': summaries })
     const router = renderPage()
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
 
-    await user.click(await screen.findByRole('button', { name: '‹ 前の6か月' }))
-    expect(screen.getByText('表示期間：2025年10月〜2026年3月')).toBeInTheDocument()
+    await screen.findByRole('combobox', { name: '表示開始月' })
+    await user.selectOptions(screen.getByRole('combobox', { name: '表示開始月' }), '2025-10')
+    expect(screen.getByRole('combobox', { name: '表示終了月' })).toHaveValue('2026-03')
     expect(screen.getAllByText(/-[¥￥]1,000/).length).toBeGreaterThan(0)
     expect(screen.getAllByText('集計なし')).toHaveLength(10)
     expect(router.state.location.search).toContain('end=2026-03')
-    expect(screen.getByRole('button', { name: '‹ 前の6か月' })).toBeDisabled()
+    await user.selectOptions(screen.getByRole('combobox', { name: '表示終了月' }), '2026-08')
+    expect(screen.getByRole('combobox', { name: '表示開始月' })).toHaveValue('2026-03')
   })
 
   it('全件空なら取り込みと解析履歴への回復導線だけを表示する', async () => {

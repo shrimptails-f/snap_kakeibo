@@ -5,6 +5,7 @@ import { Button } from '@/shared/ui/Button'
 import { SpinnerBlock } from '@/shared/ui/Spinner'
 import { useMonthlyExpenses } from '../hooks/useMonthlyExpenses'
 import { categoryLabel } from '../lib/categoryLabel'
+import { formatUpdatedAt } from '../lib/formatUpdatedAt'
 import { monthlyBreakdown, type CategoryBreakdown } from '../lib/monthlyBreakdown'
 import { currentYearMonth, isYearMonth, shiftYearMonth, yearMonthLabel } from '../lib/yearMonth'
 import type { MonthlyExpenseItem } from '../types/monthly-expenses.types'
@@ -81,7 +82,6 @@ export function MonthlyExpensesPage() {
 
   const previous = shiftYearMonth(yearMonth, -1)
   const next = shiftYearMonth(yearMonth, 1)
-  const current = currentYearMonth()
   const maxAmount = Math.max(0, ...items.map((item) => item.amount))
 
   return (
@@ -97,7 +97,6 @@ export function MonthlyExpensesPage() {
           <label>表示する月<input className="field-control" type="month" value={yearMonth} onChange={(event) => moveTo(event.target.value)} /></label>
           <Button variant="secondary" aria-label={`${yearMonthLabel(next)}を表示`} onClick={() => moveTo(next)}>翌月 ›</Button>
         </div>
-        <Button variant="secondary" disabled={yearMonth === current} onClick={() => moveTo(current)}>今月</Button>
       </nav>
 
       {(summaries.isRefetchError || expenses.isRefetchError) && (summary || items.length > 0) && <p className={styles.warning} role="alert">更新できませんでした。前回取得した内容です。</p>}
@@ -110,6 +109,7 @@ export function MonthlyExpensesPage() {
         <section className={styles.total} aria-labelledby="monthly-total-heading">
           <div className={styles.totalRow}><h2 id="monthly-total-heading">月合計（計上額）</h2><strong className="amount">{formatYen(summary.total_recorded_amount)}</strong></div>
           <p>支出 {summary.expense_count}件 / 明細 {summary.detail_count}件</p>
+          <p>集計更新：{formatUpdatedAt(summary.updated_at)}</p>
           {summary.total_recorded_amount < 0 && <p>返金などの調整により、今月の計上額はマイナスです。</p>}
         </section>
       ) : null}

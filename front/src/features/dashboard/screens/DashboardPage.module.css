@@ -14,8 +14,6 @@
 .pageHeader p,
 .sectionHeading p,
 .help,
-.updatedAt,
-.currentMonthNote,
 .month small {
   color: var(--color-text-muted);
 }
@@ -31,24 +29,35 @@
   font-weight: 700;
 }
 
+.uploadLink {
+  justify-content: center;
+  padding-inline: var(--space-4);
+  border-radius: var(--radius-sm);
+  color: white;
+  background: var(--color-primary);
+  text-decoration: none;
+}
+
 .periodControls {
   display: grid;
-  grid-template-columns: minmax(190px, 240px) auto 1fr auto;
+  grid-template-columns: repeat(2, minmax(0, 220px)) auto;
   gap: var(--space-3) var(--space-4);
   align-items: end;
-  padding-block: var(--space-4);
-  border-block: 1px solid var(--color-border);
 }
+
+.periodControls > button { width: 136px; }
 
 .periodControls label,
 .sectionHeading label {
   display: grid;
   gap: var(--space-1);
+  min-width: 0;
   font-weight: 700;
 }
 
 .periodControls select,
 .sectionHeading select {
+  width: 100%;
   min-height: 44px;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);
@@ -57,16 +66,6 @@
   background: var(--color-surface);
 }
 
-.periodButtons {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.periodControls > small {
-  grid-column: 1 / -1;
-}
-
-.trend,
 .breakdown {
   padding-top: var(--space-6);
   border-top: 1px solid var(--color-border);
@@ -196,16 +195,20 @@
   cursor: pointer;
 }
 
-.categoryButton[aria-pressed="true"] {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
+.categoryButton:not([aria-pressed="true"]) .segment,
+.recordedButton:not([aria-pressed="true"]) .recordedBar { opacity: .55; }
 
-.recordedLink {
+.categoryButton:hover .segment,
+.recordedButton:hover .recordedBar { opacity: 1; }
+
+.recordedButton {
   position: absolute;
   z-index: 3;
   inset: 0;
   min-width: 44px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
 }
 
 .recordedBar {
@@ -244,9 +247,7 @@
   font-size: 13px;
 }
 
-.currentMonthNote,
-.help,
-.updatedAt {
+.help {
   margin-top: var(--space-4);
   font-size: 14px;
 }
@@ -279,7 +280,7 @@
 }
 
 .summaryList {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -416,20 +417,12 @@
 
 @media (max-width: 799px) {
   .periodControls {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .periodButtons,
-  .periodControls label {
+  .periodControls > button {
     grid-column: 1 / -1;
-  }
-
-  .periodButtons > button {
-    flex: 1;
-  }
-
-  .periodControls > p {
-    align-self: center;
+    justify-self: start;
   }
 
   .sectionHeading {
