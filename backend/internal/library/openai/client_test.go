@@ -87,7 +87,7 @@ func TestNewRequiresAPIKey(t *testing.T) {
 		t.Fatal("empty APIKey must be rejected")
 	}
 	c, err := New(Options{APIKey: "k"})
-	if err != nil || c.baseURL != DefaultBaseURL || c.policy.MaxAttempts() != DefaultRetry.MaxAttempts() || c.policy.ShouldRetry == nil {
+	if err != nil || c.baseURL != DefaultBaseURL || c.policy.MaxAttempts() != 2 || c.policy.AttemptTimeout != 5*time.Minute || c.policy.Backoff[0] != time.Second || c.policy.ShouldRetry == nil {
 		t.Fatalf("defaults: c=%+v err=%v", c, err)
 	}
 }

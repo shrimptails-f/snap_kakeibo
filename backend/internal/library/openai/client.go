@@ -53,10 +53,10 @@ const (
 	maxErrorMessageRunes = 500
 )
 
-// DefaultRetry は Options.Retry が空のときの方針。1,2,4,8 秒待ちで最大 5 回、1 回 60 秒まで。
+// DefaultRetry は Options.Retry が空のときの方針。1 秒待ちで 1 回リトライし、各試行は最大 5 分。
 var DefaultRetry = retry.Policy{
-	Backoff:        retry.Exponential(time.Second, 8*time.Second, 4),
-	AttemptTimeout: 60 * time.Second,
+	Backoff:        []time.Duration{time.Second},
+	AttemptTimeout: 5 * time.Minute,
 }
 
 // Options は New に渡す設定。APIKey 以外は省略できる。
