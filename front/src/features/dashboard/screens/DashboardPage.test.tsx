@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -149,5 +149,10 @@ describe('DashboardPage', () => {
     await user.click(screen.getByRole('button', { name: '再読み込み' }))
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('前回取得した内容を表示しています'))
     expect(screen.getByText('対象月の計上額').parentElement).toHaveTextContent(/[¥￥]128,500/)
+    expect(screen.getByRole('button', { name: '再読み込み（あと5秒）' })).toBeDisabled()
+    act(() => vi.advanceTimersByTime(2100))
+    expect(screen.getByRole('button', { name: '再読み込み（あと3秒）' })).toBeDisabled()
+    act(() => vi.advanceTimersByTime(2900))
+    expect(screen.getByRole('button', { name: '再読み込み' })).toBeEnabled()
   })
 })

@@ -45,7 +45,12 @@
   align-items: end;
 }
 
-.periodControls > button { width: 136px; }
+button.dashboardReload {
+  --reload-button-min-width: 136px;
+  width: 136px;
+  padding-inline: var(--space-2);
+  font-size: 14px;
+}
 
 .periodControls label,
 .sectionHeading label {

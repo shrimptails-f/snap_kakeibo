@@ -1,10 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useIsFetching, useQueryClient } from '@tanstack/react-query'
+import { useReloadCooldown } from '@/shared/hooks/useReloadCooldown'
 import { analysisRequestsQueryKey } from './useAnalysisRequests'
 import type { AnalysisRequestFilter } from '../types/analysis-request.types'
-
-// 連打で API を叩かないよう、再読み込みのあと 5 秒はボタンを無効にする
-export const RELOAD_COOLDOWN_MS = 5000
 
 export type ReloadAnalysisRequests = {
   reload: () => void
@@ -21,29 +19,11 @@ export function useReloadAnalysisRequests(yearMonth: string, filter: AnalysisReq
   const queryClient = useQueryClient()
   const queryKey = analysisRequestsQueryKey(yearMonth, filter, cursor)
   const isFetching = useIsFetching({ queryKey }) > 0
-  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null)
-  const [cooldownRemainingMs, setCooldownRemainingMs] = useState(0)
+  const { startCooldown, isCoolingDown, cooldownRemainingMs } = useReloadCooldown()
   const [hasError, setHasError] = useState(false)
 
-  // 残り時間を表示しつつ、クールタイムが明けたらボタンを戻す
-  useEffect(() => {
-    if (cooldownUntil === null) return
-    const deadline = cooldownUntil
-    function updateRemaining() {
-      const remaining = Math.max(0, deadline - Date.now())
-      setCooldownRemainingMs(remaining)
-      if (remaining === 0) setCooldownUntil(null)
-    }
-    updateRemaining()
-    const timer = setInterval(updateRemaining, 100)
-    return () => clearInterval(timer)
-  }, [cooldownUntil])
-
   function reload() {
-    if (cooldownUntil !== null) return
-    const nextCooldownUntil = Date.now() + RELOAD_COOLDOWN_MS
-    setCooldownRemainingMs(RELOAD_COOLDOWN_MS)
-    setCooldownUntil(nextCooldownUntil)
+    if (!startCooldown()) return
     setHasError(false)
     // 失敗しても前回の一覧を保ち、取得結果だけを案内する
     void queryClient.refetchQueries({ queryKey }).then(() => {
@@ -53,9 +33,9 @@ export function useReloadAnalysisRequests(yearMonth: string, filter: AnalysisReq
 
   return {
     reload,
-    isDisabled: isFetching || cooldownUntil !== null,
+    isDisabled: isFetching || isCoolingDown,
     isFetching,
-    isCoolingDown: cooldownUntil !== null,
+    isCoolingDown,
     cooldownRemainingMs,
     hasError,
   }

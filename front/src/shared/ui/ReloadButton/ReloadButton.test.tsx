@@ -1,17 +1,16 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { ReloadAnalysisRequests } from '../hooks/useReloadAnalysisRequests'
+import type { ReloadControl } from './ReloadButton'
 import { ReloadButton } from './ReloadButton'
 import styles from './ReloadButton.module.css'
 
-function reloadState(overrides: Partial<ReloadAnalysisRequests> = {}): ReloadAnalysisRequests {
+function reloadState(overrides: Partial<ReloadControl> = {}): ReloadControl {
   return {
     reload: vi.fn(),
     isDisabled: false,
     isFetching: false,
     isCoolingDown: false,
     cooldownRemainingMs: 0,
-    hasError: false,
     ...overrides,
   }
 }

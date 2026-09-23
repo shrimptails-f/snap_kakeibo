@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { formatYen } from '@/shared/lib/formatYen'
-import { Button } from '@/shared/ui/Button'
+import { useReloadCooldown } from '@/shared/hooks/useReloadCooldown'
+import { ReloadButton, type ReloadControl } from '@/shared/ui/ReloadButton'
 import { SpinnerBlock } from '@/shared/ui/Spinner'
 import { useMonthlySummaries } from '../hooks/useMonthlySummaries'
 import {
@@ -141,12 +142,12 @@ function SummaryGraph({
   )
 }
 
-function InitialError({ onRetry }: { onRetry: () => void }) {
+function InitialError({ reload }: { reload: ReloadControl }) {
   return (
     <section className={styles.error} role="alert">
       <h2>月ごとの支出を取得できませんでした</h2>
       <p>通信状態を確認して、もう一度お試しください。</p>
-      <Button variant="secondary" onClick={onRetry}>再試行</Button>
+      <ReloadButton reload={reload} idleLabel="再試行" className={styles.dashboardReload} />
     </section>
   )
 }
@@ -154,8 +155,7 @@ function InitialError({ onRetry }: { onRetry: () => void }) {
 export function DashboardPage() {
   const query = useMonthlySummaries()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [isCoolingDown, setIsCoolingDown] = useState(false)
-  const cooldownTimer = useRef<number | undefined>(undefined)
+  const cooldown = useReloadCooldown()
   const didRestoreScroll = useRef(false)
   const scrollStorageKey = `dashboard-scroll:${searchParams.toString()}`
   const nowMonth = currentYearMonth()
@@ -164,8 +164,6 @@ export function DashboardPage() {
     [query.data],
   )
   const summariesByMonth = useMemo(() => new Map(summaries.map((summary) => [summary.year_month, summary])), [summaries])
-
-  useEffect(() => () => window.clearTimeout(cooldownTimer.current), [])
 
   useEffect(() => {
     if (!query.isSuccess || didRestoreScroll.current) return
@@ -223,17 +221,23 @@ export function DashboardPage() {
   }
 
   async function reload() {
-    setIsCoolingDown(true)
-    window.clearTimeout(cooldownTimer.current)
-    cooldownTimer.current = window.setTimeout(() => setIsCoolingDown(false), 5000)
+    if (!cooldown.startCooldown()) return
     await query.refetch()
+  }
+
+  const reloadControl: ReloadControl = {
+    reload: () => void reload(),
+    isDisabled: query.isFetching || cooldown.isCoolingDown,
+    isFetching: query.isFetching,
+    isCoolingDown: cooldown.isCoolingDown,
+    cooldownRemainingMs: cooldown.cooldownRemainingMs,
   }
 
   if (query.isError && !query.data) {
     return (
       <div className={styles.page}>
         <header className={styles.pageHeader}><div><h1>ダッシュボード</h1><p>月ごとの支出を振り返る</p></div></header>
-        <InitialError onRetry={() => void reload()} />
+        <InitialError reload={reloadControl} />
       </div>
     )
   }
@@ -246,7 +250,7 @@ export function DashboardPage() {
           <h2>まだ月ごとの集計がありません</h2>
           <p>レシートを取り込むと、登録された支出を月ごとに確認できます。</p>
           <div className={styles.emptyActions}><Link to="/upload">レシートを取り込む ›</Link><Link to="/analysis-requests">取り込み済みの場合は、解析履歴を確認 ›</Link></div>
-          <Button variant="secondary" disabled={query.isFetching || isCoolingDown} onClick={() => void reload()}>{query.isFetching ? '再読み込み中…' : '再読み込み'}</Button>
+          <ReloadButton reload={reloadControl} className={styles.dashboardReload} />
         </section>
       </div>
     )
@@ -274,10 +278,10 @@ export function DashboardPage() {
             {selectableEndMonths.map((month) => <option key={month} value={month}>{yearMonthLabel(month)}{month > nowMonth ? '（未来月）' : ''}</option>)}
           </select>
         </label>
-        <Button variant="secondary" disabled={query.isFetching || isCoolingDown} onClick={() => void reload()}>{query.isFetching ? '再読み込み中…' : '再読み込み'}</Button>
+        <ReloadButton reload={reloadControl} className={styles.dashboardReload} />
       </section>
 
-      {query.isRefetchError && <div className={styles.warning} role="alert"><p>更新できませんでした。前回取得した内容を表示しています。</p><Button variant="secondary" onClick={() => void reload()}>再試行</Button></div>}
+      {query.isRefetchError && <div className={styles.warning} role="alert"><p>更新できませんでした。前回取得した内容を表示しています。</p><ReloadButton reload={reloadControl} idleLabel="再試行" className={styles.dashboardReload} /></div>}
 
       <section className={styles.trend} aria-labelledby="trend-heading">
         <div className={styles.sectionHeading}>
