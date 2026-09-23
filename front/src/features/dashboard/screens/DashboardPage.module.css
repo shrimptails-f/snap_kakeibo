@@ -198,8 +198,8 @@
 .categoryButton:not([aria-pressed="true"]) .segment,
 .recordedButton:not([aria-pressed="true"]) .recordedBar { opacity: .55; }
 
-.categoryButton:hover .segment,
-.recordedButton:hover .recordedBar { opacity: 1; }
+.categoryButton:not([aria-pressed="true"]):hover .segment,
+.recordedButton:not([aria-pressed="true"]):hover .recordedBar { opacity: .8; }
 
 .recordedButton {
   position: absolute;
