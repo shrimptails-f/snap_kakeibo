@@ -74,11 +74,15 @@ function SummaryGraph({
   period,
   summariesByMonth,
   onOpenMonth,
+  referenceMonth,
+  onSelectReferenceMonth,
 }: {
   mode: ChartMode
   period: string[]
   summariesByMonth: Map<string, MonthlySummary>
   onOpenMonth: () => void
+  referenceMonth: string
+  onSelectReferenceMonth: (month: string) => void
 }) {
   const scale = graphScale(period, summariesByMonth, mode)
   return (
@@ -98,7 +102,8 @@ function SummaryGraph({
               <div className={styles.plot}>
                 <span className={styles.zeroLine} aria-hidden="true" />
                 {!summary ? <span className={styles.noBar}>集計なし</span> : mode === 'category' ? (
-                  segmentPositions(summary, scale.minimum, scale.range).map((segment) => (
+                  <button type="button" className={styles.categoryButton} aria-label={`${yearMonthLabel(month)}のカテゴリ別内訳を表示`} aria-pressed={referenceMonth === month} onClick={() => onSelectReferenceMonth(month)}>
+                  {segmentPositions(summary, scale.minimum, scale.range).map((segment) => (
                     <span
                       key={segment.category}
                       className={styles.segment}
@@ -107,6 +112,7 @@ function SummaryGraph({
                       aria-hidden="true"
                     />
                   ))
+                  }</button>
                 ) : (
                   <Link
                     className={styles.recordedLink}
@@ -125,7 +131,7 @@ function SummaryGraph({
                 )}
               </div>
               <Link className={styles.monthLink} to={`/months/${month}`} onClick={onOpenMonth}>{shortMonthLabel(month, previousMonth)}</Link>
-              <strong className={`amount ${styles.graphValue}`}>{visibleAmount === null ? '—（集計なし）' : formatYen(visibleAmount)}</strong>
+              <strong className={`amount ${styles.graphValue}`}>{visibleAmount === null ? '集計なし' : formatYen(visibleAmount)}</strong>
               {summary && <small>{previousMonthChange(summary, summariesByMonth)}</small>}
             </li>
           )
@@ -285,22 +291,19 @@ export function DashboardPage() {
           period={period}
           summariesByMonth={summariesByMonth}
           onOpenMonth={rememberScrollPosition}
+          referenceMonth={referenceMonth}
+          onSelectReferenceMonth={(month) => updateParams({ reference: month })}
         />
-        {summariesByMonth.has(nowMonth) && period.includes(nowMonth) && <p className={styles.currentMonthNote}>※ {yearMonthLabel(nowMonth)}は月途中の登録分です。前月全体との比較になります。</p>}
       </section>
 
       <section className={styles.breakdown} aria-labelledby="breakdown-heading">
         <div className={styles.sectionHeading}>
-          <div><h2 id="breakdown-heading">カテゴリ別内訳</h2><p>明細ベース・参考</p></div>
-          <label>対象月
-            <select value={referenceMonth} onChange={(event) => updateParams({ reference: event.target.value })}>
-              {period.map((month) => <option key={month} value={month}>{yearMonthLabel(month)}</option>)}
-            </select>
-          </label>
+          <div><h2 id="breakdown-heading">カテゴリ別内訳</h2><p>{yearMonthLabel(referenceMonth)}</p></div>
+          <Link className={styles.detailsLink} to={`/months/${referenceMonth}`} onClick={rememberScrollPosition}>{yearMonthLabel(referenceMonth)}の明細を見る ›</Link>
         </div>
         <p className={styles.help}>明細金額の合計です。月の計上額とは一致しない場合があります。</p>
         {!referenceSummary ? (
-          <div className={styles.referenceEmpty}><p>この月の集計はありません。</p><Link to={`/months/${referenceMonth}`}>{yearMonthLabel(referenceMonth)}の明細を見る ›</Link></div>
+          <div className={styles.referenceEmpty}><p>この月の集計はありません。</p></div>
         ) : (
           <>
             {referenceRows.length === 0 ? <p className={styles.referenceEmpty}>{referenceSummary.detail_count === 0 ? 'この月の明細はありません。' : 'この月の明細金額はすべて0円です。'}</p> : (
@@ -312,7 +315,6 @@ export function DashboardPage() {
               <div><dt>対象月の計上額</dt><dd className="amount">{formatYen(referenceSummary.total_recorded_amount)}</dd></div>
               <div><dt>前月からの変化</dt><dd className="amount">{previousReference ? signedYen(referenceSummary.total_recorded_amount - previousReference.total_recorded_amount) : '比較できません'}</dd></div>
             </dl>
-            <Link className={styles.detailsLink} to={`/months/${referenceMonth}`} onClick={rememberScrollPosition}>{yearMonthLabel(referenceMonth)}の明細を見る ›</Link>
             <p className={styles.updatedAt}>集計更新：{formatUpdatedAt(referenceSummary.updated_at)}</p>
           </>
         )}

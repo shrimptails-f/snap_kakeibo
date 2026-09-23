@@ -29,6 +29,7 @@
 .table td { overflow-wrap: anywhere; }
 .table td:nth-child(4) > * { display: block; }
 .table td:nth-child(4) > * + * { margin-top: var(--space-1); }
+.mobileRecordedLabel { display: none !important; }
 .table tr:focus-visible { outline: 3px solid var(--color-primary); outline-offset: -3px; }
 .actions { padding: var(--space-3); }
 .pagination { display: flex; justify-content: center; align-items: center; gap: var(--space-4); margin-top: var(--space-6); }
@@ -47,7 +48,13 @@
   .table tr { padding: var(--space-3) 0; border-bottom: 1px solid var(--color-border); }
   .table td, .table td:nth-child(3), .table td:nth-child(4), .actions { display: grid; grid-template-columns: minmax(100px, 34%) 1fr; justify-items: start; gap: var(--space-2); padding: var(--space-2) 0; border: 0; }
   .table td::before { content: attr(data-label); color: var(--color-text-muted); font-size: 14px; font-weight: 700; }
+  .table .recordedCell::before { content: none; }
+  .table .mobileRecordedLabel { display: inline-flex !important; grid-column: 1; color: var(--color-text-muted); font-size: 14px; font-weight: 700; }
   .table td > p, .table td > strong, .table td > span, .table td > time, .table td > a, .table td > button { grid-column: 2; }
+}
+
+@media (max-width: 599px) {
+  .table td:nth-child(2) { display: none; }
 }
 
 @media (max-width: 420px) {

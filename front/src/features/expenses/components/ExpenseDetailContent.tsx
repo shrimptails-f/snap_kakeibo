@@ -107,7 +107,6 @@ export function ExpenseDetailContent({ expenseId }: Props) {
         <section className={styles.amountSummary} aria-label="支出金額">
           <div><span>{isEditing ? '保存後の計上額' : '計上額'}</span><strong className="amount">{recordedAmount === null ? '入力中' : formatYen(recordedAmount)}</strong></div>
           <p><span>読取金額 {formatYen(data.expense.read_amount)}</span><span>＋ 調整額 {recordedAmount === null ? '入力中' : formatYen(adjustment)}</span></p>
-          {!isEditing && <SourceBadge source={data.expense.source} isEdited={data.expense.is_edited} />}
           {recordedAmount !== null && recordedAmount < 0 && <small>返金などにより、今月の支出を減らす金額です。</small>}
         </section>
         <aside className={styles.receipt}><h2>レシート画像</h2><ReceiptImage expenseId={expenseId} initialUrl={data.expense.image_url} /></aside>

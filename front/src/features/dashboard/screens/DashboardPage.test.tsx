@@ -72,17 +72,17 @@ describe('DashboardPage', () => {
     expect(screen.getByText(/集計更新：2026年9月15日 21:01/)).toBeInTheDocument()
   })
 
-  it('カテゴリ区画に詳細パネルを出さず、参考月は選択欄で切り替える', async () => {
+  it('積み上げ棒を選ぶとカテゴリ別内訳の月が切り替わる', async () => {
     mockFetch({ '/api/monthly-summaries': summaries })
     const router = renderPage()
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
 
     await screen.findByRole('list', { name: '月ごとのカテゴリ別明細合計' })
     expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /内訳を表示/ })).not.toBeInTheDocument()
-
-    await user.selectOptions(screen.getByLabelText('対象月'), '2026-08')
-    expect(screen.getByLabelText('対象月')).toHaveValue('2026-08')
+    expect(screen.queryByRole('combobox', { name: '対象月' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '2026年8月のカテゴリ別内訳を表示' }))
+    expect(screen.getByRole('button', { name: '2026年8月のカテゴリ別内訳を表示' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('link', { name: '2026年8月の明細を見る ›' })).toHaveAttribute('href', '/months/2026-08')
     expect(router.state.location.search).toContain('reference=2026-08')
   })
 
@@ -106,7 +106,7 @@ describe('DashboardPage', () => {
     await user.click(await screen.findByRole('button', { name: '‹ 前の6か月' }))
     expect(screen.getByText('表示期間：2025年10月〜2026年3月')).toBeInTheDocument()
     expect(screen.getAllByText(/-[¥￥]1,000/).length).toBeGreaterThan(0)
-    expect(screen.getAllByText('—（集計なし）')).toHaveLength(5)
+    expect(screen.getAllByText('集計なし')).toHaveLength(10)
     expect(router.state.location.search).toContain('end=2026-03')
     expect(screen.getByRole('button', { name: '‹ 前の6か月' })).toBeDisabled()
   })

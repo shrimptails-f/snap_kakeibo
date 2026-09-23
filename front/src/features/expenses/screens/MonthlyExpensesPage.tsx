@@ -87,14 +87,16 @@ export function MonthlyExpensesPage() {
   return (
     <div className={styles.page}>
       <header className={styles.pageHeader}>
-        <div><h1>月別支出</h1><p>{yearMonthLabel(yearMonth)}に購入した支出</p></div>
+        <h1>月別支出</h1>
         <Button variant="secondary" disabled={isFetching || isCoolingDown} onClick={reloadAll}>{isFetching ? '再読み込み中…' : '再読み込み'}</Button>
       </header>
 
       <nav className={styles.monthNav} aria-label="表示月">
-        <Link to={`/months/${previous}`} aria-label={`${yearMonthLabel(previous)}を表示`}>‹ 前月</Link>
-        <label>表示する月<input className="field-control" type="month" value={yearMonth} onChange={(event) => moveTo(event.target.value)} /></label>
-        <Link to={`/months/${next}`} aria-label={`${yearMonthLabel(next)}を表示`}>翌月 ›</Link>
+        <div className={styles.monthSwitcher}>
+          <Button variant="secondary" aria-label={`${yearMonthLabel(previous)}を表示`} onClick={() => moveTo(previous)}>‹ 前月</Button>
+          <label>表示する月<input className="field-control" type="month" value={yearMonth} onChange={(event) => moveTo(event.target.value)} /></label>
+          <Button variant="secondary" aria-label={`${yearMonthLabel(next)}を表示`} onClick={() => moveTo(next)}>翌月 ›</Button>
+        </div>
         <Button variant="secondary" disabled={yearMonth === current} onClick={() => moveTo(current)}>今月</Button>
       </nav>
 
@@ -106,8 +108,7 @@ export function MonthlyExpensesPage() {
         <ErrorNotice message="月合計を取得できませんでした。" action="月合計を再読み込み" onRetry={() => void summaries.refetch()} />
       ) : summary ? (
         <section className={styles.total} aria-labelledby="monthly-total-heading">
-          <h2 id="monthly-total-heading">月合計（計上額）</h2>
-          <strong className="amount">{formatYen(summary.total_recorded_amount)}</strong>
+          <div className={styles.totalRow}><h2 id="monthly-total-heading">月合計（計上額）</h2><strong className="amount">{formatYen(summary.total_recorded_amount)}</strong></div>
           <p>支出 {summary.expense_count}件 / 明細 {summary.detail_count}件</p>
           {summary.total_recorded_amount < 0 && <p>返金などの調整により、今月の計上額はマイナスです。</p>}
         </section>
@@ -134,7 +135,7 @@ export function MonthlyExpensesPage() {
             <ol>{items.map((item) => {
               const [,, day] = item.purchase_date.split('-').map(Number)
               const width = maxAmount > 0 && item.amount > 0 ? `${Math.max(2, item.amount / maxAmount * 100)}%` : '0%'
-              return <li key={item.detail_id} id={`detail-${item.detail_id}`} tabIndex={-1}><Link to={`/expenses/${item.expense_id}`} state={{ from: `/months/${yearMonth}`, backLabel: `${yearMonthLabel(yearMonth)}の支出へ`, detailId: item.detail_id, scrollY: window.scrollY }}><span className={styles.itemTop}><strong>{item.name}</strong><strong className="amount">{formatYen(item.amount)} <span aria-hidden="true">›</span></strong></span>{!hasNegativeDetail && <span className={styles.barTrack} aria-hidden="true"><span style={{ width }} /></span>}<span className={styles.itemMeta}>{Number(yearMonth.slice(5))}/{day} · {item.store_name}</span><span className={styles.itemMeta}>{categoryLabel(item.category)} · 数量{item.quantity} · {sourceText(item)}</span></Link></li>
+              return <li key={item.detail_id} id={`detail-${item.detail_id}`} tabIndex={-1}><Link to={`/expenses/${item.expense_id}`} state={{ from: `/months/${yearMonth}`, backLabel: `${yearMonthLabel(yearMonth)}の支出へ`, detailId: item.detail_id, scrollY: window.scrollY }}><span className={styles.itemTop}><strong>{item.name}</strong><strong className="amount">{formatYen(item.amount)} <span aria-hidden="true">›</span></strong></span>{!hasNegativeDetail && <span className={styles.barTrack} aria-hidden="true"><span style={{ width, background: categoryColor(item.category) }} /></span>}<span className={styles.itemMeta}>{Number(yearMonth.slice(5))}/{day} · {item.store_name}</span><span className={styles.itemMeta}>{categoryLabel(item.category)} · 数量{item.quantity} · {sourceText(item)}</span></Link></li>
             })}</ol>
           </section>
         </>

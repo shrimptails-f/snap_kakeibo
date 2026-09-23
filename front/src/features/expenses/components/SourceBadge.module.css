@@ -1,8 +1,5 @@
-.root { position: relative; display: inline-flex; align-items: center; gap: var(--space-1); min-width: 0; }
+.root { display: inline-flex; align-items: center; gap: var(--space-1); min-width: 0; }
 .prefix { color: var(--color-text-muted); }
-.ai, .edited { display: inline-flex; align-items: center; min-height: 28px; padding: 0 var(--space-2); border-radius: 999px; font-size: 14px; font-weight: 700; }
-.ai { color: var(--color-info); background: var(--color-info-subtle); }
+.ai, .edited { display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--space-2); border-radius: 999px; font-size: 14px; font-weight: 700; }
+.ai { color: var(--color-info); background: var(--color-info-subtle); text-decoration: underline dotted; }
 .edited { color: var(--color-warning); background: var(--color-warning-subtle); }
-.info { display: inline-grid; place-items: center; width: 44px; height: 44px; margin: -8px; border: 0; color: var(--color-info); background: transparent; font-weight: 800; cursor: pointer; }
-.info::before { content: ''; position: absolute; width: 18px; height: 18px; border: 1px solid currentcolor; border-radius: 50%; }
-.tooltip { position: absolute; z-index: 4; top: calc(100% + 4px); left: 0; width: min(280px, calc(100vw - 48px)); padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); background: var(--color-surface); box-shadow: var(--shadow-card); font-size: 14px; font-weight: 400; }

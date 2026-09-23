@@ -9,7 +9,7 @@
 .message { display: grid; place-items: center; min-height: 180px; padding: var(--space-6); color: var(--color-text-muted); text-align: center; }
 .message p { margin: 0; color: var(--color-text); font-weight: 700; }
 .message small { margin-top: var(--space-2); }
-.dialogBackdrop { position: fixed; z-index: 40; inset: 0; padding: var(--space-4); background: rgb(27 31 36 / 72%); }
+.dialogBackdrop { position: fixed; z-index: 1000; inset: 0; padding: var(--space-4); background: rgb(27 31 36 / 72%); }
 .dialog { display: grid; grid-template-rows: auto minmax(0, 1fr); width: 100%; height: 100%; border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-card); }
 .dialogToolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border); }
 .dialogToolbar h2 { margin: 0; font-size: 20px; }
