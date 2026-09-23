@@ -100,9 +100,10 @@ func ReconcileAmounts(r ReceiptReading) AmountEvidence {
 			continue
 		}
 		score := 0
-		if role == "final_total" {
+		switch role {
+		case "final_total":
 			score = 100
-		} else if role == "payment" {
+		case "payment":
 			score = 40
 		}
 		if c.Position > 0 {
