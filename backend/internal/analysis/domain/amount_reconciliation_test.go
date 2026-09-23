@@ -114,3 +114,31 @@ func TestValidateReadingDoesNotUseOnePartOfSplitPaymentAsTotal(t *testing.T) {
 		t.Fatalf("failure=%v", failure)
 	}
 }
+
+func TestValidateReadingSeiyuWithSeparateTaxHeadings(t *testing.T) {
+	t.Parallel()
+	items := []ReadDetail{{Name: "キッチンタオル", Amount: 199, Quantity: 1}, {Name: "洗濯槽クリーナー", Amount: 516, Quantity: 2}, {Name: "雑巾", Amount: 398, Quantity: 2}, {Name: "マジックリン", Amount: 369, Quantity: 1}, {Name: "ネット", Amount: 518, Quantity: 2}, {Name: "レジ袋", Amount: 6, Quantity: 1}}
+	for _, tt := range []struct{ name, subtotalLabel, taxableLabel, taxLabel, paymentLabel string }{
+		{"headings attached", "小計 9点", "税抜金額対象 10% 9点", "消費税額 10% 9点", "支払い PayPay"},
+		{"headings omitted", "9点", "10% 9点", "10% 9点", "PayPay"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			r := ReceiptReading{PurchaseDate: strPtr("2026-09-19"), Details: items, AmountCandidates: []AmountCandidate{
+				{Amount: 2006, Label: tt.subtotalLabel, Role: "final_total", Position: 8},
+				{Amount: 2006, Label: tt.taxableLabel, Role: "final_total", Position: 10},
+				{Amount: 200, Label: tt.taxLabel, Role: "final_total", Position: 12},
+				{Amount: 2206, Label: "合計", Role: "final_total", Position: 14},
+				{Amount: 2206, Label: tt.paymentLabel, Role: "unknown", Position: 16},
+			}, TaxBreakdown: []TaxBreakdown{{Rate: intPtr(10), TaxableAmount: intPtr(2006), TaxAmount: intPtr(200), Mode: "external"}}}
+			result, f := ValidateReading(r, time.Date(2026, 9, 19, 20, 0, 0, 0, time.UTC))
+			if f != nil {
+				t.Fatalf("failure=%v", f)
+			}
+			e := result.Evidence()
+			if result.ReadAmount().Yen() != 2206 || e.Selected == nil || e.Selected.Label != "合計" || e.Status != "strong" {
+				t.Fatalf("read amount=%d evidence=%+v", result.ReadAmount().Yen(), e)
+			}
+		})
+	}
+}

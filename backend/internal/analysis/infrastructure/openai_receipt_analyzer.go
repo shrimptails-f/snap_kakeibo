@@ -41,7 +41,7 @@ func (o receiptOutput) toReading() domain.ReceiptReading {
 }
 
 // Instructions は OpenAI に渡すプロンプト。
-const Instructions = `レシート画像から店名・購入日・商品行・印字された金額行・税率別内訳を読み取る。読めない値はnullにし、推測で補わない。購入日はYYYY-MM-DD。金額は印字額の整数円で、商品行を根拠なく税込みに換算しない。amount_candidatesには最終支払合計、商品代金、小計、個別値引きと値引合計、税額、税率別対象額、預り金、お釣り、支払方法別の決済額を印字ラベル・上からの順番(position)・役割(role)とともに列挙する。最終支払額の候補も複数あればすべて残す。roleはfinal_total,subtotal,discount,tax,taxable,deposit,change,payment,unknownから選ぶ。tax_breakdownには8%・10%など税率ごとの税抜対象額と税額、商品行が税抜で最後に税を加える外税(external)か、税込の商品行に税を内訳表示する内税(included)か不明(unknown)かを記す。税抜小計と合計後の税込対象額が両方ある場合、taxable_amountには税抜小計を入れ、税込対象額はamount_candidatesに別行で残す。「内消費税」と書かれた合計後の内訳だけで商品行を内税と決めない。detailsは商品行のみで、amountは印字された行金額、税率と内外税が分かる場合だけ記す。明細を固定カテゴリに分類する。レシート以外ならdetailsを空にする。`
+const Instructions = `レシート画像から店名・購入日・商品行・印字された金額行・税率別内訳を読み取る。読めない値はnullにし、推測で補わない。購入日はYYYY-MM-DD。金額は印字額の整数円で、商品行を根拠なく税込みに換算しない。amount_candidatesには最終支払合計、商品代金、小計、個別値引きと値引合計、税額、税率別対象額、預り金、お釣り、支払方法別の決済額を印字ラベル・上からの順番(position)・役割(role)とともに列挙する。金額行の見出しが別行なら直前の見出しもlabelに含め、役割の判定に使う。最終支払額の候補も複数あればすべて残す。roleはfinal_total,subtotal,discount,tax,taxable,deposit,change,payment,unknownから選ぶ。tax_breakdownには8%・10%など税率ごとの税抜対象額と税額、商品行が税抜で最後に税を加える外税(external)か、税込の商品行に税を内訳表示する内税(included)か不明(unknown)かを記す。税抜小計と合計後の税込対象額が両方ある場合、taxable_amountには税抜小計を入れ、税込対象額はamount_candidatesに別行で残す。「内消費税」と書かれた合計後の内訳だけで商品行を内税と決めない。detailsは商品行のみで、amountは印字された行金額、税率と内外税が分かる場合だけ記す。明細を固定カテゴリに分類する。レシート以外ならdetailsを空にする。`
 
 const (
 	// DefaultRequestTimeout は 1 ジョブあたりの OpenAI 呼び出し(リトライ込み)の上限。
