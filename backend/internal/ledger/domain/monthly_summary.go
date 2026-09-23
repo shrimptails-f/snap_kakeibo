@@ -16,13 +16,14 @@ type CategoryTotals map[Category]int64
 
 // MonthlySummary は家計簿コンテキストの月次読み取りモデル。
 type MonthlySummary struct {
-	UserID              common.UserID
-	YearMonth           YearMonth
-	TotalRecordedAmount int64
-	ExpenseCount        int64
-	DetailCount         int64
-	CategoryTotals      CategoryTotals
-	Version             int64
+	UserID               common.UserID
+	YearMonth            YearMonth
+	TotalRecordedAmount  int64
+	ExpenseCount         int64
+	DetailCount          int64
+	ConfirmedDetailCount int64
+	CategoryTotals       CategoryTotals
+	Version              int64
 }
 
 // RebuildMonthlySummary は支出を正本として対象月の月次集計を再構築する。
@@ -39,7 +40,10 @@ func RebuildMonthlySummary(userID common.UserID, yearMonth YearMonth, expenses [
 		summary.ExpenseCount++
 		summary.DetailCount += int64(len(expense.details))
 		for _, detail := range expense.details {
-			summary.CategoryTotals[detail.category] += detail.amount.Yen()
+			summary.CategoryTotals[detail.category] += detail.ReportingAmount()
+			if detail.TaxIncludedAmount() != nil {
+				summary.ConfirmedDetailCount++
+			}
 		}
 	}
 	return summary, nil

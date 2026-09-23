@@ -285,7 +285,7 @@ export function DashboardPage() {
 
       <section className={styles.trend} aria-labelledby="trend-heading">
         <div className={styles.sectionHeading}>
-          <div><h2 id="trend-heading">月ごとの支出</h2><p>{mode === 'category' ? 'カテゴリ別の高さは明細合計です。計上額とは一致しない場合があります。' : '各支出の計上額を月ごとに合計しています。'}</p></div>
+          <div><h2 id="trend-heading">月ごとの支出</h2><p>{mode === 'category' ? 'カテゴリ別の高さは確定した税込み明細額と未確定の印字額の合計です。計上額とは一致しない場合があります。' : '各支出の計上額を月ごとに合計しています。'}</p></div>
           <div className={styles.modeSwitch} role="group" aria-label="グラフの表示内容">
             <button type="button" aria-pressed={mode === 'category'} onClick={() => updateParams({ mode: 'category' })}>カテゴリ別（明細）</button>
             <button type="button" aria-pressed={mode === 'recorded'} onClick={() => updateParams({ mode: 'recorded' })}>計上額</button>
@@ -307,11 +307,12 @@ export function DashboardPage() {
           <div><h2 id="breakdown-heading">カテゴリ別内訳</h2><p>{yearMonthLabel(referenceMonth)}</p></div>
           <Link className={styles.detailsLink} to={`/months/${referenceMonth}`} onClick={rememberScrollPosition}>{yearMonthLabel(referenceMonth)}の明細を見る ›</Link>
         </div>
-        <p className={styles.help}>明細金額の合計です。月の計上額とは一致しない場合があります。</p>
+        <p className={styles.help}>確定した税込み明細額と未確定の印字額を集計します。店舗の値引き、利用者の調整、読取漏れにより月の計上額と一致しない場合があります。</p>
         {!referenceSummary ? (
           <div className={styles.referenceEmpty}><p>この月の集計はありません。</p></div>
         ) : (
           <>
+            {referenceSummary.detail_count > (referenceSummary.confirmed_detail_count ?? 0) && <p className={styles.help}>税込み額未確定の明細 {referenceSummary.detail_count - (referenceSummary.confirmed_detail_count ?? 0)}件は印字額で含めています。</p>}
             {referenceRows.length === 0 ? <p className={styles.referenceEmpty}>{referenceSummary.detail_count === 0 ? 'この月の明細はありません。' : 'この月の明細金額はすべて0円です。'}</p> : (
               <dl className={styles.categoryList}>{referenceRows.map((row) => <div key={row.category}><dt><span data-category={row.category} />{row.label}</dt><dd className="amount">{formatYen(row.amount)}</dd></div>)}</dl>
             )}

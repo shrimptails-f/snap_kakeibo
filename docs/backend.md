@@ -197,6 +197,9 @@ instructions(固定文。cached input を効かせるため毎回同じにする
   レシート画像から店名・購入日・合計金額・明細を読み取り、明細を固定カテゴリに分類する
   読めない項目は null にする。推測で埋めない
   商品行の金額は印字額の整数(円)とし、根拠なく税込みへ換算しない
+  商品別の内税が確認できた行は印字額を税込み額として保持する。外税は商品別税率・税率別の印字税額・課税対象額を照合できた行だけ、印字税額を比例配分する
+  配分は円未満を切り捨てた後、余りを剰余の大きい商品行から1円ずつ配る。同じ剰余なら印字順を優先する。配分税額の合計は印字税額に一致させる
+  商品別税率が不明、値引きの税率別帰属が不明、課税対象額と商品行が照合できない場合は税込み額を未確定にする
   金額候補はラベル・位置・役割を付け、小計・税額・対象額・預り金と最終支払合計を区別する
   税率別内訳と内税・外税区分を読み取る。読めない値は推測しない
   明細は商品行のみ。小計・税・割引・預り金・お釣りの行は明細に含めない
@@ -729,11 +732,12 @@ POST /monthly-summaries/{yyyy-MM}/rebuild
    total_recorded_amount    = SUM(expenses.recorded_amount)
    expense_count            = COUNT(expenses)
    detail_count             = COUNT(expense_details)
-   category_total_{category} = SUM(expense_details.amount) GROUP BY category(全カテゴリ。0 も SET)
+   confirmed_detail_count   = COUNT(tax_included_amount がある expense_details)
+   category_total_{category} = SUM(確定時 tax_included_amount、未確定時 amount) GROUP BY category(全カテゴリ。0 も SET)
 
 5. monthly_summaries更新
    Condition: attribute_not_exists(PK) OR version = :v
-   SET total_recorded_amount, expense_count, detail_count, category_total_{category} × 全カテゴリ
+   SET total_recorded_amount, expense_count, detail_count, confirmed_detail_count, category_total_{category} × 全カテゴリ
    SET type / user_id / year_month
    SET version = if_not_exists(version, 0) + 1
 ```
@@ -762,6 +766,7 @@ expense_details.name
 expense_details.amount
 expense_details.quantity
 expense_details.category
+expense_details.tax_mode / tax_rate / tax_included_amount（利用者がレシートで確認した場合）
 ```
 
 処理:

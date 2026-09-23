@@ -17,9 +17,9 @@ const summaries = {
 }
 const expenses = {
   year_month: '2026-09', items: [
-    { detail_id: 'd1', expense_id: 'e1', name: '米 5kg', category: 'food', amount: 7500, quantity: 1, source: 'AI', is_edited: false, store_name: 'スーパーさくら', purchase_date: '2026-09-15' },
-    { detail_id: 'd2', expense_id: 'e2', name: '洗剤セット', category: 'daily_goods', amount: 4500, quantity: 1, source: 'USER', is_edited: true, store_name: '日用品ストア', purchase_date: '2026-09-12' },
-    { detail_id: 'd3', expense_id: 'e1', name: '商品A', category: 'unknown', amount: 1500, quantity: 1, source: 'AI', is_edited: false, store_name: 'スーパーさくら', purchase_date: '2026-09-15' },
+    { detail_id: 'd1', expense_id: 'e1', name: '米 5kg', category: 'food', amount: 7500, tax_included_amount: 7500, quantity: 1, source: 'AI', is_edited: false, store_name: 'スーパーさくら', purchase_date: '2026-09-15' },
+    { detail_id: 'd2', expense_id: 'e2', name: '洗剤セット', category: 'daily_goods', amount: 4500, tax_included_amount: 4500, quantity: 1, source: 'USER', is_edited: true, store_name: '日用品ストア', purchase_date: '2026-09-12' },
+    { detail_id: 'd3', expense_id: 'e1', name: '商品A', category: 'unknown', amount: 1500, tax_included_amount: 1500, quantity: 1, source: 'AI', is_edited: false, store_name: 'スーパーさくら', purchase_date: '2026-09-15' },
   ],
 }
 
@@ -65,6 +65,17 @@ describe('MonthlyExpensesPage', () => {
     expect(screen.getByText('9/12 · 日用品ストア')).toBeInTheDocument()
     expect(screen.getByText('日用品 · 数量1 · 編集済み')).toBeInTheDocument()
     expect(screen.getAllByRole('listitem')).toHaveLength(3)
+  })
+
+  it('税込み未確定の明細を印字額に含め、暫定的な構成比を示す', async () => {
+    const mixed = { ...expenses, items: [{ ...expenses.items[0], amount: 7000, tax_included_amount: 7500 }, { ...expenses.items[1], tax_included_amount: undefined }] }
+    mockFetch({ '/api/monthly-summaries': summaries, '/api/months/2026-09/expenses': mixed })
+    renderPage()
+    expect(await screen.findByText(/税込み額未確定の明細 1件は印字額で含めています/)).toBeInTheDocument()
+    expect(screen.getByText(/税込み明細額（印字額 [¥￥]7,000）/)).toBeInTheDocument()
+    expect(screen.getByText('印字額・税込み未確定')).toBeInTheDocument()
+    expect(screen.getByText(/円グラフと割合は暫定値です/)).toBeInTheDocument()
+    expect(screen.getByText('62.5%')).toBeInTheDocument()
   })
 
   it('明細から支出詳細へ遷移し、戻り先の月と明細IDを渡す', async () => {

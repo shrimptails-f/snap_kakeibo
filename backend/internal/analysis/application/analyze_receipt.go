@@ -213,8 +213,14 @@ func (u *AnalyzeReceiptUsecase) newExpense(job domain.AnalysisJob, result domain
 	userID, _ := common.NewUserID(job.UserID)
 	requestID, _ := common.NewAnalysisRequestID(job.AnalysisRequestID)
 	analyzed := result.Details()
+	evidence := result.Evidence()
+	printed := make([]domain.ReadDetail, len(analyzed))
+	for i, detail := range analyzed {
+		printed[i] = domain.ReadDetail{Amount: detail.Amount().Yen()}
+	}
+	included := domain.AllocateDetailTaxes(printed, evidence)
 	details := make([]ledgerdomain.ExpenseDetail, 0, len(analyzed))
-	for _, d := range analyzed {
+	for i, d := range analyzed {
 		id, err := u.IDs.NewID()
 		if err != nil {
 			return ledgerdomain.Expense{}, fmt.Errorf("generate detail id: %w", err)
@@ -224,16 +230,35 @@ func (u *AnalyzeReceiptUsecase) newExpense(job domain.AnalysisJob, result domain
 		if err != nil {
 			return ledgerdomain.Expense{}, fmt.Errorf("build expense detail: %w", err)
 		}
+		if i < len(evidence.DetailTaxes) {
+			tax := evidence.DetailTaxes[i]
+			if tax.Rate != nil && (*tax.Rate <= 0 || *tax.Rate > 100) {
+				tax.Rate = nil
+			}
+			if tax.Mode != "included" && tax.Mode != "external" && tax.Mode != "mixed" {
+				tax.Mode = "unknown"
+			}
+			allocation := ""
+			if included[i] != nil {
+				allocation = "printed_included"
+				if tax.Mode == "external" {
+					allocation = "receipt_tax_proportional_v1"
+				}
+			}
+			if err := detail.SetTaxEvidence(tax.Rate, tax.Mode, included[i], allocation); err != nil {
+				return ledgerdomain.Expense{}, fmt.Errorf("build expense detail tax: %w", err)
+			}
+		}
 		details = append(details, detail)
 	}
 	expense, err := ledgerdomain.NewExpense(expenseID, userID, requestID, result.StoreName(), result.PurchaseDate(), result.ReadAmount(), details)
 	if err != nil {
 		return ledgerdomain.Expense{}, fmt.Errorf("build expense: %w", err)
 	}
-	evidence, err := json.Marshal(result.Evidence())
+	evidenceJSON, err := json.Marshal(evidence)
 	if err != nil {
 		return ledgerdomain.Expense{}, fmt.Errorf("marshal analysis evidence: %w", err)
 	}
-	expense.SetAnalysisEvidence(string(evidence))
+	expense.SetAnalysisEvidence(string(evidenceJSON))
 	return expense, nil
 }

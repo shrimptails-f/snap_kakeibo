@@ -20,16 +20,19 @@ import (
 )
 
 type item struct {
-	DetailID     string `json:"detail_id"`
-	ExpenseID    string `json:"expense_id"`
-	Name         string `json:"name"`
-	Category     string `json:"category"`
-	Amount       int64  `json:"amount"`
-	Quantity     int64  `json:"quantity"`
-	Source       string `json:"source"`
-	IsEdited     bool   `json:"is_edited"`
-	StoreName    string `json:"store_name"`
-	PurchaseDate string `json:"purchase_date"`
+	DetailID          string `json:"detail_id"`
+	ExpenseID         string `json:"expense_id"`
+	Name              string `json:"name"`
+	Category          string `json:"category"`
+	Amount            int64  `json:"amount"`
+	TaxIncludedAmount *int64 `json:"tax_included_amount,omitempty"`
+	TaxRate           *int64 `json:"tax_rate,omitempty"`
+	TaxMode           string `json:"tax_mode,omitempty"`
+	Quantity          int64  `json:"quantity"`
+	Source            string `json:"source"`
+	IsEdited          bool   `json:"is_edited"`
+	StoreName         string `json:"store_name"`
+	PurchaseDate      string `json:"purchase_date"`
 }
 type response struct {
 	YearMonth string `json:"year_month"`
@@ -90,7 +93,7 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	}
 	items := make([]item, 0, len(out.Items))
 	for _, value := range out.Items {
-		items = append(items, item{DetailID: value.DetailID.String(), ExpenseID: value.ExpenseID.String(), Name: value.Name, Category: value.Category.String(), Amount: value.Amount, Quantity: value.Quantity, Source: value.Source.String(), IsEdited: value.IsEdited, StoreName: value.StoreName, PurchaseDate: value.PurchaseDate})
+		items = append(items, item{DetailID: value.DetailID.String(), ExpenseID: value.ExpenseID.String(), Name: value.Name, Category: value.Category.String(), Amount: value.Amount, TaxIncludedAmount: value.TaxIncludedAmount, TaxRate: value.TaxRate, TaxMode: value.TaxMode, Quantity: value.Quantity, Source: value.Source.String(), IsEdited: value.IsEdited, StoreName: value.StoreName, PurchaseDate: value.PurchaseDate})
 	}
 	return apigateway.JSON(200, response{YearMonth: out.YearMonth, Items: items})
 }

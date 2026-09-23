@@ -23,11 +23,15 @@ import (
 )
 
 type detailRequest struct {
-	DetailID string `json:"detail_id"`
-	Name     string `json:"name"`
-	Amount   int64  `json:"amount"`
-	Quantity int64  `json:"quantity"`
-	Category string `json:"category"`
+	DetailID          string `json:"detail_id"`
+	Name              string `json:"name"`
+	Amount            int64  `json:"amount"`
+	Quantity          int64  `json:"quantity"`
+	Category          string `json:"category"`
+	TaxConfirmed      *bool  `json:"tax_confirmed"`
+	TaxRate           int64  `json:"tax_rate"`
+	TaxMode           string `json:"tax_mode"`
+	TaxIncludedAmount int64  `json:"tax_included_amount"`
 }
 type request struct {
 	StoreName        string          `json:"store_name"`
@@ -101,7 +105,7 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	}
 	details := make([]application.UpdateExpenseDetailInput, 0, len(body.Details))
 	for _, d := range body.Details {
-		details = append(details, application.UpdateExpenseDetailInput{DetailID: d.DetailID, Name: d.Name, Amount: d.Amount, Quantity: d.Quantity, Category: d.Category})
+		details = append(details, application.UpdateExpenseDetailInput{DetailID: d.DetailID, Name: d.Name, Amount: d.Amount, Quantity: d.Quantity, Category: d.Category, TaxConfirmed: d.TaxConfirmed, TaxRate: d.TaxRate, TaxMode: d.TaxMode, TaxIncludedAmount: d.TaxIncludedAmount})
 	}
 	out, err := update.Update(ctx, application.UpdateExpenseInput{UserID: user.UserID, ExpenseID: expenseID, StoreName: body.StoreName, PurchaseDate: body.PurchaseDate, AdjustmentAmount: body.AdjustmentAmount, Details: details})
 	if err != nil {

@@ -209,7 +209,7 @@ python3 -m http.server 4173 --directory docs/screens/expense-detail
 | 数量 | 必須。1〜999の整数。数量の変更で明細金額・計上額を自動更新しない |
 | カテゴリ | 必須。[用語集](../../ddd/ubiquitous-language.md#カテゴリ)の全11分類を日本語表示する。分類不能も有効な選択肢 |
 
-明細合計は `details[].amount` の合計。読取金額との差だけではエラーにせず、保存を妨げない。カテゴリ別内訳は明細金額に基づく補助情報であり、調整額を各明細に自動配分しない。
+閲覧時の明細合計は、確定した行では `details[].tax_included_amount`、未確定行では `details[].amount` の合計。各行に税込み明細額または「印字額・税込み未確定」と元の印字額を明示し、確認できた商品別税率を併記し、外税で換算できた行には `tax_included_amount - amount` を「配分税額」として示す。編集フォームでは内税・外税・未確定と税率8%・10%を選び、外税ではレシートで確認した税込み明細額を入力する。印字額を変更しても税区分・税率と入力済みの税込み明細額は維持し、外税の税込み明細額を確認するよう案内する。内税の税込み額は保存時に変更後の印字額へ揃える。未確定へ戻すこともできる。入力中合計は印字額の合計と明記する。読取金額との差だけではエラーにせず、保存を妨げない。調整額や店舗値引きを各明細に自動配分しない。
 
 明細は編集画面で追加・削除できる。保存後は1〜50件とし、最後の1件は削除できず、50件に達したら追加できない。新規行は商品名・金額・数量・カテゴリを入力し、保存後は「編集済み」と表示する。追加・削除も未保存の変更として扱う。
 
@@ -315,6 +315,8 @@ python3 -m http.server 4173 --directory docs/screens/expense-detail
 数量
 
 カテゴリ
+
+税区分・税率・外税の税込み明細額
 ```
 
 調整額を変更した場合は、支出単位の計上額を再計算する。調整額は符号付きで、減額は負数、増額は正数。
@@ -330,6 +332,8 @@ read_amount + adjustment_amount = recorded_amount
 ## API設計
 
 ### GET /expenses/{expense_id}
+
+`details[].amount` は印字額として維持する。`tax_included_amount` と `tax_rate` は根拠を確認できたときだけ返す。`tax_mode` は `included` / `external` / `mixed` / `unknown` で、旧データでは空の場合がある。税込み額がない行を税込みとして表示しない。
 
 支出単位の詳細と支出明細を取得する。利用者の支出に `expense_id` が無ければ `404`(他人の支出も同じ)。
 
@@ -358,6 +362,9 @@ Response:
       "category": "food",
       "category_source": "AI",
       "amount": 281,
+      "tax_included_amount": 303,
+      "tax_rate": 8,
+      "tax_mode": "external",
       "quantity": 1,
       "source": "AI",
       "is_edited": false
@@ -378,6 +385,8 @@ Response:
 
 調整額は JSON / Go の符号付き整数として受け付け、フロントエンドでは JavaScript の安全な整数に限定する。店舗名・商品名は空白だけを許容しない。`details` は保存後の全件（1〜50件）を指定する。既存行の `detail_id` は重複なく指定し、省略した行は新規作成、送らなかった既存行は削除する。未知のIDは拒否する。新規行にはサーバーでULIDを採番し、由来とカテゴリ決定元を `USER` にする。支出自体の楽観ロックは持たず後勝ちとし、月次集計の再構築だけ `version` の条件更新を最大3回やり直す。明細金額は数量込みの `amount` をそのまま保存・集計し、数量を掛け直さない。
 
+各明細の `tax_confirmed` を省略した旧クライアントの更新では税情報を維持する。`true` の場合は `tax_rate`（8または10）、`tax_mode`（`included` または `external`）、`tax_included_amount` を受け付け、利用者確認済みとして保存する。内税は印字額と税込み額を同額とし、外税の税込み額は印字額以上かつ税率から計算した上限以下に制限する。`false` で未確定に戻す。印字額を変更した場合は元の税根拠を破棄し、同じ更新で明示的に再確認した場合だけ新しい税情報を保存する。
+
 Request:
 
 ```json
@@ -391,7 +400,11 @@ Request:
       "name": "牛乳",
       "amount": 281,
       "quantity": 1,
-      "category": "food"
+      "category": "food",
+      "tax_confirmed": true,
+      "tax_mode": "external",
+      "tax_rate": 8,
+      "tax_included_amount": 303
     }
   ]
 }

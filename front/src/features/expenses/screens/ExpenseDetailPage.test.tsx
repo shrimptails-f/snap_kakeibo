@@ -42,6 +42,15 @@ describe('ExpenseDetailPage', () => {
     expect(screen.getByRole('button', { name: '編集する' })).toBeEnabled()
   })
 
+  it('明細の税込み額と印字額を区別し、未確定を示す', async () => {
+    const withTax = { ...original, details: [{ ...original.details[0], amount: 281, tax_included_amount: 303, tax_rate: 8, tax_mode: 'external' }, original.details[1]] }
+    mockFetch({ '/api/expenses/e1': withTax })
+    renderPage()
+    expect(await screen.findByText(/税込み明細額（印字額 [¥￥]281） \/ 税率 8% \/ 配分税額 [¥￥]22/)).toBeInTheDocument()
+    expect(screen.getByText('印字額・税込み未確定')).toBeInTheDocument()
+    expect(screen.getByText(/税込み額未確定の明細 1件は印字額で含めています/)).toBeInTheDocument()
+  })
+
   it('解析履歴の検索条件と復元情報を保って戻る', async () => {
     mockFetch({ '/api/expenses/e1': original })
     const router = createMemoryRouter([
@@ -112,6 +121,54 @@ describe('ExpenseDetailPage', () => {
     const patchCall = calls.find((call) => call.init.method === 'PATCH')
     expect(JSON.parse(String(patchCall?.init.body))).toEqual(expect.objectContaining({ adjustment_amount: -1000, details: expect.arrayContaining([expect.objectContaining({ detail_id: 'd1' })]) }))
     expect(getCount).toBe(2)
+  })
+
+  it('未確定の明細を内税8%として確定し、税込み額を保存する', async () => {
+    const confirmed = { ...original, details: [{ ...original.details[0], tax_mode: 'included', tax_rate: 8, tax_included_amount: 281, source: 'USER', is_edited: true }, original.details[1]] }
+    let getCount = 0
+    const { calls } = mockFetch({ '/api/expenses/e1': ({ init }) => init.method === 'PATCH'
+      ? jsonResponse({ expense: { expense_id: 'e1', read_amount: 3280, adjustment_amount: -500, recorded_amount: 2780, updated_at: '2026-09-22T01:00:00Z' } })
+      : jsonResponse(++getCount === 1 ? original : confirmed) })
+    renderPage(); const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: '編集する' }))
+    await user.selectOptions(screen.getAllByLabelText('税区分')[0], 'included')
+    await user.selectOptions(screen.getAllByLabelText('税率')[0], '8')
+    await user.click(screen.getByRole('button', { name: '変更を保存' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('変更を保存しました。')
+    const body = JSON.parse(String(calls.find((call) => call.init.method === 'PATCH')?.init.body))
+    expect(body.details[0]).toMatchObject({ tax_confirmed: true, tax_mode: 'included', tax_rate: 8, tax_included_amount: 281 })
+    expect(screen.getByText(/税込み明細額（印字額 [¥￥]281） \/ 税率 8%/)).toBeInTheDocument()
+  })
+
+  it('外税の明細には税込み額の入力を求める', async () => {
+    mockFetch({ '/api/expenses/e1': original })
+    renderPage(); const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: '編集する' }))
+    await user.selectOptions(screen.getAllByLabelText('税区分')[0], 'external')
+    await user.selectOptions(screen.getAllByLabelText('税率')[0], '10')
+    await user.click(screen.getByRole('button', { name: '変更を保存' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('入力内容を確認してください。')
+    expect(screen.getByText('税込み額は印字額以上、税率から計算した上限以下で入力してください。')).toBeInTheDocument()
+  })
+
+  it('明細金額の変更後も税区分・税率・税込み額を保持して保存する', async () => {
+    const withTax = { ...original, details: [{ ...original.details[0], tax_mode: 'external', tax_rate: 8, tax_included_amount: 303 }, original.details[1]] }
+    const changed = { ...withTax, details: [{ ...withTax.details[0], amount: 282, source: 'USER', is_edited: true }, original.details[1]] }
+    let getCount = 0
+    const { calls } = mockFetch({ '/api/expenses/e1': ({ init }) => init.method === 'PATCH'
+      ? jsonResponse({ expense: { expense_id: 'e1', read_amount: 3280, adjustment_amount: -500, recorded_amount: 2780, updated_at: '2026-09-22T01:00:00Z' } })
+      : jsonResponse(++getCount === 1 ? withTax : changed) })
+    renderPage(); const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: '編集する' }))
+    const amount = screen.getAllByLabelText(/明細金額（必須）/)[0]
+    await user.clear(amount); await user.type(amount, '282')
+    expect(screen.getAllByLabelText('税区分')[0]).toHaveValue('external')
+    expect(screen.getAllByLabelText('税率')[0]).toHaveValue('8')
+    expect(screen.getByLabelText(/税込み明細額（必須）/)).toHaveValue(303)
+    await user.click(screen.getByRole('button', { name: '変更を保存' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('変更を保存しました。')
+    const body = JSON.parse(String(calls.find((call) => call.init.method === 'PATCH')?.init.body))
+    expect(body.details[0]).toMatchObject({ amount: 282, tax_confirmed: true, tax_mode: 'external', tax_rate: 8, tax_included_amount: 303 })
   })
 
   it('保存失敗時は入力を残して手動で再試行できる', async () => {

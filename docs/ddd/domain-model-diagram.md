@@ -150,6 +150,9 @@ classDiagram
         +ExpenseDetailID id
         +string name
         +DetailAmount amount
+        +int64? taxIncludedAmount
+        +int64? taxRate
+        +string taxMode
         +Quantity quantity
         +Category category
         +CategorySource categorySource
@@ -205,6 +208,7 @@ classDiagram
         +RecordedAmount totalRecordedAmount
         +int expenseCount
         +int detailCount
+        +int confirmedDetailCount
         +CategoryTotals categoryTotals
         +int64 version
     }

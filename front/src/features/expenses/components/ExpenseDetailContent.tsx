@@ -21,19 +21,20 @@ const CATEGORIES = ['food', 'daily_goods', 'medical', 'transport', 'utilities', 
 type Props = { expenseId: string }
 
 function defaultValues(data: GetExpenseResponse): UpdateExpenseRequest {
-  return { store_name: data.expense.store_name, purchase_date: data.expense.purchase_date, adjustment_amount: data.expense.adjustment_amount, details: data.details.map(({ detail_id, name, amount, quantity, category }) => ({ detail_id, name, amount, quantity, category: category as UpdateExpenseRequest['details'][number]['category'] })) }
+  return { store_name: data.expense.store_name, purchase_date: data.expense.purchase_date, adjustment_amount: data.expense.adjustment_amount, details: data.details.map(({ detail_id, name, amount, quantity, category, tax_mode, tax_rate, tax_included_amount }) => ({ detail_id, name, amount, quantity, category: category as UpdateExpenseRequest['details'][number]['category'], tax_mode: tax_included_amount !== undefined && (tax_rate === 8 || tax_rate === 10) && (tax_mode === 'included' || tax_mode === 'external') ? tax_mode : 'unknown', tax_rate: tax_included_amount !== undefined && (tax_rate === 8 || tax_rate === 10) ? tax_rate : 0, tax_included_amount })) }
 }
 
 function DetailList({ details }: { details: ExpenseDetail[] }) {
-  const total = details.reduce((sum, detail) => sum + detail.amount, 0)
+  const total = details.reduce((sum, detail) => sum + (detail.tax_included_amount ?? detail.amount), 0)
+  const unconfirmed = details.filter((detail) => detail.tax_included_amount === undefined).length
   return (
     <section className={styles.detailsSection} aria-labelledby="detail-heading">
       <h2 id="detail-heading">支出明細 <span>{details.length}件</span></h2>
       <ol className={styles.detailList}>
-        {details.map((detail) => <li key={detail.detail_id}><div><strong>{detail.name}</strong><span>{categoryLabel(detail.category)} / 数量 {detail.quantity}</span><SourceBadge source={detail.source} isEdited={detail.is_edited} /></div><strong className="amount">{formatYen(detail.amount)}</strong></li>)}
+        {details.map((detail) => <li key={detail.detail_id}><div><strong>{detail.name}</strong><span>{categoryLabel(detail.category)} / 数量 {detail.quantity}</span><span>{detail.tax_included_amount === undefined ? '印字額・税込み未確定' : `税込み明細額（印字額 ${formatYen(detail.amount)}）`}{detail.tax_rate !== undefined ? ` / 税率 ${detail.tax_rate}%` : ''}{detail.tax_mode === 'external' && detail.tax_included_amount !== undefined ? ` / 配分税額 ${formatYen(detail.tax_included_amount - detail.amount)}` : ''}</span><SourceBadge source={detail.source} isEdited={detail.is_edited} /></div><strong className="amount">{formatYen(detail.tax_included_amount ?? detail.amount)}</strong></li>)}
       </ol>
       <div className={styles.detailTotal}><span>明細合計</span><strong className="amount">{formatYen(total)}</strong></div>
-      <p className={styles.help}>明細合計と読取金額は、店舗の値引きや税などにより異なる場合があります。</p>
+      <p className={styles.help}>{unconfirmed > 0 ? `税込み額未確定の明細 ${unconfirmed}件は印字額で含めています。` : ''}明細合計と最終支払合計は、店舗の値引きや読取漏れなどにより異なる場合があります。</p>
     </section>
   )
 }
@@ -71,7 +72,12 @@ export function ExpenseDetailContent({ expenseId }: Props) {
     form.clearErrors('root.server')
     setIsRefreshFailed(false)
     try {
-      await mutation.mutateAsync(values)
+      const initial = defaultValues(data)
+      await mutation.mutateAsync({ ...values, details: values.details.map((detail) => {
+        const previous = initial.details.find((row) => row.detail_id === detail.detail_id)
+        const taxChanged = detail.tax_mode !== (previous?.tax_mode ?? 'unknown') || detail.tax_rate !== (previous?.tax_rate ?? 0) || detail.tax_included_amount !== previous?.tax_included_amount || (detail.tax_mode !== 'unknown' && detail.amount !== previous?.amount)
+        return { ...detail, tax_confirmed: taxChanged ? detail.tax_mode !== 'unknown' : undefined, tax_included_amount: detail.tax_mode === 'included' ? detail.amount : detail.tax_included_amount }
+      }) })
     } catch {
       form.setError('root.server', { message: '変更を保存できませんでした。入力内容は残っています。' })
       return
@@ -106,7 +112,7 @@ export function ExpenseDetailContent({ expenseId }: Props) {
       <div className={styles.layout}>
         <section className={styles.amountSummary} aria-label="支出金額">
           <div><span>{isEditing ? '保存後の計上額' : '計上額'}</span><strong className="amount">{recordedAmount === null ? '入力中' : formatYen(recordedAmount)}</strong></div>
-          <p><span>読取金額 {formatYen(data.expense.read_amount)}</span><span>＋ 調整額 {recordedAmount === null ? '入力中' : formatYen(adjustment)}</span></p>
+          <p><span>最終支払合計（読取金額） {formatYen(data.expense.read_amount)}</span><span>＋ 利用者調整額 {recordedAmount === null ? '入力中' : formatYen(adjustment)}</span></p>
           {recordedAmount !== null && recordedAmount < 0 && <small>返金などにより、今月の支出を減らす金額です。</small>}
         </section>
         <aside className={styles.receipt}><h2>レシート画像</h2><ReceiptImage expenseId={expenseId} initialUrl={data.expense.image_url} /></aside>
@@ -145,13 +151,19 @@ export function ExpenseDetailContent({ expenseId }: Props) {
                       </div>
                       <label>カテゴリ（必須）<select id={`${prefix}-category`} className="field-control" {...form.register(`details.${index}.category`)} aria-invalid={!!error?.category} aria-describedby={error?.category ? `${prefix}-category-error` : undefined}>{CATEGORIES.map((category) => <option key={category} value={category}>{categoryLabel(category)}</option>)}</select>{error?.category && <span id={`${prefix}-category-error`}>{error.category.message}</span>}</label>
                       {saved && <SourceBadge label="カテゴリ" source={saved.category_source} isEdited={saved.category_source === 'USER'} />}
+                      <p className={styles.help}>レシートで確認した税区分と税率を指定します。明細金額を変更した後も、外税の税込み明細額を確認してください。</p>
+                      <div className={styles.fieldRow}>
+                        <label>税区分<select className="field-control" {...form.register(`details.${index}.tax_mode`, { onChange: (event) => { if (event.target.value === 'external') form.setValue(`details.${index}.tax_included_amount`, undefined, { shouldDirty: true }) } })}><option value="unknown">未確定</option><option value="included">内税</option><option value="external">外税</option></select></label>
+                        {detailValues[index]?.tax_mode !== 'unknown' && <label>税率<select className="field-control" {...form.register(`details.${index}.tax_rate`, { valueAsNumber: true, onChange: () => { if (form.getValues(`details.${index}.tax_mode`) === 'external') form.setValue(`details.${index}.tax_included_amount`, undefined, { shouldDirty: true }) } })} aria-invalid={!!error?.tax_rate}><option value="0">選択してください</option><option value="8">8%</option><option value="10">10%</option></select>{error?.tax_rate && <span>{error.tax_rate.message}</span>}</label>}
+                      </div>
+                      {detailValues[index]?.tax_mode === 'external' && <label>税込み明細額（必須）<span className={styles.inputUnit}><input className="field-control" type="number" inputMode="numeric" {...form.register(`details.${index}.tax_included_amount`, { setValueAs: (value: string) => value === '' ? undefined : Number(value) })} aria-invalid={!!error?.tax_included_amount} /><span>円</span></span>{error?.tax_included_amount && <span>{error.tax_included_amount.message}</span>}</label>}
                       <Button variant="secondary" disabled={fields.length <= 1} onClick={() => remove(index)} aria-label={`${index + 1}件目の明細を削除`}>この明細を削除</Button>
                     </fieldset>
                   })}
-                  <Button variant="secondary" disabled={fields.length >= 50} onClick={() => append({ detail_id: undefined, name: '', amount: 0, quantity: 1, category: 'unknown' })}>明細を追加</Button>
+                  <Button variant="secondary" disabled={fields.length >= 50} onClick={() => append({ detail_id: undefined, name: '', amount: 0, quantity: 1, category: 'unknown', tax_mode: 'unknown', tax_rate: 0 })}>明細を追加</Button>
                 </section>
               </fieldset>
-              <div className={styles.detailTotal}><span>明細合計</span><strong className="amount">{formatYen(detailTotal)}</strong></div>
+              <div className={styles.detailTotal}><span>入力中の印字額合計</span><strong className="amount">{formatYen(detailTotal)}</strong></div>
               <p className={styles.help}>明細の修正だけでは計上額は変わりません。計上額も直す場合は、調整額を変更してください。</p>
               <div className={styles.saveBar}><span>{isDirty ? '未保存' : '変更なし'} / 計上額 {recordedAmount === null ? '入力中' : formatYen(recordedAmount)}</span><div><Button variant="secondary" disabled={mutation.isPending} onClick={() => isDirty ? setWantsCancel(true) : discard()}>キャンセル</Button><Button variant="primary" type="submit" disabled={!isDirty || mutation.isPending}>{mutation.isPending ? '保存中…' : '変更を保存'}</Button></div></div>
               </form>

@@ -14,11 +14,15 @@ import (
 )
 
 type UpdateExpenseDetailInput struct {
-	DetailID string
-	Name     string
-	Amount   int64
-	Quantity int64
-	Category string
+	DetailID          string
+	Name              string
+	Amount            int64
+	Quantity          int64
+	Category          string
+	TaxConfirmed      *bool
+	TaxRate           int64
+	TaxMode           string
+	TaxIncludedAmount int64
 }
 
 type UpdateExpenseInput struct {
@@ -144,6 +148,15 @@ func (u *UpdateExpenseUsecase) Update(ctx context.Context, in UpdateExpenseInput
 				return UpdateExpenseOutput{}, ErrInvalidInput
 			}
 		}
+		if raw.TaxConfirmed != nil {
+			if *raw.TaxConfirmed {
+				if err := expense.ConfirmDetailTax(existing.ID(), raw.TaxRate, raw.TaxMode, raw.TaxIncludedAmount); err != nil {
+					return UpdateExpenseOutput{}, ErrInvalidInput
+				}
+			} else if err := expense.ClearDetailTax(existing.ID()); err != nil {
+				return UpdateExpenseOutput{}, ErrInvalidInput
+			}
+		}
 	}
 	for _, raw := range additions {
 		amount, err := common.NewDetailAmount(raw.Amount)
@@ -169,6 +182,11 @@ func (u *UpdateExpenseUsecase) Update(ctx context.Context, in UpdateExpenseInput
 		detail, err := domain.NewExpenseDetail(detailID, raw.Name, amount, quantity, category, domain.CategorySourceUser)
 		if err != nil || expense.AddDetail(detail) != nil {
 			return UpdateExpenseOutput{}, ErrInvalidInput
+		}
+		if raw.TaxConfirmed != nil && *raw.TaxConfirmed {
+			if err := expense.ConfirmDetailTax(detailID, raw.TaxRate, raw.TaxMode, raw.TaxIncludedAmount); err != nil {
+				return UpdateExpenseOutput{}, ErrInvalidInput
+			}
 		}
 	}
 	if len(expense.Details()) != len(in.Details) {

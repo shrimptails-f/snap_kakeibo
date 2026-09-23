@@ -41,14 +41,18 @@ var (
 
 // ExpenseDetail は支出に含まれる商品またはサービスの1行。
 type ExpenseDetail struct {
-	id             ExpenseDetailID
-	name           string
-	amount         DetailAmount
-	quantity       Quantity
-	category       Category
-	categorySource CategorySource
-	source         RecordSource
-	edited         bool
+	id                ExpenseDetailID
+	name              string
+	amount            DetailAmount
+	taxIncludedAmount *int64
+	taxRate           *int64
+	taxMode           string
+	taxAllocation     string
+	quantity          Quantity
+	category          Category
+	categorySource    CategorySource
+	source            RecordSource
+	edited            bool
 }
 
 // NewExpenseDetail は不変条件を満たす支出明細を生成する。
@@ -87,6 +91,49 @@ func (d ExpenseDetail) Name() string { return d.name }
 
 // Amount は数量反映後の明細金額を返す。
 func (d ExpenseDetail) Amount() DetailAmount { return d.amount }
+
+// TaxIncludedAmount は根拠を確認できた税込み明細額を返す。nil は未確定を表す。
+func (d ExpenseDetail) TaxIncludedAmount() *int64 { return copyInt64(d.taxIncludedAmount) }
+
+// TaxRate は確認済みの商品別税率を返す。
+func (d ExpenseDetail) TaxRate() *int64 { return copyInt64(d.taxRate) }
+
+// TaxMode は商品行の内外税区分を返す。
+func (d ExpenseDetail) TaxMode() string { return d.taxMode }
+
+// TaxAllocation は税込み額の算出根拠を返す。
+func (d ExpenseDetail) TaxAllocation() string { return d.taxAllocation }
+
+// ReportingAmount は内訳に使う金額。未確定なら印字額を返す。
+func (d ExpenseDetail) ReportingAmount() int64 {
+	if d.taxIncludedAmount != nil {
+		return *d.taxIncludedAmount
+	}
+	return d.amount.Yen()
+}
+
+// SetTaxEvidence はレシートに基づく税情報を設定する。未確定の行では税込み額を渡さない。
+func (d *ExpenseDetail) SetTaxEvidence(rate *int64, mode string, included *int64, allocation string) error {
+	if included != nil && (*included < d.amount.Yen() || *included > 10_000_000 || (mode != "included" && mode != "external")) {
+		return ErrInvalidExpenseDetail
+	}
+	if mode != "" && mode != "included" && mode != "external" && mode != "mixed" && mode != "unknown" {
+		return ErrInvalidExpenseDetail
+	}
+	if rate != nil && (*rate <= 0 || *rate > 100) {
+		return ErrInvalidExpenseDetail
+	}
+	d.taxRate, d.taxMode, d.taxIncludedAmount, d.taxAllocation = copyInt64(rate), mode, copyInt64(included), allocation
+	return nil
+}
+
+func copyInt64(value *int64) *int64 {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	return &copy
+}
 
 // Quantity は数量を返す。
 func (d ExpenseDetail) Quantity() Quantity { return d.quantity }
@@ -240,6 +287,9 @@ func (e *Expense) ChangeDetailAmount(id ExpenseDetailID, amount DetailAmount, qu
 	if err != nil {
 		return err
 	}
+	if detail.amount != amount {
+		detail.taxIncludedAmount, detail.taxRate, detail.taxMode, detail.taxAllocation = nil, nil, "unknown", ""
+	}
 	detail.amount, detail.quantity, detail.source, detail.edited, e.source, e.edited = amount, quantity, RecordSourceUser, true, RecordSourceUser, true
 	return nil
 }
@@ -254,6 +304,47 @@ func (e *Expense) ChangeDetailCategory(id ExpenseDetailID, category Category) er
 		return err
 	}
 	detail.category, detail.categorySource, detail.source, detail.edited, e.source, e.edited = category, CategorySourceUser, RecordSourceUser, true, RecordSourceUser, true
+	return nil
+}
+
+// ConfirmDetailTax は利用者がレシートを確認した税込み明細額と税区分を保存する。
+func (e *Expense) ConfirmDetailTax(id ExpenseDetailID, rate int64, mode string, included int64) error {
+	detail, err := e.detail(id)
+	if err != nil {
+		return err
+	}
+	if (rate != 8 && rate != 10) || (mode != "included" && mode != "external") || included < detail.amount.Yen() || included > 10_000_000 {
+		return ErrInvalidExpenseDetail
+	}
+	if mode == "included" && included != detail.amount.Yen() {
+		return ErrInvalidExpenseDetail
+	}
+	if mode == "external" && included > detail.amount.Yen()+(detail.amount.Yen()*rate+99)/100 {
+		return ErrInvalidExpenseDetail
+	}
+	if detail.taxRate != nil && *detail.taxRate == rate && detail.taxMode == mode && detail.taxIncludedAmount != nil && *detail.taxIncludedAmount == included {
+		return nil
+	}
+	if err := detail.SetTaxEvidence(&rate, mode, &included, "user_confirmed"); err != nil {
+		return err
+	}
+	detail.source, detail.edited, e.source, e.edited = RecordSourceUser, true, RecordSourceUser, true
+	return nil
+}
+
+// ClearDetailTax は利用者による確認結果を未確定に戻す。
+func (e *Expense) ClearDetailTax(id ExpenseDetailID) error {
+	detail, err := e.detail(id)
+	if err != nil {
+		return err
+	}
+	if detail.taxIncludedAmount == nil && detail.taxRate == nil && (detail.taxMode == "" || detail.taxMode == "unknown") {
+		return nil
+	}
+	if err := detail.SetTaxEvidence(nil, "unknown", nil, ""); err != nil {
+		return err
+	}
+	detail.source, detail.edited, e.source, e.edited = RecordSourceUser, true, RecordSourceUser, true
 	return nil
 }
 

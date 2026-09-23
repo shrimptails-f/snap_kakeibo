@@ -23,24 +23,25 @@ var _ application.MonthlySummaryRepository = DynamoDBMonthlySummaryRepository{}
 var _ application.MonthlySummaryLister = DynamoDBMonthlySummaryRepository{}
 
 type monthlySummaryItem struct {
-	UserID              string `dynamodbav:"user_id"`
-	YearMonth           string `dynamodbav:"year_month"`
-	TotalRecordedAmount int64  `dynamodbav:"total_recorded_amount"`
-	ExpenseCount        int64  `dynamodbav:"expense_count"`
-	DetailCount         int64  `dynamodbav:"detail_count"`
-	Version             int64  `dynamodbav:"version"`
-	UpdatedAt           string `dynamodbav:"updated_at"`
-	Food                int64  `dynamodbav:"category_total_food"`
-	DailyGoods          int64  `dynamodbav:"category_total_daily_goods"`
-	Medical             int64  `dynamodbav:"category_total_medical"`
-	Transport           int64  `dynamodbav:"category_total_transport"`
-	Utilities           int64  `dynamodbav:"category_total_utilities"`
-	Entertainment       int64  `dynamodbav:"category_total_entertainment"`
-	Social              int64  `dynamodbav:"category_total_social"`
-	Clothing            int64  `dynamodbav:"category_total_clothing"`
-	Education           int64  `dynamodbav:"category_total_education"`
-	Other               int64  `dynamodbav:"category_total_other"`
-	Unknown             int64  `dynamodbav:"category_total_unknown"`
+	UserID               string `dynamodbav:"user_id"`
+	YearMonth            string `dynamodbav:"year_month"`
+	TotalRecordedAmount  int64  `dynamodbav:"total_recorded_amount"`
+	ExpenseCount         int64  `dynamodbav:"expense_count"`
+	DetailCount          int64  `dynamodbav:"detail_count"`
+	ConfirmedDetailCount int64  `dynamodbav:"confirmed_detail_count"`
+	Version              int64  `dynamodbav:"version"`
+	UpdatedAt            string `dynamodbav:"updated_at"`
+	Food                 int64  `dynamodbav:"category_total_food"`
+	DailyGoods           int64  `dynamodbav:"category_total_daily_goods"`
+	Medical              int64  `dynamodbav:"category_total_medical"`
+	Transport            int64  `dynamodbav:"category_total_transport"`
+	Utilities            int64  `dynamodbav:"category_total_utilities"`
+	Entertainment        int64  `dynamodbav:"category_total_entertainment"`
+	Social               int64  `dynamodbav:"category_total_social"`
+	Clothing             int64  `dynamodbav:"category_total_clothing"`
+	Education            int64  `dynamodbav:"category_total_education"`
+	Other                int64  `dynamodbav:"category_total_other"`
+	Unknown              int64  `dynamodbav:"category_total_unknown"`
 }
 
 // List は利用者の保存済み集計を全件読み、year_month 降順で返す。
@@ -77,7 +78,7 @@ func (r DynamoDBMonthlySummaryRepository) List(ctx context.Context, userID commo
 			}
 			result = append(result, application.MonthlySummaryItem{Summary: domain.MonthlySummary{
 				UserID: userID, YearMonth: domain.YearMonth(month), TotalRecordedAmount: item.TotalRecordedAmount,
-				ExpenseCount: item.ExpenseCount, DetailCount: item.DetailCount, CategoryTotals: totals, Version: item.Version,
+				ExpenseCount: item.ExpenseCount, DetailCount: item.DetailCount, ConfirmedDetailCount: item.ConfirmedDetailCount, CategoryTotals: totals, Version: item.Version,
 			}, UpdatedAt: updatedAt})
 		}
 		if len(out.LastEvaluatedKey) == 0 {
@@ -107,9 +108,10 @@ func (r DynamoDBMonthlySummaryRepository) Save(ctx context.Context, summary doma
 	values := map[string]ddbtypes.AttributeValue{
 		":type": stringValue("MONTHLY_SUMMARY"), ":user": stringValue(summary.UserID.String()), ":month": stringValue(summary.YearMonth.String()),
 		":total": numberValue(summary.TotalRecordedAmount), ":expenses": numberValue(summary.ExpenseCount), ":details": numberValue(summary.DetailCount),
-		":expected": numberValue(summary.Version), ":zero": numberValue(0), ":one": numberValue(1), ":updated": stringValue(updatedAt.UTC().Format(time.RFC3339)),
+		":confirmed": numberValue(summary.ConfirmedDetailCount),
+		":expected":  numberValue(summary.Version), ":zero": numberValue(0), ":one": numberValue(1), ":updated": stringValue(updatedAt.UTC().Format(time.RFC3339)),
 	}
-	sets := []string{"#type=:type", "user_id=:user", "year_month=:month", "total_recorded_amount=:total", "expense_count=:expenses", "detail_count=:details", "updated_at=:updated", "#version=if_not_exists(#version,:zero)+:one"}
+	sets := []string{"#type=:type", "user_id=:user", "year_month=:month", "total_recorded_amount=:total", "expense_count=:expenses", "detail_count=:details", "confirmed_detail_count=:confirmed", "updated_at=:updated", "#version=if_not_exists(#version,:zero)+:one"}
 	for i, category := range common.Categories() {
 		name, value := fmt.Sprintf("#c%d", i), fmt.Sprintf(":c%d", i)
 		names[name] = "category_total_" + category.String()

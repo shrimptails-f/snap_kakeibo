@@ -21,12 +21,13 @@ import (
 )
 
 type summary struct {
-	YearMonth           string           `json:"year_month"`
-	TotalRecordedAmount int64            `json:"total_recorded_amount"`
-	ExpenseCount        int64            `json:"expense_count"`
-	DetailCount         int64            `json:"detail_count"`
-	CategoryTotals      map[string]int64 `json:"category_totals"`
-	UpdatedAt           string           `json:"updated_at"`
+	YearMonth            string           `json:"year_month"`
+	TotalRecordedAmount  int64            `json:"total_recorded_amount"`
+	ExpenseCount         int64            `json:"expense_count"`
+	DetailCount          int64            `json:"detail_count"`
+	ConfirmedDetailCount int64            `json:"confirmed_detail_count"`
+	CategoryTotals       map[string]int64 `json:"category_totals"`
+	UpdatedAt            string           `json:"updated_at"`
 }
 type response struct {
 	MonthlySummaries []summary `json:"monthly_summaries"`
@@ -87,7 +88,7 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 		for _, category := range common.Categories() {
 			totals[category.String()] = value.Summary.CategoryTotals[category]
 		}
-		summaries = append(summaries, summary{YearMonth: value.Summary.YearMonth.String(), TotalRecordedAmount: value.Summary.TotalRecordedAmount, ExpenseCount: value.Summary.ExpenseCount, DetailCount: value.Summary.DetailCount, CategoryTotals: totals, UpdatedAt: value.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z")})
+		summaries = append(summaries, summary{YearMonth: value.Summary.YearMonth.String(), TotalRecordedAmount: value.Summary.TotalRecordedAmount, ExpenseCount: value.Summary.ExpenseCount, DetailCount: value.Summary.DetailCount, ConfirmedDetailCount: value.Summary.ConfirmedDetailCount, CategoryTotals: totals, UpdatedAt: value.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z")})
 	}
 	return apigateway.JSON(200, response{MonthlySummaries: summaries})
 }

@@ -90,6 +90,35 @@ func TestRebuildMonthlySummary(t *testing.T) {
 	}
 }
 
+func TestTaxIncludedDetailSurvivesCategoryEditAndClearsOnAmountChange(t *testing.T) {
+	t.Parallel()
+	expense := newTestExpense(t, "expense-tax", "2026-09-21", common.CategoryFood, 100)
+	detail := expense.details[0]
+	rate, included := int64(10), int64(110)
+	if err := detail.SetTaxEvidence(&rate, "external", &included, "receipt_tax_proportional_v1"); err != nil {
+		t.Fatal(err)
+	}
+	expense.details[0] = detail
+	if err := expense.ChangeDetailCategory(detail.ID(), common.CategorySocial); err != nil {
+		t.Fatal(err)
+	}
+	month, _ := common.NewYearMonth("2026-09")
+	summary, err := RebuildMonthlySummary(expense.UserID(), month, []Expense{expense}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.CategoryTotals[common.CategorySocial] != 110 || summary.ConfirmedDetailCount != 1 {
+		t.Errorf("summary = %+v", summary)
+	}
+	changed, _ := common.NewDetailAmount(200)
+	if err := expense.ChangeDetailAmount(detail.ID(), changed, detail.Quantity()); err != nil {
+		t.Fatal(err)
+	}
+	if expense.details[0].TaxIncludedAmount() != nil || expense.details[0].ReportingAmount() != 200 {
+		t.Errorf("changed detail = %+v", expense.details[0])
+	}
+}
+
 func TestExpenseRejectsZeroQuantityOnChange(t *testing.T) {
 	t.Parallel()
 

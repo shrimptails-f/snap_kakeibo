@@ -48,9 +48,9 @@ function receiptForMonth(offset: number) {
       updated_at: updatedAt,
     },
     details: [
-      { detail_id: `sample-food-${suffix}`, name: 'サンプル食品', category: 'food', category_source: 'AI', amount: food, quantity: 2, source: 'AI', is_edited: false },
-      { detail_id: `sample-daily-${suffix}`, name: 'サンプル日用品', category: 'daily_goods', category_source: 'AI', amount: dailyGoods, quantity: 1, source: 'AI', is_edited: false },
-      ...extraDetails[offset].map(({ category, name }, index) => ({ detail_id: `sample-extra-${index}-${suffix}`, name, category, category_source: 'AI', amount: index === 0 ? firstExtraAmount : secondExtraAmount, quantity: 1, source: 'AI', is_edited: false })),
+      { detail_id: `sample-food-${suffix}`, name: 'サンプル食品', category: 'food', category_source: 'AI', amount: food, tax_included_amount: food, tax_mode: 'included', quantity: 2, source: 'AI', is_edited: false },
+      { detail_id: `sample-daily-${suffix}`, name: 'サンプル日用品', category: 'daily_goods', category_source: 'AI', amount: dailyGoods, tax_included_amount: dailyGoods, tax_mode: 'included', quantity: 1, source: 'AI', is_edited: false },
+      ...extraDetails[offset].map(({ category, name }, index) => ({ detail_id: `sample-extra-${index}-${suffix}`, name, category, category_source: 'AI', amount: index === 0 ? firstExtraAmount : secondExtraAmount, tax_included_amount: index === 0 ? firstExtraAmount : secondExtraAmount, tax_mode: 'included', quantity: 1, source: 'AI', is_edited: false })),
     ],
   }
 }
@@ -101,7 +101,7 @@ export function sampleApi(): Plugin {
         if (req.method === 'GET' && path === '/api/monthly-summaries') {
           return respond(res, { monthly_summaries: receipts.map(({ expense, details }) => {
             const categoryTotals = Object.fromEntries(categories.map((category) => [category, details.filter((detail) => detail.category === category).reduce((sum, detail) => sum + detail.amount, 0)]))
-            return { year_month: expense.year_month, total_recorded_amount: expense.recorded_amount, expense_count: 1, detail_count: details.length, category_totals: categoryTotals, updated_at: expense.updated_at }
+            return { year_month: expense.year_month, total_recorded_amount: expense.recorded_amount, expense_count: 1, detail_count: details.length, confirmed_detail_count: details.length, category_totals: categoryTotals, updated_at: expense.updated_at }
           }) })
         }
 
@@ -109,7 +109,7 @@ export function sampleApi(): Plugin {
         if (req.method === 'GET' && expensesMonth) {
           const items = receipts.filter(({ expense }) => expense.year_month === expensesMonth[1]).flatMap(({ expense, details }) => details.map((detail) => ({
             detail_id: detail.detail_id, expense_id: expense.expense_id, name: detail.name, category: detail.category,
-            amount: detail.amount, quantity: detail.quantity, source: detail.source, is_edited: detail.is_edited,
+            amount: detail.amount, tax_included_amount: detail.tax_included_amount, tax_mode: detail.tax_mode, quantity: detail.quantity, source: detail.source, is_edited: detail.is_edited,
             store_name: expense.store_name, purchase_date: expense.purchase_date,
           })))
           return respond(res, { year_month: expensesMonth[1], items })

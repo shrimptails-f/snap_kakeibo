@@ -99,7 +99,7 @@ export function MonthlyExpensesPage() {
 
   const previous = shiftYearMonth(yearMonth, -1)
   const next = shiftYearMonth(yearMonth, 1)
-  const maxAmount = Math.max(0, ...items.map((item) => item.amount))
+  const maxAmount = Math.max(0, ...items.map((item) => item.tax_included_amount ?? item.amount))
 
   return (
     <div className={styles.page}>
@@ -140,19 +140,21 @@ export function MonthlyExpensesPage() {
           {isInconsistent && <div className={styles.warning} role="alert"><p>月合計と明細の情報が揃っていません。</p><ReloadButton reload={reloadControl(reloadAll)} /></div>}
           <section className={styles.breakdown} aria-labelledby="category-heading">
             <div className={styles.sectionHeading}><div><h2 id="category-heading">カテゴリ別内訳</h2><p>明細合計 <strong className="amount">{formatYen(breakdown.total)}</strong></p></div></div>
+            {breakdown.unconfirmedCount > 0 && <p className={styles.help}>税込み額未確定の明細 {breakdown.unconfirmedCount}件は印字額で含めています。円グラフと割合は暫定値です。</p>}
             <div className={styles.breakdownGrid}>
               {breakdown.canDrawChart ? <CategoryChart rows={breakdown.rows} /> : <p className={styles.noChart}>{hasNegativeDetail ? '負の明細金額があるため、円グラフと割合は表示しません。' : '明細金額の合計は0円です。'}</p>}
               <table><thead><tr><th scope="col">カテゴリ</th><th scope="col">明細金額</th><th scope="col">割合</th></tr></thead><tbody>{breakdown.rows.map((row) => <tr key={row.category}><th scope="row"><span className={styles.swatch} data-category={row.category} />{categoryLabel(row.category)}</th><td className="amount">{formatYen(row.amount)}</td><td>{row.percentage === null ? '—' : `${row.percentage.toFixed(1)}%`}</td></tr>)}</tbody></table>
             </div>
-            <p className={styles.help}>内訳は明細金額に基づきます。調整額や読取金額との差により、月合計と一致しない場合があります。AIによるカテゴリは参考値です。</p>
+            <p className={styles.help}>内訳は確定した税込み明細額を使い、未確定の行は印字額を使います。店舗の値引き、利用者の調整、読取漏れにより月合計と一致しない場合があります。AIによるカテゴリは参考値です。</p>
           </section>
 
           <section className={styles.details} aria-labelledby="monthly-details-heading">
             <div className={styles.sectionHeading}><h2 id="monthly-details-heading">支出明細 <span>{items.length}件</span></h2><p>金額の大きい順</p></div>
             <ol>{items.map((item) => {
               const [,, day] = item.purchase_date.split('-').map(Number)
-              const width = maxAmount > 0 && item.amount > 0 ? `${Math.max(2, item.amount / maxAmount * 100)}%` : '0%'
-              return <li key={item.detail_id} id={`detail-${item.detail_id}`} tabIndex={-1}><Link to={`/expenses/${item.expense_id}`} state={{ from: `/months/${yearMonth}`, backLabel: `${yearMonthLabel(yearMonth)}の支出へ`, detailId: item.detail_id, scrollY: window.scrollY }}><span className={styles.itemTop}><strong>{item.name}</strong><strong className="amount">{formatYen(item.amount)} <span aria-hidden="true">›</span></strong></span>{!hasNegativeDetail && <span className={styles.barTrack} aria-hidden="true"><span style={{ width, background: categoryColor(item.category) }} /></span>}<span className={styles.itemMeta}>{Number(yearMonth.slice(5))}/{day} · {item.store_name}</span><span className={styles.itemMeta}>{categoryLabel(item.category)} · 数量{item.quantity} · {sourceText(item)}</span></Link></li>
+              const shownAmount = item.tax_included_amount ?? item.amount
+              const width = maxAmount > 0 && shownAmount > 0 ? `${Math.max(2, shownAmount / maxAmount * 100)}%` : '0%'
+              return <li key={item.detail_id} id={`detail-${item.detail_id}`} tabIndex={-1}><Link to={`/expenses/${item.expense_id}`} state={{ from: `/months/${yearMonth}`, backLabel: `${yearMonthLabel(yearMonth)}の支出へ`, detailId: item.detail_id, scrollY: window.scrollY }}><span className={styles.itemTop}><strong>{item.name}</strong><strong className="amount">{formatYen(shownAmount)} <span aria-hidden="true">›</span></strong></span>{!hasNegativeDetail && <span className={styles.barTrack} aria-hidden="true"><span style={{ width, background: categoryColor(item.category) }} /></span>}<span className={styles.itemMeta}>{item.tax_included_amount === undefined ? '印字額・税込み未確定' : `税込み明細額（印字額 ${formatYen(item.amount)}）`}{item.tax_rate !== undefined ? ` · 税率 ${item.tax_rate}%` : ''}{item.tax_mode === 'external' && item.tax_included_amount !== undefined ? ` · 配分税額 ${formatYen(item.tax_included_amount - item.amount)}` : ''}</span><span className={styles.itemMeta}>{Number(yearMonth.slice(5))}/{day} · {item.store_name}</span><span className={styles.itemMeta}>{categoryLabel(item.category)} · 数量{item.quantity} · {sourceText(item)}</span></Link></li>
             })}</ol>
           </section>
         </>
