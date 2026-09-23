@@ -10,7 +10,7 @@ type AmountCandidate struct {
 	Position int64  `json:"position"`
 }
 
-// TaxBreakdown は税率ごとの印字された対象額と税額。nil は判読不能を示す。
+// TaxBreakdown は税率ごとの印字された税抜対象額と税額。nil は判読不能を示す。
 type TaxBreakdown struct {
 	Rate          *int64 `json:"rate"`
 	TaxableAmount *int64 `json:"taxable_amount"`
@@ -51,21 +51,28 @@ func ReconcileAmounts(r ReceiptReading) AmountEvidence {
 		}
 		return e
 	}
-	var subtotal, discount, externalTax int64
-	hasSubtotal := false
+	var discount, externalTax int64
+	var subtotals []int64
+	var discountSummary *int64
+	paymentCount := 0
 	var estimatedTax, estimatedGroups int64
 	for _, c := range r.AmountCandidates {
 		switch candidateRole(c) {
+		case "payment":
+			paymentCount++
 		case "subtotal":
-			subtotal = c.Amount
-			hasSubtotal = true
+			subtotals = append(subtotals, c.Amount)
 		case "discount":
-			if c.Amount < 0 {
-				discount -= c.Amount
+			value := absAmount(c.Amount)
+			if strings.Contains(c.Label, "値引合計") || strings.Contains(c.Label, "割引合計") {
+				discountSummary = &value
 			} else {
-				discount += c.Amount
+				discount += value
 			}
 		}
+	}
+	if discountSummary != nil {
+		discount = *discountSummary
 	}
 	for _, tax := range r.TaxBreakdown {
 		if tax.Mode == "external" && tax.TaxAmount != nil {
@@ -75,26 +82,44 @@ func ReconcileAmounts(r ReceiptReading) AmountEvidence {
 			estimatedGroups++
 		}
 	}
+	breakdownGross, completeBreakdown := int64(0), len(r.TaxBreakdown) > 0
+	for _, tax := range r.TaxBreakdown {
+		if tax.TaxableAmount == nil || tax.TaxAmount == nil {
+			completeBreakdown = false
+			break
+		}
+		breakdownGross += *tax.TaxableAmount + *tax.TaxAmount
+	}
 	best, second := -1<<30, -1<<30
 	for i, c := range r.AmountCandidates {
 		if c.Amount < 0 || c.Amount > 10_000_000 {
 			continue
 		}
 		role := candidateRole(c)
-		if role == "tax" || role == "taxable" || role == "deposit" || role == "change" || role == "discount" || role == "subtotal" {
+		if role == "tax" || role == "taxable" || role == "deposit" || role == "change" || role == "discount" || role == "subtotal" || role == "payment" && paymentCount > 1 {
 			continue
 		}
 		score := 0
 		if role == "final_total" {
 			score = 100
+		} else if role == "payment" {
+			score = 40
 		}
 		if c.Position > 0 {
 			score += int(min(c.Position, 20))
 		}
-		if hasSubtotal && estimatedGroups == 0 && c.Amount == subtotal-discount+externalTax {
-			score += 30
-		} else if hasSubtotal && estimatedGroups > 0 && absAmount(c.Amount-(subtotal-discount+externalTax+estimatedTax)) <= estimatedGroups {
-			score += 10
+		for _, subtotal := range subtotals {
+			if estimatedGroups == 0 && c.Amount == subtotal-discount+externalTax {
+				score += 30
+				break
+			}
+			if estimatedGroups > 0 && absAmount(c.Amount-(subtotal-discount+externalTax+estimatedTax)) <= estimatedGroups {
+				score += 10
+				break
+			}
+		}
+		if completeBreakdown && c.Amount == breakdownGross {
+			score += 40
 		}
 		var details int64
 		for _, d := range r.Details {
@@ -102,6 +127,14 @@ func ReconcileAmounts(r ReceiptReading) AmountEvidence {
 		}
 		if len(r.Details) > 0 && (c.Amount == details || c.Amount == details-discount+externalTax) {
 			score += 10
+		}
+		if role == "final_total" {
+			for _, other := range r.AmountCandidates {
+				if candidateRole(other) == "payment" && other.Amount == c.Amount {
+					score += 15
+					break
+				}
+			}
 		}
 		for _, tax := range r.TaxBreakdown {
 			if tax.TaxAmount != nil && c.Amount == *tax.TaxAmount {
@@ -127,8 +160,20 @@ func ReconcileAmounts(r ReceiptReading) AmountEvidence {
 	if candidateRole(*e.Selected) == "final_total" && best-second >= 20 {
 		e.Status = "strong"
 	}
-	if hasSubtotal && estimatedGroups == 0 && e.Selected.Amount == subtotal-discount+externalTax {
-		e.Reasons = append(e.Reasons, "subtotal_discount_tax_match")
+	for _, subtotal := range subtotals {
+		if estimatedGroups == 0 && e.Selected.Amount == subtotal-discount+externalTax {
+			e.Reasons = append(e.Reasons, "subtotal_discount_tax_match")
+			break
+		}
+	}
+	if completeBreakdown && e.Selected.Amount == breakdownGross {
+		e.Reasons = append(e.Reasons, "tax_breakdown_match")
+	}
+	for _, other := range r.AmountCandidates {
+		if candidateRole(other) == "payment" && other.Amount == e.Selected.Amount {
+			e.Reasons = append(e.Reasons, "payment_match")
+			break
+		}
 	}
 	if candidateRole(*e.Selected) == "final_total" {
 		e.Reasons = append(e.Reasons, "final_total_label")
@@ -194,10 +239,14 @@ func candidateRole(c AmountCandidate) string {
 		return "tax"
 	case strings.Contains(label, "税抜対象"), strings.Contains(label, "対象額"), strings.Contains(label, "課税対象"), strings.Contains(label, "taxable"):
 		return "taxable"
-	case strings.Contains(label, "小計"), strings.Contains(label, "subtotal"):
+	case (strings.Contains(label, "税率") || strings.Contains(label, "%")) && strings.Contains(label, "対象"):
+		return "taxable"
+	case strings.Contains(label, "小計"), strings.Contains(label, "商品代金"), strings.Contains(label, "subtotal"):
 		return "subtotal"
 	case strings.Contains(label, "合計"), strings.Contains(label, "お買上"), strings.Contains(label, "お支払"), strings.Contains(label, "請求額"), strings.Contains(label, "total"):
 		return "final_total"
+	case strings.Contains(label, "支払"), strings.Contains(label, "決済"):
+		return "payment"
 	}
 	return c.Role
 }

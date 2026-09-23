@@ -66,3 +66,51 @@ func TestReconcileAmountsReportsMixedTaxMode(t *testing.T) {
 		t.Fatalf("tax mode=%s", e.TaxMode)
 	}
 }
+
+func TestValidateReadingSevenElevenInvoiceWithDiscountAndPostTotalBreakdown(t *testing.T) {
+	t.Parallel()
+	amounts := []int64{182, 173, 170, 396, 350, 173, 188, 175, 680, 138, 550, 648, 5}
+	details := make([]ReadDetail, 0, len(amounts))
+	for _, amount := range amounts {
+		details = append(details, ReadDetail{Name: "商品", Amount: amount, Quantity: 1})
+	}
+	r := ReceiptReading{PurchaseDate: strPtr("2026-09-23"), Details: details,
+		AmountCandidates: []AmountCandidate{
+			{Amount: -20, Label: "値引額", Role: "discount", Position: 2},
+			{Amount: -32, Label: "値引額", Role: "discount", Position: 4},
+			{Amount: -20, Label: "値引額", Role: "discount", Position: 8},
+			{Amount: -30, Label: "値引", Role: "discount", Position: 12},
+			{Amount: 3828, Label: "商品代金", Role: "final_total", Position: 16},
+			{Amount: -102, Label: "値引合計", Role: "discount", Position: 17},
+			{Amount: -102, Label: "税率8%対象", Role: "final_total", Position: 18},
+			{Amount: 3539, Label: "小計（税抜8%）", Role: "subtotal", Position: 19},
+			{Amount: 283, Label: "消費税等（8%）", Role: "final_total", Position: 20},
+			{Amount: 187, Label: "小計（税抜10%）", Role: "subtotal", Position: 21},
+			{Amount: 18, Label: "消費税等（10%）", Role: "tax", Position: 22},
+			{Amount: 4027, Label: "合計", Role: "final_total", Position: 25},
+			{Amount: 3822, Label: "（税率8%対象）", Role: "final_total", Position: 30},
+			{Amount: 205, Label: "（税率10%対象）", Role: "final_total", Position: 31},
+			{Amount: 283, Label: "（内消費税等8%）", Role: "final_total", Position: 32},
+			{Amount: 18, Label: "（内消費税等10%）", Role: "final_total", Position: 33},
+			{Amount: 4027, Label: "PayPay支払", Role: "final_total", Position: 34},
+		},
+		TaxBreakdown: []TaxBreakdown{{Rate: intPtr(8), TaxableAmount: intPtr(3539), TaxAmount: intPtr(283), Mode: "external"}, {Rate: intPtr(10), TaxableAmount: intPtr(187), TaxAmount: intPtr(18), Mode: "external"}},
+	}
+	result, f := ValidateReading(r, time.Date(2026, 9, 23, 18, 0, 0, 0, time.FixedZone("JST", 9*3600)))
+	if f != nil {
+		t.Fatalf("failure=%v", f)
+	}
+	e := result.Evidence()
+	if result.ReadAmount().Yen() != 4027 || e.Selected == nil || e.Selected.Label != "合計" || e.Status != "strong" || e.TaxMode != "external" {
+		t.Fatalf("read amount=%d evidence=%+v", result.ReadAmount().Yen(), e)
+	}
+}
+
+func TestValidateReadingDoesNotUseOnePartOfSplitPaymentAsTotal(t *testing.T) {
+	t.Parallel()
+	r := ReceiptReading{PurchaseDate: strPtr("2026-09-23"), AmountCandidates: []AmountCandidate{{Amount: 2000, Label: "PayPay支払", Role: "payment", Position: 20}, {Amount: 2027, Label: "現金支払", Role: "payment", Position: 21}}}
+	_, failure := ValidateReading(r, time.Date(2026, 9, 23, 18, 0, 0, 0, time.UTC))
+	if failure == nil || failure.Code() != FailureNoTotalAmount {
+		t.Fatalf("failure=%v", failure)
+	}
+}

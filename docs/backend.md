@@ -240,7 +240,7 @@ Structured Outputs(JSON Schema、`strict: true`)で固定形式のJSONで受け�
 | store_name | string / null | 読めなければ null。null でも登録は続ける |
 | purchase_date | string(YYYY-MM-DD) / null | 時刻を含めない。JSON Schemaでも形式を制約する。null なら `NO_DATE` |
 | amount_candidates | array | 印字された金額行。`amount`、`label`、`role`、上からの順番 `position` を保持する。候補が読めなければ空配列 |
-| tax_breakdown | array | 税率 `rate`、対象額 `taxable_amount`、税額 `tax_amount`、内税・外税 `mode`。読めない個別値は null |
+| tax_breakdown | array | 税率 `rate`、税抜対象額 `taxable_amount`、税額 `tax_amount`、商品行の内税・外税 `mode`。読めない個別値は null。合計後に載る税込対象額は別の金額候補として保持する |
 | details[].name | string | レシート表記のまま |
 | details[].amount | integer | 行の金額(数量をかけた後) |
 | details[].quantity | integer | 読めなければ 1 |
@@ -269,27 +269,34 @@ JSON Schema に合っていてもレシートとして正しい値とは限ら�
 
 実装は `backend/internal/analysis/domain/amount_reconciliation.go` の `ReconcileAmounts`。OpenAI が返す `amount_candidates` の各行を次の順で扱う。
 
-1. `label` に役割を示す語があれば、OpenAI が付けた `role` より印字ラベルを優先する。預り金・お釣り・値引き・税額・税抜対象額・小計・合計の順で語を確認する。例えば `role=final_total` でも `label=8%消費税額` なら税額とする。どの語にも該当しなければ `role` を使う。
-2. 0 円未満または 10,000,000 円超の行と、役割が `tax` / `taxable` / `deposit` / `change` / `discount` / `subtotal` の行を選択対象から外す。`final_total` と `unknown` の行が順位付け対象になる。対象がなければ `NO_TOTAL_AMOUNT`。採用後に `ReadAmount` の範囲も検証する。
+1. `label` に役割を示す語があれば、OpenAI が付けた `role` より印字ラベルを優先する。預り金・お釣り・値引き・税額・税対象額・小計または商品代金・合計・決済額の順で語を確認する。`税率8%対象` も税対象額とする。例えば `role=final_total` でも `label=8%消費税額` なら税額、`label=PayPay支払` なら決済額とする。どの語にも該当しなければ `role` を使う。
+2. 0 円未満または 10,000,000 円超の行と、役割が `tax` / `taxable` / `deposit` / `change` / `discount` / `subtotal` の行を選択対象から外す。`final_total` と `unknown`、決済額の行が1件だけなら `payment` が順位付け対象になる。複数の決済額は分割払いの可能性があるため単独の合計候補にしない。対象がなければ `NO_TOTAL_AMOUNT`。採用後に `ReadAmount` の範囲も検証する。
 3. 残った各候補に下表の点数を加減し、最高点を選ぶ。同点なら `amount_candidates` で先に現れた行を採用する。完全一致は必須条件にしない。
 
 | 根拠 | 点数 | 判定方法 |
 | --- | ---: | --- |
 | 最終合計の役割 | +100 | 印字ラベル優先で決めた役割が `final_total` |
+| 支払方法別の決済額 | +40 | 役割が `payment`。合計行が読めない場合の候補とし、単独で採用されたら `weak` |
 | レシート下部の位置 | +0〜20 | `position` が正なら `min(position, 20)`。0 以下なら加点なし |
-| 小計・値引き・印字外税の一致 | +30 | `候補額 = 小計 − 値引き合計 + 外税額合計`。値引きは符号にかかわらず絶対額を足す。小計は読み取った最後の行を使う。推定可能な未読税額の群がない場合に判定する |
+| 小計・値引き・印字外税の一致 | +30 | `候補額 = いずれかの小計または商品代金 − 値引き合計 + 外税額合計`。推定可能な未読税額の群がない場合に判定する |
 | 税率から推定した外税との近似 | +10 | 外税額が読めず、対象額と税率がある税率群について `対象額 × 税率 ÷ 100` の整数除算を補助的に使う。`候補額` と `小計 − 値引き合計 + 印字外税額合計 + 推定外税額合計` の差が推定した群数以下なら加点する |
+| 税率別内訳の合算 | +40 | 全税率群で税抜対象額と税額が読める場合、`候補額 = Σ(税抜対象額 + 税額)` |
 | 商品行との一致 | +10 | 候補額が商品行の印字額合計、または `商品行の印字額合計 − 値引き合計 + 印字外税額合計` と一致する。商品行が0件なら加点しない |
+| 決済額との一致 | +15 | `final_total` の候補額が、印字された `payment` の候補額と同じ |
 | 印字された税額との一致 | −30 | 候補額がいずれかの税率群の税額と同じ |
 | 印字された税対象額との一致 | −20 | 候補額がいずれかの税率群の対象額と同じ |
 
 外税の照合ではレシート記載の税額を優先する。内税額は合計へ再加算しない。税率からの推定は点数付けだけに使い、`read_amount`、商品行、税額を計算値で書き換えない。商品行の読取漏れを想定し、商品行の合計との不一致だけでは候補を却下しない。
 
+値引きは符号にかかわらず絶対額を使う。`値引合計` または `割引合計` が読めたらその印字額を優先し、個別の値引き行を重ねて引かない。集計行がなければ個別の値引き額を合算する。複数の小計行がある場合は、それぞれを照合に使い、最後の小計だけを正としない。
+
 最高点の候補が `final_total` で、2位との差が20点以上なら `analysis_evidence.status=strong`、それ以外は `weak` とする。候補が1件だけなら2位は存在しないため、`final_total` の候補は `strong` になる。`weak` でも最有力の候補を採用する。候補が読めない場合は `NO_TOTAL_AMOUNT`。旧形式の `ReadAmount` だけがある場合は候補として採用し、`weak` にする。
 
-支出の `analysis_evidence` には採用候補 `selected`、全候補 `candidates`、税率別内訳 `taxes`、商品行ごとの税率・内外税区分 `detail_taxes`、集約した `tax_mode`、`status`、`reasons` を JSON で保存する。`tax_mode` は内税と外税があれば `mixed`、一方だけがあり不明な区分が混じらなければその区分、それ以外は `unknown`。税率別内訳があればそこを使い、なければ商品行の区分を使う。`reasons` は小計等との完全一致 `subtotal_discount_tax_match`、合計ラベル `final_total_label`、弱い判定 `ambiguous_or_incomplete` を記録する。旧形式の金額だけを採用した場合は `legacy_total_without_candidates` を記録する。生の OpenAI 応答は従来の S3 経路にも保存する。
+支出の `analysis_evidence` には採用候補 `selected`、全候補 `candidates`、税率別内訳 `taxes`、商品行ごとの税率・内外税区分 `detail_taxes`、集約した `tax_mode`、`status`、`reasons` を JSON で保存する。`tax_mode` は内税と外税があれば `mixed`、一方だけがあり不明な区分が混じらなければその区分、それ以外は `unknown`。税率別内訳があればそこを使い、なければ商品行の区分を使う。`reasons` は小計等との完全一致 `subtotal_discount_tax_match`、税率別内訳との一致 `tax_breakdown_match`、決済額との一致 `payment_match`、合計ラベル `final_total_label`、弱い判定 `ambiguous_or_incomplete` を記録する。旧形式の金額だけを採用した場合は `legacy_total_without_candidates` を記録する。生の OpenAI 応答は従来の S3 経路にも保存する。
 
 例: `小計=100円`、`8%税額=8円`、`8%対象額=100円`、`お支払合計=108円` が並ぶ外税レシートでは、最初の3行を選択対象から外す。合計行の `position=9` なら、合計の役割 +100、位置 +9、小計と印字外税の一致 +30 が付き、108円を `read_amount` にする。商品行が一部欠けても、108円を他の金額へ補正しない。
+
+セブン‐イレブンのインボイス対応レシート例では、商品行 3,828 円、値引合計 102 円、税抜対象額 3,539 円と 187 円、税額 283 円と 18 円から、`3,828 − 102 + 283 + 18 = 4,027` および `3,539 + 283 + 187 + 18 = 4,027` の両方が成り立つ。合計後の `税率8%対象=3,822円` と `税率10%対象=205円` は各税率の税込内訳なので個別の最終合計候補から除外する。`PayPay支払=4,027円` は合計行の裏付けに使う。この読み取り内容を `TestValidateReadingSevenElevenInvoiceWithDiscountAndPostTotalBreakdown` で固定する。
 
 `INVALID_DATE` / `INVALID_AMOUNT` は読み取りミスの可能性が高いので、解析依頼一覧画面から再解析できる。再解析でも直らない場合は画像側の問題(手ブレ、見切れ)として扱う。
 

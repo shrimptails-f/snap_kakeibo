@@ -153,6 +153,10 @@ func TestReceiptSchemaRequiresDateOnly(t *testing.T) {
 	if !slices.Contains(enum, "social") {
 		t.Errorf("category enum must include social: %v", enum)
 	}
+	roles := properties["amount_candidates"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)["role"].(map[string]any)["enum"].([]string)
+	if !slices.Contains(roles, "payment") {
+		t.Errorf("amount roles must include payment: %v", roles)
+	}
 }
 
 // TestAnalyzeConvertsDetailsIncludingSocial は OpenAI の出力が
