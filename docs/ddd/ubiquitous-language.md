@@ -33,7 +33,7 @@
 | カテゴリ決定元 | カテゴリをAIと利用者のどちらが最後に決めたか | `CategorySource` / `category_source` |
 | 月次集計 | ある利用者の対象月に属する支出を集計した結果 | `MonthlySummary` / `monthly_summaries`。計上額合計(`total_recorded_amount`)、支出数(`expense_count`)、明細数(`detail_count`)、カテゴリ別金額を含む。家計簿コンテキストの読み取りモデル |
 
-カテゴリ別金額は、確定した行の税込み明細額と未確定行の印字額を合計する。`confirmed_detail_count` と `detail_count` の差で未確定件数を示す。未確定行がある月の構成比は、税込み構成比と誤認させないため表示しない。計上額と明細合計の差は店舗値引き、利用者調整額、読取漏れなどを含み得るため、税や調整額と決めつけない。
+カテゴリ別金額は、確定した行の税込み明細額と未確定行の印字額を合計する。`confirmed_detail_count` と `detail_count` の差で未確定件数を示す。未確定行がある月の構成比は暫定値と明示して表示する。計上額と明細合計の差は店舗値引き、利用者調整額、読取漏れなどを含み得るため、税や調整額と決めつけない。
 | 月次再構築 | 保存済みの支出と支出明細から月次集計を作り直す操作 | `RebuildMonthlySummary`、`POST /monthly-summaries/{yyyy-MM}/rebuild`。集計の復旧および支出編集の反映に使用する |
 
 ## 解析依頼の状態

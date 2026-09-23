@@ -550,7 +550,7 @@ amount_desc_key = 2147483647 - amount(10 桁ゼロ埋め)
   "tax_included_amount": 303, // 根拠を確認できた税込み明細額。未確定では属性なし
   "tax_rate": 8, // 商品別に確認できた税率。未確定では属性なし
   "tax_mode": "external", // included / external / mixed / unknown
-  "tax_allocation": "receipt_tax_proportional_v1", // printed_included または印字税額の比例配分。未確定では空
+  "tax_allocation": "receipt_tax_proportional_v1", // printed_included、印字税額の比例配分、利用者確認時は user_confirmed。未確定では空
   "quantity": 1, // 数量
   "source": "AI", // データの作成元。AIまたはMANUAL
   "is_edited": false, // ユーザーが後から編集したかどうか
@@ -590,7 +590,7 @@ amount_desc_key = 2147483647 - amount(10 桁ゼロ埋め)
 | 計上額合計 | 1ユーザー + 1月で1値 | `monthly_summaries.total_recorded_amount` | `expenses.recorded_amount` | ダッシュボードの月合計で使う |
 | 支出件数 | 1ユーザー + 1月で1値 | `monthly_summaries.expense_count` | `expenses` | 画像解析成功後に作成された支出数 |
 | 明細件数 | 1ユーザー + 1月で1値 | `monthly_summaries.detail_count` | `expense_details` | AIで読み取れた明細数 |
-| 税込み確定明細件数 | 1ユーザー + 1月で1値 | `monthly_summaries.confirmed_detail_count` | `expense_details.tax_included_amount` がある行 | 未確定件数と構成比の表示判定に使う |
+| 税込み確定明細件数 | 1ユーザー + 1月で1値 | `monthly_summaries.confirmed_detail_count` | `expense_details.tax_included_amount` がある行 | 未確定件数の表示に使う |
 | カテゴリ別金額 | 1ユーザー + 1月 + 1カテゴリで1値 | `monthly_summaries.category_total_{category}` | `expense_details.category` + 確定した `tax_included_amount`、未確定なら `amount` | 積み上げ棒グラフの内訳。API は map にして返す |
 
 月合計はカテゴリ別金額の合計から作らない。
@@ -615,7 +615,7 @@ monthly_summaries.total_recorded_amount = SUM(expense_details.amount)
 
 1. 新しいバックエンドを先に配布し、`GET /expenses/{expense_id}` と `GET /months/{yyyy-MM}/expenses` の追加属性を確認する。`amount` は従来の印字額のままで、旧明細に `tax_included_amount` は付けない。税率別税額や支払合計との差額から旧明細を一括換算しない。
 2. 利用者ごとに `GET /monthly-summaries` で対象月を列挙し、認証された利用者の `POST /monthly-summaries/{yyyy-MM}/rebuild` を各月に一度実行する。再構築は支出・明細を正本にして `category_total_*`、`confirmed_detail_count`、`detail_count` を作り直す。各月の `total_recorded_amount` が再構築前後で等しいことを確認する。
-3. 旧データで税率と商品行の対応が確認できないものは未確定のまま表示する。利用者が金額を編集した行の税込み根拠は破棄する。将来、元画像に基づく再解析や利用者確認の機能を設ける場合も、編集済み明細を自動上書きせず、個別の確認後に保存する。
+3. 旧データで税率と商品行の対応が確認できないものは未確定のまま表示する。利用者が印字額を編集した行の税込み根拠は破棄する。利用者がレシートと照らして税区分・税率・税込み明細額を確認した場合は `PATCH /expenses/{expense_id}` で保存できる。編集済み明細を再解析結果で自動上書きせず、個別の確認後に保存する。
 
 バックエンドとフロントエンドを独立して配布する間、追加 API 属性は省略可能として読む。旧月次集計に `confirmed_detail_count` がない場合は 0 件として扱う。新しい登録・編集処理は対象月の集計を新契約で更新するが、既存の月を完全に揃えるため上記の再構築を実行する。
 

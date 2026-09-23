@@ -766,6 +766,7 @@ expense_details.name
 expense_details.amount
 expense_details.quantity
 expense_details.category
+expense_details.tax_mode / tax_rate / tax_included_amount（利用者がレシートで確認した場合）
 ```
 
 処理:

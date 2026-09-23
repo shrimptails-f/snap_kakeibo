@@ -140,9 +140,9 @@ export function MonthlyExpensesPage() {
           {isInconsistent && <div className={styles.warning} role="alert"><p>月合計と明細の情報が揃っていません。</p><ReloadButton reload={reloadControl(reloadAll)} /></div>}
           <section className={styles.breakdown} aria-labelledby="category-heading">
             <div className={styles.sectionHeading}><div><h2 id="category-heading">カテゴリ別内訳</h2><p>明細合計 <strong className="amount">{formatYen(breakdown.total)}</strong></p></div></div>
-            {breakdown.unconfirmedCount > 0 && <p className={styles.help}>税込み額未確定の明細 {breakdown.unconfirmedCount}件は印字額で含めています。割合は表示しません。</p>}
+            {breakdown.unconfirmedCount > 0 && <p className={styles.help}>税込み額未確定の明細 {breakdown.unconfirmedCount}件は印字額で含めています。円グラフと割合は暫定値です。</p>}
             <div className={styles.breakdownGrid}>
-              {breakdown.canDrawChart ? <CategoryChart rows={breakdown.rows} /> : <p className={styles.noChart}>{breakdown.unconfirmedCount > 0 ? '税込み額が未確定の明細があるため、円グラフと割合は表示しません。' : hasNegativeDetail ? '負の明細金額があるため、円グラフと割合は表示しません。' : '明細金額の合計は0円です。'}</p>}
+              {breakdown.canDrawChart ? <CategoryChart rows={breakdown.rows} /> : <p className={styles.noChart}>{hasNegativeDetail ? '負の明細金額があるため、円グラフと割合は表示しません。' : '明細金額の合計は0円です。'}</p>}
               <table><thead><tr><th scope="col">カテゴリ</th><th scope="col">明細金額</th><th scope="col">割合</th></tr></thead><tbody>{breakdown.rows.map((row) => <tr key={row.category}><th scope="row"><span className={styles.swatch} data-category={row.category} />{categoryLabel(row.category)}</th><td className="amount">{formatYen(row.amount)}</td><td>{row.percentage === null ? '—' : `${row.percentage.toFixed(1)}%`}</td></tr>)}</tbody></table>
             </div>
             <p className={styles.help}>内訳は確定した税込み明細額を使い、未確定の行は印字額を使います。店舗の値引き、利用者の調整、読取漏れにより月合計と一致しない場合があります。AIによるカテゴリは参考値です。</p>

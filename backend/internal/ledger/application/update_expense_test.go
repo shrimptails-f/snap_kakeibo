@@ -101,6 +101,49 @@ func TestUpdateExpenseReplacesDetailAndRebuildsSummary(t *testing.T) {
 	}
 }
 
+func TestUpdateExpenseConfirmsAndClearsDetailTax(t *testing.T) {
+	t.Parallel()
+	confirmed := true
+	cleared := false
+	base := application.UpdateExpenseInput{UserID: "u1", ExpenseID: "e1", StoreName: "store", PurchaseDate: "2026-09-18"}
+	repository := &expenseRepository{expense: sampleExpense(t)}
+	rebuild := &rebuildRecorder{}
+	usecase := application.NewUpdateExpenseUsecase(repository, rebuild, timewrapper.NewFixed(time.Time{}), ulid.New(nil))
+	detail := repository.expense.Details()[0]
+	base.Details = []application.UpdateExpenseDetailInput{{DetailID: detail.ID().String(), Name: detail.Name(), Amount: detail.Amount().Yen(), Quantity: detail.Quantity().Int64(), Category: detail.Category().String(), TaxConfirmed: &confirmed, TaxRate: 8, TaxMode: "external", TaxIncludedAmount: detail.Amount().Yen() + 1}}
+	if _, err := usecase.Update(context.Background(), base); err != nil {
+		t.Fatalf("confirm tax: %v", err)
+	}
+	got := repository.saved.Details()[0]
+	if got.TaxIncludedAmount() == nil || *got.TaxIncludedAmount() != base.Details[0].TaxIncludedAmount || got.TaxRate() == nil || *got.TaxRate() != 8 || got.TaxMode() != "external" || got.TaxAllocation() != "user_confirmed" || !got.Edited() {
+		t.Fatalf("confirmed detail = %+v", got)
+	}
+	if len(rebuild.months) != 1 || rebuild.months[0] != "2026-09" {
+		t.Fatalf("rebuild months = %v", rebuild.months)
+	}
+	repository.expense = repository.saved
+	base.Details[0].TaxConfirmed = &cleared
+	if _, err := usecase.Update(context.Background(), base); err != nil {
+		t.Fatalf("clear tax: %v", err)
+	}
+	got = repository.saved.Details()[0]
+	if got.TaxIncludedAmount() != nil || got.TaxRate() != nil || got.TaxMode() != "unknown" {
+		t.Fatalf("cleared detail = %+v", got)
+	}
+}
+
+func TestUpdateExpenseRejectsInconsistentManualTax(t *testing.T) {
+	t.Parallel()
+	confirmed := true
+	repository := &expenseRepository{expense: sampleExpense(t)}
+	detail := repository.expense.Details()[0]
+	input := application.UpdateExpenseInput{UserID: "u1", ExpenseID: "e1", StoreName: "store", PurchaseDate: "2026-09-18", Details: []application.UpdateExpenseDetailInput{{DetailID: detail.ID().String(), Name: detail.Name(), Amount: detail.Amount().Yen(), Quantity: detail.Quantity().Int64(), Category: detail.Category().String(), TaxConfirmed: &confirmed, TaxRate: 8, TaxMode: "included", TaxIncludedAmount: detail.Amount().Yen() + 1}}}
+	_, err := application.NewUpdateExpenseUsecase(repository, &rebuildRecorder{}, timewrapper.NewFixed(time.Time{}), ulid.New(nil)).Update(context.Background(), input)
+	if !errors.Is(err, application.ErrInvalidInput) {
+		t.Fatalf("Update() error = %v, want ErrInvalidInput", err)
+	}
+}
+
 type summaryRepository struct {
 	versions  []int64
 	saves     int

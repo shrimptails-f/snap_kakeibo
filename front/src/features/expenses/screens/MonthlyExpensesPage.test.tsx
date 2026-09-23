@@ -67,14 +67,15 @@ describe('MonthlyExpensesPage', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(3)
   })
 
-  it('税込み未確定の明細を印字額と示し、構成比を隠す', async () => {
+  it('税込み未確定の明細を印字額に含め、暫定的な構成比を示す', async () => {
     const mixed = { ...expenses, items: [{ ...expenses.items[0], amount: 7000, tax_included_amount: 7500 }, { ...expenses.items[1], tax_included_amount: undefined }] }
     mockFetch({ '/api/monthly-summaries': summaries, '/api/months/2026-09/expenses': mixed })
     renderPage()
     expect(await screen.findByText(/税込み額未確定の明細 1件は印字額で含めています/)).toBeInTheDocument()
     expect(screen.getByText(/税込み明細額（印字額 [¥￥]7,000）/)).toBeInTheDocument()
     expect(screen.getByText('印字額・税込み未確定')).toBeInTheDocument()
-    expect(screen.queryByText('55.6%')).not.toBeInTheDocument()
+    expect(screen.getByText(/円グラフと割合は暫定値です/)).toBeInTheDocument()
+    expect(screen.getByText('62.5%')).toBeInTheDocument()
   })
 
   it('明細から支出詳細へ遷移し、戻り先の月と明細IDを渡す', async () => {

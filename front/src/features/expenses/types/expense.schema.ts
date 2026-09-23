@@ -49,6 +49,16 @@ export const updateExpenseDetailSchema = z.object({
   amount: integerInput(0, 10_000_000, '明細金額は0〜10,000,000の整数で入力してください。'),
   quantity: integerInput(1, 999, '数量は1〜999の整数で入力してください。'),
   category: z.enum(['food', 'daily_goods', 'medical', 'transport', 'utilities', 'entertainment', 'social', 'clothing', 'education', 'other', 'unknown']),
+  tax_mode: z.enum(['unknown', 'included', 'external']),
+  tax_rate: z.union([z.literal(0), z.literal(8), z.literal(10)]),
+  tax_included_amount: z.number().int().min(0).max(10_000_000).optional(),
+  tax_confirmed: z.boolean().optional(),
+}).superRefine((detail, context) => {
+  if (detail.tax_mode === 'unknown') return
+  if (detail.tax_rate === 0) context.addIssue({ code: 'custom', path: ['tax_rate'], message: '税率を選択してください。' })
+  if (detail.tax_mode === 'external' && (detail.tax_included_amount === undefined || detail.tax_included_amount < detail.amount || detail.tax_included_amount > detail.amount + Math.ceil(detail.amount * detail.tax_rate / 100))) {
+    context.addIssue({ code: 'custom', path: ['tax_included_amount'], message: '税込み額は印字額以上、税率から計算した上限以下で入力してください。' })
+  }
 })
 
 export const updateExpenseRequestSchema = z.object({

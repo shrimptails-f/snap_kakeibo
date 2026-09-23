@@ -9,7 +9,7 @@ export function monthlyBreakdown(items: MonthlyExpenseItem[]): { total: number; 
   for (const item of items) totals.set(item.category, (totals.get(item.category) ?? 0) + (item.tax_included_amount ?? item.amount))
   const total = items.reduce((sum, item) => sum + (item.tax_included_amount ?? item.amount), 0)
   const unconfirmedCount = items.filter((item) => item.tax_included_amount === undefined).length
-  const canDrawChart = total > 0 && unconfirmedCount === 0 && items.every((item) => (item.tax_included_amount ?? item.amount) >= 0)
+  const canDrawChart = total > 0 && items.every((item) => (item.tax_included_amount ?? item.amount) >= 0)
   return {
     total,
     canDrawChart,

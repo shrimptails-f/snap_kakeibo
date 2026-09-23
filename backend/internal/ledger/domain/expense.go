@@ -307,6 +307,47 @@ func (e *Expense) ChangeDetailCategory(id ExpenseDetailID, category Category) er
 	return nil
 }
 
+// ConfirmDetailTax は利用者がレシートを確認した税込み明細額と税区分を保存する。
+func (e *Expense) ConfirmDetailTax(id ExpenseDetailID, rate int64, mode string, included int64) error {
+	detail, err := e.detail(id)
+	if err != nil {
+		return err
+	}
+	if (rate != 8 && rate != 10) || (mode != "included" && mode != "external") || included < detail.amount.Yen() || included > 10_000_000 {
+		return ErrInvalidExpenseDetail
+	}
+	if mode == "included" && included != detail.amount.Yen() {
+		return ErrInvalidExpenseDetail
+	}
+	if mode == "external" && included > detail.amount.Yen()+(detail.amount.Yen()*rate+99)/100 {
+		return ErrInvalidExpenseDetail
+	}
+	if detail.taxRate != nil && *detail.taxRate == rate && detail.taxMode == mode && detail.taxIncludedAmount != nil && *detail.taxIncludedAmount == included {
+		return nil
+	}
+	if err := detail.SetTaxEvidence(&rate, mode, &included, "user_confirmed"); err != nil {
+		return err
+	}
+	detail.source, detail.edited, e.source, e.edited = RecordSourceUser, true, RecordSourceUser, true
+	return nil
+}
+
+// ClearDetailTax は利用者による確認結果を未確定に戻す。
+func (e *Expense) ClearDetailTax(id ExpenseDetailID) error {
+	detail, err := e.detail(id)
+	if err != nil {
+		return err
+	}
+	if detail.taxIncludedAmount == nil && detail.taxRate == nil && (detail.taxMode == "" || detail.taxMode == "unknown") {
+		return nil
+	}
+	if err := detail.SetTaxEvidence(nil, "unknown", nil, ""); err != nil {
+		return err
+	}
+	detail.source, detail.edited, e.source, e.edited = RecordSourceUser, true, RecordSourceUser, true
+	return nil
+}
+
 // AddDetail は利用者が入力した明細を支出へ追加する。
 func (e *Expense) AddDetail(detail ExpenseDetail) error {
 	if len(e.details) >= 50 || detail.ID() == "" {
