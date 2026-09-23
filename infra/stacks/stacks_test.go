@@ -152,10 +152,10 @@ func TestStorageStackResources(t *testing.T) {
 			"IndexName": common.RefreshTokenUserIndex,
 		}},
 	})
-	// Analyze Lambda 3分 -> 可視性タイムアウト 18分
+	// Analyze Lambda 11分 -> 可視性タイムアウト 66分
 	storage.HasResourceProperties(jsii.String("AWS::SQS::Queue"), map[string]any{
 		"QueueName":         "dev-snap-kakeibo-analyze",
-		"VisibilityTimeout": 1080,
+		"VisibilityTimeout": 3960,
 	})
 	storage.HasResourceProperties(jsii.String("AWS::SQS::Queue"), map[string]any{
 		"QueueName": "dev-snap-kakeibo-analyze-dlq",
@@ -245,7 +245,7 @@ func TestStorageStackResources(t *testing.T) {
 			})}},
 		},
 	})
-	app.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]any{"FunctionName": "dev-snap-kakeibo-analyze-receipt", "MemorySize": 1024, "Timeout": 180})
+	app.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]any{"FunctionName": "dev-snap-kakeibo-analyze-receipt", "MemorySize": 1024, "Timeout": 660})
 	app.HasResourceProperties(jsii.String("AWS::Lambda::Function"), map[string]any{
 		"FunctionName": "dev-snap-kakeibo-analyze-receipt",
 		"Environment": map[string]any{"Variables": assertions.Match_ObjectLike(&map[string]any{

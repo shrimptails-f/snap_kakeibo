@@ -42,8 +42,8 @@ const Instructions = `レシート画像から店名・購入日・合計金額�
 
 const (
 	// DefaultRequestTimeout は 1 ジョブあたりの OpenAI 呼び出し(リトライ込み)の上限。
-	// Lambda のタイムアウト(3 分)より短くし、span_finished を出してから終われるようにする
-	DefaultRequestTimeout = 120 * time.Second
+	// 5 分の試行 2 回と 1 秒の待機を収め、Lambda の 11 分上限より短くする
+	DefaultRequestTimeout = 10*time.Minute + 30*time.Second
 	maxOutputTokens       = 4096
 	imageDetail           = "high"
 	schemaName            = "receipt"

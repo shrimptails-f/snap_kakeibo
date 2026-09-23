@@ -73,7 +73,7 @@ func Dev() Config {
 		},
 		OpenAI: OpenAIConfig{Model: "gpt-5.6-terra", ReasoningEffort: "medium"},
 		Timeouts: Timeouts{
-			Analyze: awscdk.Duration_Minutes(jsii.Number(3)),
+			Analyze: awscdk.Duration_Minutes(jsii.Number(11)),
 			API:     awscdk.Duration_Seconds(jsii.Number(29)),
 		},
 		Deployment: DeploymentConfig{
