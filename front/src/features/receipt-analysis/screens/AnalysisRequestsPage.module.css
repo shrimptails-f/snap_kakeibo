@@ -54,6 +54,7 @@
 }
 
 @media (max-width: 599px) {
+  .uploadLink { width: 80%; justify-self: start; justify-content: center; text-align: center; }
   .table td:nth-child(2) { display: none; }
 }
 

@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -38,7 +38,19 @@ describe('MonthlyExpensesPage', () => {
     setAuthSession({ access_token: 'token', token_type: 'Bearer', expires_in: 900 })
     vi.stubGlobal('scrollTo', vi.fn())
   })
-  afterEach(() => { vi.unstubAllGlobals(); clearAuthToken() })
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); clearAuthToken() })
+
+  it('再読み込み後は共通の3秒クールタイムを表示する', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    mockFetch({ '/api/monthly-summaries': summaries, '/api/months/2026-09/expenses': expenses })
+    renderPage()
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    await screen.findByText('明細合計')
+    await user.click(screen.getByRole('button', { name: '再読み込み' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '再読み込み（あと3秒）' })).toBeDisabled())
+    act(() => vi.advanceTimersByTime(3000))
+    expect(screen.getByRole('button', { name: '再読み込み' })).toBeEnabled()
+  })
 
   it('月合計と明細合計を区別し、カテゴリ表と全明細を表示する', async () => {
     mockFetch({ '/api/monthly-summaries': summaries, '/api/months/2026-09/expenses': expenses })
@@ -46,6 +58,7 @@ describe('MonthlyExpensesPage', () => {
     expect(screen.getByRole('status', { name: '月別支出を読み込み中' })).toBeInTheDocument()
     expect(await screen.findByRole('heading', { level: 1, name: '月別支出' })).toBeInTheDocument()
     expect(screen.getByText(/^[¥￥]12,000$/)).toBeInTheDocument()
+    expect(screen.getByText(/集計更新：2026年9月22日 10:00（日本時間）/)).toBeInTheDocument()
     expect(screen.getByText('明細合計').parentElement).toHaveTextContent(/^[^¥￥]*[¥￥]13,500/)
     expect(screen.getByRole('rowheader', { name: /食費/ })).toBeInTheDocument()
     expect(screen.getByText('55.6%')).toBeInTheDocument()
@@ -68,6 +81,7 @@ describe('MonthlyExpensesPage', () => {
     const router = renderPage(); const user = userEvent.setup()
     await screen.findByRole('heading', { name: '月別支出' })
     expect(screen.queryByText('2026年9月に購入した支出')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '今月' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '2026年8月を表示' }))
     expect(router.state.location.pathname).toBe('/months/2026-08')
     expect(screen.getByRole('button', { name: '2026年9月を表示' })).toBeInTheDocument()

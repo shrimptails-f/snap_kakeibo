@@ -275,7 +275,7 @@
     periodSelect.addEventListener('change',()=>renderPeriod(periodSelect.value));
     prev.addEventListener('click',()=>{const i=data.findIndex(m=>m.ym===periodSelect.value);periodSelect.value=data[Math.min(i+6,data.length-1)].ym;renderPeriod(periodSelect.value);});
     next.addEventListener('click',()=>{const i=data.findIndex(m=>m.ym===periodSelect.value);periodSelect.value=data[Math.max(i-6,0)].ym;renderPeriod(periodSelect.value);});
-    const reload=document.querySelector('#reload'); reload.addEventListener('click',()=>{reload.disabled=true;reload.textContent='再読み込み中…';document.querySelector('#status').textContent='現在の内容を表示したまま、保存済み集計を確認しています。';setTimeout(()=>{reload.textContent='再読み込み';document.querySelector('#status').textContent='最新の集計を表示しました（サンプル動作）。';showToast('再読み込みが完了しました');},1200);setTimeout(()=>reload.disabled=false,5000);});
+    const reload=document.querySelector('#reload'); reload.addEventListener('click',()=>{reload.disabled=true;reload.textContent='再読み込み中…';document.querySelector('#status').textContent='現在の内容を表示したまま、保存済み集計を確認しています。';setTimeout(()=>{reload.textContent='再読み込み';document.querySelector('#status').textContent='最新の集計を表示しました（サンプル動作）。';showToast('再読み込みが完了しました');},1200);setTimeout(()=>reload.disabled=false,3000);});
   </script>
 </body>
 </html>

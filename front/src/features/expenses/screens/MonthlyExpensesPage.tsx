@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, type CSSProperties } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { formatYen } from '@/shared/lib/formatYen'
+import { useReloadCooldown } from '@/shared/hooks/useReloadCooldown'
 import { Button } from '@/shared/ui/Button'
+import { ReloadButton, type ReloadControl } from '@/shared/ui/ReloadButton'
 import { SpinnerBlock } from '@/shared/ui/Spinner'
 import { useMonthlyExpenses } from '../hooks/useMonthlyExpenses'
 import { categoryLabel } from '../lib/categoryLabel'
+import { formatUpdatedAt } from '../lib/formatUpdatedAt'
 import { monthlyBreakdown, type CategoryBreakdown } from '../lib/monthlyBreakdown'
 import { currentYearMonth, isYearMonth, shiftYearMonth, yearMonthLabel } from '../lib/yearMonth'
 import type { MonthlyExpenseItem } from '../types/monthly-expenses.types'
@@ -31,16 +34,15 @@ function CategoryChart({ rows }: { rows: CategoryBreakdown[] }) {
   return <div className={styles.chart} aria-hidden="true" style={{ '--chart-segments': `conic-gradient(${stops.join(', ')})` } as CSSProperties} />
 }
 
-function ErrorNotice({ message, action, onRetry }: { message: string; action: string; onRetry: () => void }) {
-  return <div className={styles.error} role="alert"><p>{message}</p><Button variant="secondary" onClick={onRetry}>{action}</Button></div>
+function ErrorNotice({ message, action, reload }: { message: string; action: string; reload: ReloadControl }) {
+  return <div className={styles.error} role="alert"><p>{message}</p><ReloadButton reload={reload} idleLabel={action} /></div>
 }
 
 export function MonthlyExpensesPage() {
   const { yearMonth = '' } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
-  const [isCoolingDown, setIsCoolingDown] = useState(false)
-  const cooldownTimer = useRef<number | undefined>(undefined)
+  const cooldown = useReloadCooldown()
   const validMonth = isYearMonth(yearMonth)
   const { summaries, expenses } = useMonthlyExpenses(yearMonth, validMonth)
 
@@ -50,8 +52,6 @@ export function MonthlyExpensesPage() {
     if (detailId) requestAnimationFrame(() => document.getElementById(`detail-${detailId}`)?.focus())
     else window.scrollTo({ top: 0 })
   }, [location.key, location.state, validMonth, yearMonth])
-
-  useEffect(() => () => window.clearTimeout(cooldownTimer.current), [])
 
   const summary = summaries.data?.monthly_summaries.find((value) => value.year_month === yearMonth)
   const items = useMemo(() => expenses.data?.items ?? [], [expenses.data])
@@ -66,11 +66,29 @@ export function MonthlyExpensesPage() {
     if (isYearMonth(month)) navigate(`/months/${month}`)
   }
 
-  async function reloadAll() {
-    setIsCoolingDown(true)
-    window.clearTimeout(cooldownTimer.current)
-    cooldownTimer.current = window.setTimeout(() => setIsCoolingDown(false), 5000)
-    await Promise.allSettled([summaries.refetch(), expenses.refetch()])
+  function reloadAll() {
+    if (!cooldown.startCooldown()) return
+    void Promise.allSettled([summaries.refetch(), expenses.refetch()])
+  }
+
+  function reloadSummaries() {
+    if (!cooldown.startCooldown()) return
+    void summaries.refetch()
+  }
+
+  function reloadExpenses() {
+    if (!cooldown.startCooldown()) return
+    void expenses.refetch()
+  }
+
+  function reloadControl(reload: () => void): ReloadControl {
+    return {
+      reload,
+      isDisabled: isFetching || cooldown.isCoolingDown,
+      isFetching,
+      isCoolingDown: cooldown.isCoolingDown,
+      cooldownRemainingMs: cooldown.cooldownRemainingMs,
+    }
   }
 
   if (!validMonth) {
@@ -81,14 +99,13 @@ export function MonthlyExpensesPage() {
 
   const previous = shiftYearMonth(yearMonth, -1)
   const next = shiftYearMonth(yearMonth, 1)
-  const current = currentYearMonth()
   const maxAmount = Math.max(0, ...items.map((item) => item.amount))
 
   return (
     <div className={styles.page}>
       <header className={styles.pageHeader}>
         <h1>月別支出</h1>
-        <Button variant="secondary" disabled={isFetching || isCoolingDown} onClick={reloadAll}>{isFetching ? '再読み込み中…' : '再読み込み'}</Button>
+        <ReloadButton reload={reloadControl(reloadAll)} />
       </header>
 
       <nav className={styles.monthNav} aria-label="表示月">
@@ -97,30 +114,30 @@ export function MonthlyExpensesPage() {
           <label>表示する月<input className="field-control" type="month" value={yearMonth} onChange={(event) => moveTo(event.target.value)} /></label>
           <Button variant="secondary" aria-label={`${yearMonthLabel(next)}を表示`} onClick={() => moveTo(next)}>翌月 ›</Button>
         </div>
-        <Button variant="secondary" disabled={yearMonth === current} onClick={() => moveTo(current)}>今月</Button>
       </nav>
 
       {(summaries.isRefetchError || expenses.isRefetchError) && (summary || items.length > 0) && <p className={styles.warning} role="alert">更新できませんでした。前回取得した内容です。</p>}
 
       {bothFailed ? (
-        <ErrorNotice message="月別支出を読み込めませんでした。" action="再読み込み" onRetry={() => void reloadAll()} />
+        <ErrorNotice message="月別支出を読み込めませんでした。" action="再読み込み" reload={reloadControl(reloadAll)} />
       ) : summaries.isError && !summaries.data ? (
-        <ErrorNotice message="月合計を取得できませんでした。" action="月合計を再読み込み" onRetry={() => void summaries.refetch()} />
+        <ErrorNotice message="月合計を取得できませんでした。" action="月合計を再読み込み" reload={reloadControl(reloadSummaries)} />
       ) : summary ? (
         <section className={styles.total} aria-labelledby="monthly-total-heading">
           <div className={styles.totalRow}><h2 id="monthly-total-heading">月合計（計上額）</h2><strong className="amount">{formatYen(summary.total_recorded_amount)}</strong></div>
           <p>支出 {summary.expense_count}件 / 明細 {summary.detail_count}件</p>
+          <p>集計更新：{formatUpdatedAt(summary.updated_at)}</p>
           {summary.total_recorded_amount < 0 && <p>返金などの調整により、今月の計上額はマイナスです。</p>}
         </section>
       ) : null}
 
       {!bothFailed && (expenses.isError && !expenses.data ? (
-        <ErrorNotice message="明細を読み込めませんでした。" action="明細を再読み込み" onRetry={() => void expenses.refetch()} />
+        <ErrorNotice message="明細を読み込めませんでした。" action="明細を再読み込み" reload={reloadControl(reloadExpenses)} />
       ) : expenses.isPending ? <SpinnerBlock label="支出明細を読み込み中" /> : isEmpty ? (
         <section className={styles.empty}><h2>この月の支出はまだありません</h2><p>レシートを取り込むと、ここで月ごとの支出を確認できます。</p><Link to="/upload">レシートを取り込む ›</Link></section>
       ) : (
         <>
-          {isInconsistent && <div className={styles.warning} role="alert"><p>月合計と明細の情報が揃っていません。</p><Button variant="secondary" onClick={reloadAll}>再読み込み</Button></div>}
+          {isInconsistent && <div className={styles.warning} role="alert"><p>月合計と明細の情報が揃っていません。</p><ReloadButton reload={reloadControl(reloadAll)} /></div>}
           <section className={styles.breakdown} aria-labelledby="category-heading">
             <div className={styles.sectionHeading}><div><h2 id="category-heading">カテゴリ別内訳</h2><p>明細合計 <strong className="amount">{formatYen(breakdown.total)}</strong></p></div></div>
             <div className={styles.breakdownGrid}>

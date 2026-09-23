@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { formatYen } from '@/shared/lib/formatYen'
-import { Button } from '@/shared/ui/Button'
+import { useReloadCooldown } from '@/shared/hooks/useReloadCooldown'
+import { ReloadButton, type ReloadControl } from '@/shared/ui/ReloadButton'
 import { SpinnerBlock } from '@/shared/ui/Spinner'
 import { useMonthlySummaries } from '../hooks/useMonthlySummaries'
 import {
@@ -9,7 +10,6 @@ import {
   categoryRows,
   currentYearMonth,
   detailTotal,
-  formatUpdatedAt,
   monthsBetween,
   monthsEndingAt,
   shiftYearMonth,
@@ -114,11 +114,12 @@ function SummaryGraph({
                   ))
                   }</button>
                 ) : (
-                  <Link
-                    className={styles.recordedLink}
-                    to={`/months/${month}`}
-                    onClick={onOpenMonth}
-                    aria-label={`${yearMonthLabel(month)}、計上額${formatYen(summary.total_recorded_amount)}、月別支出を見る`}
+                  <button
+                    type="button"
+                    className={styles.recordedButton}
+                    onClick={() => onSelectReferenceMonth(month)}
+                    aria-label={`${yearMonthLabel(month)}のカテゴリ別内訳を表示（計上額${formatYen(summary.total_recorded_amount)}）`}
+                    aria-pressed={referenceMonth === month}
                   >
                     <span
                       className={styles.recordedBar}
@@ -127,7 +128,7 @@ function SummaryGraph({
                         (Math.abs(summary.total_recorded_amount) / scale.range) * 100,
                       )}
                     />
-                  </Link>
+                  </button>
                 )}
               </div>
               <Link className={styles.monthLink} to={`/months/${month}`} onClick={onOpenMonth}>{shortMonthLabel(month, previousMonth)}</Link>
@@ -141,12 +142,12 @@ function SummaryGraph({
   )
 }
 
-function InitialError({ onRetry }: { onRetry: () => void }) {
+function InitialError({ reload }: { reload: ReloadControl }) {
   return (
     <section className={styles.error} role="alert">
       <h2>月ごとの支出を取得できませんでした</h2>
       <p>通信状態を確認して、もう一度お試しください。</p>
-      <Button variant="secondary" onClick={onRetry}>再試行</Button>
+      <ReloadButton reload={reload} idleLabel="再試行" className={styles.dashboardReload} />
     </section>
   )
 }
@@ -154,8 +155,7 @@ function InitialError({ onRetry }: { onRetry: () => void }) {
 export function DashboardPage() {
   const query = useMonthlySummaries()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [isCoolingDown, setIsCoolingDown] = useState(false)
-  const cooldownTimer = useRef<number | undefined>(undefined)
+  const cooldown = useReloadCooldown()
   const didRestoreScroll = useRef(false)
   const scrollStorageKey = `dashboard-scroll:${searchParams.toString()}`
   const nowMonth = currentYearMonth()
@@ -164,8 +164,6 @@ export function DashboardPage() {
     [query.data],
   )
   const summariesByMonth = useMemo(() => new Map(summaries.map((summary) => [summary.year_month, summary])), [summaries])
-
-  useEffect(() => () => window.clearTimeout(cooldownTimer.current), [])
 
   useEffect(() => {
     if (!query.isSuccess || didRestoreScroll.current) return
@@ -195,9 +193,8 @@ export function DashboardPage() {
   const referenceMonth = requestedReferenceMonth && period.includes(requestedReferenceMonth)
     ? requestedReferenceMonth : (referenceCandidates.at(-1) ?? endMonth)
   const referenceSummary = summariesByMonth.get(referenceMonth)
-  const selectableMonths = monthsBetween(earliestSelectableMonth, latestSelectableMonth)
-  const canMovePrevious = Boolean(oldestMonth && shiftYearMonth(endMonth, -6) >= oldestMonth)
-  const canMoveNext = endMonth < latestSelectableMonth
+  const selectableEndMonths = monthsBetween(earliestSelectableMonth, latestSelectableMonth)
+  const selectableStartMonths = monthsBetween(shiftYearMonth(earliestSelectableMonth, -5), shiftYearMonth(latestSelectableMonth, -5))
 
   function updateParams(values: { end?: string; reference?: string; mode?: ChartMode }) {
     const next = new URLSearchParams(searchParams)
@@ -215,22 +212,32 @@ export function DashboardPage() {
     updateParams({ end: nextEndMonth, reference: nextReference })
   }
 
+  function selectStartMonth(nextStartMonth: string) {
+    selectEndMonth(shiftYearMonth(nextStartMonth, 5))
+  }
+
   function rememberScrollPosition() {
     window.sessionStorage.setItem(scrollStorageKey, String(window.scrollY))
   }
 
   async function reload() {
-    setIsCoolingDown(true)
-    window.clearTimeout(cooldownTimer.current)
-    cooldownTimer.current = window.setTimeout(() => setIsCoolingDown(false), 5000)
+    if (!cooldown.startCooldown()) return
     await query.refetch()
+  }
+
+  const reloadControl: ReloadControl = {
+    reload: () => void reload(),
+    isDisabled: query.isFetching || cooldown.isCoolingDown,
+    isFetching: query.isFetching,
+    isCoolingDown: cooldown.isCoolingDown,
+    cooldownRemainingMs: cooldown.cooldownRemainingMs,
   }
 
   if (query.isError && !query.data) {
     return (
       <div className={styles.page}>
         <header className={styles.pageHeader}><div><h1>ダッシュボード</h1><p>月ごとの支出を振り返る</p></div></header>
-        <InitialError onRetry={() => void reload()} />
+        <InitialError reload={reloadControl} />
       </div>
     )
   }
@@ -243,7 +250,7 @@ export function DashboardPage() {
           <h2>まだ月ごとの集計がありません</h2>
           <p>レシートを取り込むと、登録された支出を月ごとに確認できます。</p>
           <div className={styles.emptyActions}><Link to="/upload">レシートを取り込む ›</Link><Link to="/analysis-requests">取り込み済みの場合は、解析履歴を確認 ›</Link></div>
-          <Button variant="secondary" disabled={query.isFetching || isCoolingDown} onClick={() => void reload()}>{query.isFetching ? '再読み込み中…' : '再読み込み'}</Button>
+          <ReloadButton reload={reloadControl} className={styles.dashboardReload} />
         </section>
       </div>
     )
@@ -256,26 +263,25 @@ export function DashboardPage() {
     <div className={styles.page}>
       <header className={styles.pageHeader}>
         <div><h1>ダッシュボード</h1><p>月ごとの支出を振り返る</p></div>
-        <Link className={styles.uploadLink} to="/upload">レシートを取り込む ›</Link>
+        <Link className={styles.uploadLink} to="/upload">レシートを取り込む</Link>
       </header>
 
       <section className={styles.periodControls} aria-labelledby="period-heading">
         <h2 id="period-heading" className={styles.visuallyHidden}>表示期間</h2>
-        <label>表示終了月
-          <select value={endMonth} onChange={(event) => selectEndMonth(event.target.value)}>
-            {selectableMonths.map((month) => <option key={month} value={month}>{yearMonthLabel(month)}{month > nowMonth ? '（未来月）' : ''}</option>)}
+        <label>表示開始月
+          <select value={period[0]} onChange={(event) => selectStartMonth(event.target.value)}>
+            {selectableStartMonths.map((month) => <option key={month} value={month}>{yearMonthLabel(month)}</option>)}
           </select>
         </label>
-        <div className={styles.periodButtons}>
-          <Button variant="secondary" disabled={!canMovePrevious} onClick={() => selectEndMonth(shiftYearMonth(endMonth, -6))}>‹ 前の6か月</Button>
-          <Button variant="secondary" disabled={!canMoveNext} onClick={() => selectEndMonth(shiftYearMonth(endMonth, 6) > latestSelectableMonth ? latestSelectableMonth : shiftYearMonth(endMonth, 6))}>次の6か月 ›</Button>
-        </div>
-        <p>表示期間：{yearMonthLabel(period[0])}〜{yearMonthLabel(period[5])}</p>
-        <Button variant="secondary" disabled={query.isFetching || isCoolingDown} onClick={() => void reload()}>{query.isFetching ? '再読み込み中…' : '再読み込み'}</Button>
-        {!canMovePrevious && <small>これより前の集計はありません。</small>}
+        <label>表示終了月
+          <select value={endMonth} onChange={(event) => selectEndMonth(event.target.value)}>
+            {selectableEndMonths.map((month) => <option key={month} value={month}>{yearMonthLabel(month)}{month > nowMonth ? '（未来月）' : ''}</option>)}
+          </select>
+        </label>
+        <ReloadButton reload={reloadControl} className={styles.dashboardReload} />
       </section>
 
-      {query.isRefetchError && <div className={styles.warning} role="alert"><p>更新できませんでした。前回取得した内容を表示しています。</p><Button variant="secondary" onClick={() => void reload()}>再試行</Button></div>}
+      {query.isRefetchError && <div className={styles.warning} role="alert"><p>更新できませんでした。前回取得した内容を表示しています。</p><ReloadButton reload={reloadControl} idleLabel="再試行" className={styles.dashboardReload} /></div>}
 
       <section className={styles.trend} aria-labelledby="trend-heading">
         <div className={styles.sectionHeading}>
@@ -315,7 +321,6 @@ export function DashboardPage() {
               <div><dt>対象月の計上額</dt><dd className="amount">{formatYen(referenceSummary.total_recorded_amount)}</dd></div>
               <div><dt>前月からの変化</dt><dd className="amount">{previousReference ? signedYen(referenceSummary.total_recorded_amount - previousReference.total_recorded_amount) : '比較できません'}</dd></div>
             </dl>
-            <p className={styles.updatedAt}>集計更新：{formatUpdatedAt(referenceSummary.updated_at)}</p>
           </>
         )}
       </section>

@@ -201,6 +201,8 @@ Closes #68(親: #67)
 
 ## マージ
 
+- `main` を含む `deploy/*` 以外のブランチへは、PR の CI が通っても自動でマージしない。対象 PR と検証結果を提示し、そのマージを明示的に指示された場合だけ実行する。「PR を作る」「実装する」という依頼はマージの許可とみなさない。
+- 指定された `deploy/*` へのマージ・push は実行してよい。PR の base が `main` でも、`deploy/*` への反映は PR を `main` にマージする許可を意味しない。
 - GitHub 上の「Create a merge commit」で行う(squash / rebase は使わない)。マージコミットは GitHub 既定の `Merge pull request #69 from OWNER/branch` に PR タイトルが本文として付く形のままにし、手で書き換えない。
 - Issue は PR の `Closes` で自動的に閉じる。閉じた Issue に補足が必要なら、閉じる前にコメントで「何をどこまでやったか」「残りはどの Issue か」を書く。
 - マージ後はローカルの `main` を更新し、作業ブランチを削除する。
@@ -209,8 +211,8 @@ Closes #68(親: #67)
 
 `docs/ci_cd/codepipeline-design.md` のとおり、stage ごとの deploy ブランチ(`deploy/dev` / `deploy/stg` / `deploy/prd`)を進めることで配布する。
 
-- 通常は `main` を `deploy/dev` に merge する。
-- マージ前に dev で動作確認したい場合は、作業ブランチを `deploy/dev` に merge して push する。`deploy/dev` に `main` に無い独自コミットが無いことを先に確認する。
+- `main` にマージ済みなら、`main` を指定された deploy ブランチに merge する。
+- `main` のマージ前に dev で動作確認したい場合は、作業ブランチを `deploy/dev` に merge して push する。`deploy/dev` に `main` に無い独自コミットが無いことを先に確認する。
 
 ```sh
 git fetch origin
