@@ -25,15 +25,16 @@ function defaultValues(data: GetExpenseResponse): UpdateExpenseRequest {
 }
 
 function DetailList({ details }: { details: ExpenseDetail[] }) {
-  const total = details.reduce((sum, detail) => sum + detail.amount, 0)
+  const total = details.reduce((sum, detail) => sum + (detail.tax_included_amount ?? detail.amount), 0)
+  const unconfirmed = details.filter((detail) => detail.tax_included_amount === undefined).length
   return (
     <section className={styles.detailsSection} aria-labelledby="detail-heading">
       <h2 id="detail-heading">支出明細 <span>{details.length}件</span></h2>
       <ol className={styles.detailList}>
-        {details.map((detail) => <li key={detail.detail_id}><div><strong>{detail.name}</strong><span>{categoryLabel(detail.category)} / 数量 {detail.quantity}</span><SourceBadge source={detail.source} isEdited={detail.is_edited} /></div><strong className="amount">{formatYen(detail.amount)}</strong></li>)}
+        {details.map((detail) => <li key={detail.detail_id}><div><strong>{detail.name}</strong><span>{categoryLabel(detail.category)} / 数量 {detail.quantity}</span><span>{detail.tax_included_amount === undefined ? '印字額・税込み未確定' : `税込み明細額（印字額 ${formatYen(detail.amount)}）`}{detail.tax_rate !== undefined ? ` / 税率 ${detail.tax_rate}%` : ''}{detail.tax_mode === 'external' && detail.tax_included_amount !== undefined ? ` / 配分税額 ${formatYen(detail.tax_included_amount - detail.amount)}` : ''}</span><SourceBadge source={detail.source} isEdited={detail.is_edited} /></div><strong className="amount">{formatYen(detail.tax_included_amount ?? detail.amount)}</strong></li>)}
       </ol>
       <div className={styles.detailTotal}><span>明細合計</span><strong className="amount">{formatYen(total)}</strong></div>
-      <p className={styles.help}>明細合計と読取金額は、店舗の値引きや税などにより異なる場合があります。</p>
+      <p className={styles.help}>{unconfirmed > 0 ? `税込み額未確定の明細 ${unconfirmed}件は印字額で含めています。` : ''}明細合計と最終支払合計は、店舗の値引きや読取漏れなどにより異なる場合があります。</p>
     </section>
   )
 }
@@ -106,7 +107,7 @@ export function ExpenseDetailContent({ expenseId }: Props) {
       <div className={styles.layout}>
         <section className={styles.amountSummary} aria-label="支出金額">
           <div><span>{isEditing ? '保存後の計上額' : '計上額'}</span><strong className="amount">{recordedAmount === null ? '入力中' : formatYen(recordedAmount)}</strong></div>
-          <p><span>読取金額 {formatYen(data.expense.read_amount)}</span><span>＋ 調整額 {recordedAmount === null ? '入力中' : formatYen(adjustment)}</span></p>
+          <p><span>最終支払合計（読取金額） {formatYen(data.expense.read_amount)}</span><span>＋ 利用者調整額 {recordedAmount === null ? '入力中' : formatYen(adjustment)}</span></p>
           {recordedAmount !== null && recordedAmount < 0 && <small>返金などにより、今月の支出を減らす金額です。</small>}
         </section>
         <aside className={styles.receipt}><h2>レシート画像</h2><ReceiptImage expenseId={expenseId} initialUrl={data.expense.image_url} /></aside>
@@ -151,7 +152,7 @@ export function ExpenseDetailContent({ expenseId }: Props) {
                   <Button variant="secondary" disabled={fields.length >= 50} onClick={() => append({ detail_id: undefined, name: '', amount: 0, quantity: 1, category: 'unknown' })}>明細を追加</Button>
                 </section>
               </fieldset>
-              <div className={styles.detailTotal}><span>明細合計</span><strong className="amount">{formatYen(detailTotal)}</strong></div>
+              <div className={styles.detailTotal}><span>入力中の印字額合計</span><strong className="amount">{formatYen(detailTotal)}</strong></div>
               <p className={styles.help}>明細の修正だけでは計上額は変わりません。計上額も直す場合は、調整額を変更してください。</p>
               <div className={styles.saveBar}><span>{isDirty ? '未保存' : '変更なし'} / 計上額 {recordedAmount === null ? '入力中' : formatYen(recordedAmount)}</span><div><Button variant="secondary" disabled={mutation.isPending} onClick={() => isDirty ? setWantsCancel(true) : discard()}>キャンセル</Button><Button variant="primary" type="submit" disabled={!isDirty || mutation.isPending}>{mutation.isPending ? '保存中…' : '変更を保存'}</Button></div></div>
               </form>

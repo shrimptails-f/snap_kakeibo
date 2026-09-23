@@ -133,6 +133,33 @@ func TestAnalyzePersistsSelectedTotalEvidence(t *testing.T) {
 	}
 }
 
+func TestAnalyzeStoresConfirmedAndUnknownDetailAmounts(t *testing.T) {
+	t.Parallel()
+	f := newFixture()
+	f.analyzer.response.Reading = domain.ReceiptReading{
+		PurchaseDate:     ptr("2026-09-18"),
+		AmountCandidates: []domain.AmountCandidate{{Amount: 2206, Label: "お支払合計", Role: "final_total", Position: 9}},
+		TaxBreakdown:     []domain.TaxBreakdown{{Rate: ptr(int64(10)), TaxableAmount: ptr(int64(2006)), TaxAmount: ptr(int64(200)), Mode: "external"}},
+		Details:          []domain.ReadDetail{{Name: "商品", Amount: 2006, Quantity: 1, Category: "food", TaxRate: ptr(int64(10)), TaxMode: "external"}},
+	}
+	if _, err := f.build().Analyze(context.Background(), application.AnalyzeReceiptInput{Job: testJob}); err != nil {
+		t.Fatal(err)
+	}
+	detail := f.expenses.registered.Details()[0]
+	if detail.Amount().Yen() != 2006 || detail.TaxIncludedAmount() == nil || *detail.TaxIncludedAmount() != 2206 || detail.TaxAllocation() != "receipt_tax_proportional_v1" {
+		t.Errorf("detail = %+v", detail)
+	}
+	f = newFixture()
+	f.analyzer.response.Reading.Details[0].TaxMode = "unknown"
+	f.analyzer.response.Reading.TaxBreakdown = []domain.TaxBreakdown{{Rate: ptr(int64(8)), TaxableAmount: ptr(int64(100)), TaxAmount: ptr(int64(8)), Mode: "external"}}
+	if _, err := f.build().Analyze(context.Background(), application.AnalyzeReceiptInput{Job: testJob}); err != nil {
+		t.Fatal(err)
+	}
+	if f.expenses.registered.Details()[0].TaxIncludedAmount() != nil {
+		t.Error("unknown detail was converted")
+	}
+}
+
 func TestAnalyzeSkipsWhenRequestIsNotAnalyzable(t *testing.T) {
 	t.Parallel()
 	f := newFixture()

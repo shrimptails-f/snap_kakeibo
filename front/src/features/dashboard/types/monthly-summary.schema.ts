@@ -21,6 +21,7 @@ export const monthlySummarySchema = z.object({
   total_recorded_amount: z.number().int(),
   expense_count: z.number().int().nonnegative(),
   detail_count: z.number().int().nonnegative(),
+  confirmed_detail_count: z.number().int().nonnegative().optional(),
   category_totals: z.record(dashboardCategorySchema, z.number().int()),
   updated_at: z.string(),
 })

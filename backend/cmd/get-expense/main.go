@@ -38,14 +38,17 @@ type expenseResponse struct {
 }
 
 type detailResponse struct {
-	DetailID       string `json:"detail_id"`
-	Name           string `json:"name"`
-	Category       string `json:"category"`
-	CategorySource string `json:"category_source"`
-	Amount         int64  `json:"amount"`
-	Quantity       int64  `json:"quantity"`
-	Source         string `json:"source"`
-	IsEdited       bool   `json:"is_edited"`
+	DetailID          string `json:"detail_id"`
+	Name              string `json:"name"`
+	Category          string `json:"category"`
+	CategorySource    string `json:"category_source"`
+	Amount            int64  `json:"amount"`
+	TaxIncludedAmount *int64 `json:"tax_included_amount,omitempty"`
+	TaxRate           *int64 `json:"tax_rate,omitempty"`
+	TaxMode           string `json:"tax_mode,omitempty"`
+	Quantity          int64  `json:"quantity"`
+	Source            string `json:"source"`
+	IsEdited          bool   `json:"is_edited"`
 }
 
 type response struct {
@@ -124,7 +127,7 @@ func toResponse(e domain.Expense, imageURL string) response {
 	source := e.Details()
 	details := make([]detailResponse, 0, len(source))
 	for _, d := range source {
-		details = append(details, detailResponse{DetailID: d.ID().String(), Name: d.Name(), Category: d.Category().String(), CategorySource: d.CategorySource().String(), Amount: d.Amount().Yen(), Quantity: d.Quantity().Int64(), Source: d.Source().String(), IsEdited: d.Edited()})
+		details = append(details, detailResponse{DetailID: d.ID().String(), Name: d.Name(), Category: d.Category().String(), CategorySource: d.CategorySource().String(), Amount: d.Amount().Yen(), TaxIncludedAmount: d.TaxIncludedAmount(), TaxRate: d.TaxRate(), TaxMode: d.TaxMode(), Quantity: d.Quantity().Int64(), Source: d.Source().String(), IsEdited: d.Edited()})
 	}
 	return response{
 		Expense: expenseResponse{

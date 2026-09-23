@@ -10,6 +10,7 @@ export const monthlySummarySchema = z.object({
   total_recorded_amount: z.number().int(),
   expense_count: z.number().int().nonnegative(),
   detail_count: z.number().int().nonnegative(),
+  confirmed_detail_count: z.number().int().nonnegative().optional(),
   category_totals: z.record(categorySchema, z.number().int()),
   updated_at: z.string(),
 })
@@ -19,6 +20,8 @@ export const getMonthlySummariesResponseSchema = z.object({ monthly_summaries: z
 export const monthlyExpenseItemSchema = z.object({
   detail_id: z.string(), expense_id: z.string(), name: z.string(), category: categorySchema,
   amount: z.number().int(), quantity: z.number().int().positive(), source: expenseSourceSchema,
+  tax_included_amount: z.number().int().optional(), tax_rate: z.number().int().optional(),
+  tax_mode: z.enum(['included', 'external', 'mixed', 'unknown']).optional(),
   is_edited: z.boolean(), store_name: z.string(), purchase_date: purchaseDateSchema,
 })
 

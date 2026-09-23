@@ -22,6 +22,9 @@
 | 支出 | 購入、取引、請求、返金などのうち、最終的に家計へ金額上の影響を与えるもの | `Expense` / `expense_id` / `expenses` テーブル、`GET /expenses/{expense_id}` |
 | 支出明細 | 支出に含まれる商品またはサービスの1行 | `ExpenseDetail` / `detail_id` / `expense_details` テーブル |
 | 読取金額 | レシートに記載された、店舗側の値引きや税を反映済みの最終的な支払合計 | `ReadAmount` / `read_amount` |
+| 商品行の印字額 | レシートの商品行に印字された数量込みの金額。外税では税抜き、内税では税込みになり得る | `ExpenseDetail.amount` / `expense_details.amount`。編集時も元の意味を維持する |
+| 税込み明細額 | 商品行の内税が確認できる場合の印字額、または商品別税率と印字税額の配分根拠がある外税行の印字額と配分税額の合計 | `expense_details.tax_included_amount`。未確定なら属性なし |
+| 店舗値引き | 店舗が最終支払合計に反映した値引き。商品行と税率別対象額の照合に使うが、明細へ自動配分しない | `analysis_evidence.candidates` の値引き候補 |
 | 調整額 | 読取金額に対して利用者が家計簿上で加減する符号付き金額 | `AdjustmentAmount` / `adjustment_amount`。減額は負数、増額は正数 |
 | 計上額 | 月次集計へ反映する支出の金額 | `RecordedAmount` / `recorded_amount`。`読取金額 + 調整額` |
 | 購入日 | 商品またはサービスを購入した暦日 | `PurchaseDate` / `purchase_date`。時刻を含まない |
@@ -29,6 +32,8 @@
 | カテゴリ | 支出明細の用途分類 | `Category` / `category`。食費、日用品、医療などの定義済み分類 |
 | カテゴリ決定元 | カテゴリをAIと利用者のどちらが最後に決めたか | `CategorySource` / `category_source` |
 | 月次集計 | ある利用者の対象月に属する支出を集計した結果 | `MonthlySummary` / `monthly_summaries`。計上額合計(`total_recorded_amount`)、支出数(`expense_count`)、明細数(`detail_count`)、カテゴリ別金額を含む。家計簿コンテキストの読み取りモデル |
+
+カテゴリ別金額は、確定した行の税込み明細額と未確定行の印字額を合計する。`confirmed_detail_count` と `detail_count` の差で未確定件数を示す。未確定行がある月の構成比は、税込み構成比と誤認させないため表示しない。計上額と明細合計の差は店舗値引き、利用者調整額、読取漏れなどを含み得るため、税や調整額と決めつけない。
 | 月次再構築 | 保存済みの支出と支出明細から月次集計を作り直す操作 | `RebuildMonthlySummary`、`POST /monthly-summaries/{yyyy-MM}/rebuild`。集計の復旧および支出編集の反映に使用する |
 
 ## 解析依頼の状態

@@ -209,7 +209,7 @@ python3 -m http.server 4173 --directory docs/screens/expense-detail
 | 数量 | 必須。1〜999の整数。数量の変更で明細金額・計上額を自動更新しない |
 | カテゴリ | 必須。[用語集](../../ddd/ubiquitous-language.md#カテゴリ)の全11分類を日本語表示する。分類不能も有効な選択肢 |
 
-明細合計は `details[].amount` の合計。読取金額との差だけではエラーにせず、保存を妨げない。カテゴリ別内訳は明細金額に基づく補助情報であり、調整額を各明細に自動配分しない。
+閲覧時の明細合計は、確定した行では `details[].tax_included_amount`、未確定行では `details[].amount` の合計。各行に税込み明細額または「印字額・税込み未確定」と元の印字額を明示し、確認できた商品別税率を併記し、外税で換算できた行には `tax_included_amount - amount` を「配分税額」として示す。編集フォームの入力中合計は印字額の合計と明記する。読取金額との差だけではエラーにせず、保存を妨げない。調整額や店舗値引きを各明細に自動配分しない。印字額を変更した行は以前の税込み根拠を破棄する。
 
 明細は編集画面で追加・削除できる。保存後は1〜50件とし、最後の1件は削除できず、50件に達したら追加できない。新規行は商品名・金額・数量・カテゴリを入力し、保存後は「編集済み」と表示する。追加・削除も未保存の変更として扱う。
 
@@ -331,6 +331,8 @@ read_amount + adjustment_amount = recorded_amount
 
 ### GET /expenses/{expense_id}
 
+`details[].amount` は印字額として維持する。`tax_included_amount` と `tax_rate` は根拠を確認できたときだけ返す。`tax_mode` は `included` / `external` / `mixed` / `unknown` で、旧データでは空の場合がある。税込み額がない行を税込みとして表示しない。
+
 支出単位の詳細と支出明細を取得する。利用者の支出に `expense_id` が無ければ `404`(他人の支出も同じ)。
 
 Response:
@@ -358,6 +360,9 @@ Response:
       "category": "food",
       "category_source": "AI",
       "amount": 281,
+      "tax_included_amount": 303,
+      "tax_rate": 8,
+      "tax_mode": "external",
       "quantity": 1,
       "source": "AI",
       "is_edited": false

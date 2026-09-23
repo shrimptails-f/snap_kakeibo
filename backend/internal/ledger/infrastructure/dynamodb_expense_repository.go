@@ -4,6 +4,7 @@ package infrastructure
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	common "snap_kakeibo/backend/internal/common/domain"
@@ -35,17 +36,21 @@ type expenseItem struct {
 
 // expenseDetailItem は expense_details の項目のうち支出明細の復元に使う属性。
 type expenseDetailItem struct {
-	ExpenseID      string `dynamodbav:"expense_id"`
-	DetailID       string `dynamodbav:"detail_id"`
-	Name           string `dynamodbav:"name"`
-	Category       string `dynamodbav:"category"`
-	CategorySource string `dynamodbav:"category_source"`
-	Amount         int64  `dynamodbav:"amount"`
-	Quantity       int64  `dynamodbav:"quantity"`
-	Source         string `dynamodbav:"source"`
-	IsEdited       bool   `dynamodbav:"is_edited"`
-	StoreName      string `dynamodbav:"store_name"`
-	PurchaseDate   string `dynamodbav:"purchase_date"`
+	ExpenseID         string `dynamodbav:"expense_id"`
+	DetailID          string `dynamodbav:"detail_id"`
+	Name              string `dynamodbav:"name"`
+	Category          string `dynamodbav:"category"`
+	CategorySource    string `dynamodbav:"category_source"`
+	Amount            int64  `dynamodbav:"amount"`
+	TaxIncludedAmount *int64 `dynamodbav:"tax_included_amount"`
+	TaxRate           *int64 `dynamodbav:"tax_rate"`
+	TaxMode           string `dynamodbav:"tax_mode"`
+	TaxAllocation     string `dynamodbav:"tax_allocation"`
+	Quantity          int64  `dynamodbav:"quantity"`
+	Source            string `dynamodbav:"source"`
+	IsEdited          bool   `dynamodbav:"is_edited"`
+	StoreName         string `dynamodbav:"store_name"`
+	PurchaseDate      string `dynamodbav:"purchase_date"`
 }
 
 // DynamoDBExpenseRepository は expenses と expense_details から支出集約を復元する。
@@ -98,7 +103,7 @@ func (r DynamoDBExpenseRepository) ListByMonth(ctx context.Context, userID commo
 			}
 			items = append(items, application.MonthlyExpenseItem{
 				DetailID: detailID, ExpenseID: expenseID, Name: record.Name, Category: category,
-				Amount: record.Amount, Quantity: record.Quantity, Source: source, IsEdited: record.IsEdited,
+				Amount: record.Amount, TaxIncludedAmount: record.TaxIncludedAmount, TaxRate: record.TaxRate, TaxMode: record.TaxMode, Quantity: record.Quantity, Source: source, IsEdited: record.IsEdited,
 				StoreName: record.StoreName, PurchaseDate: record.PurchaseDate,
 			})
 		}
@@ -234,9 +239,10 @@ func (r DynamoDBExpenseRepository) Save(ctx context.Context, expense domain.Expe
 	for _, detail := range expense.Details() {
 		current[detail.ID()] = struct{}{}
 		values := map[string]ddbtypes.AttributeValue{
-			":gpk": stringValue(UserMonthPK(userID, expense.PurchaseDate().YearMonth().String())), ":gsk": stringValue(DetailMonthSK(detail.Amount().Yen(), expense.PurchaseDate().String(), detail.ID().String())),
+			":gpk": stringValue(UserMonthPK(userID, expense.PurchaseDate().YearMonth().String())), ":gsk": stringValue(DetailMonthSK(detail.ReportingAmount(), expense.PurchaseDate().String(), detail.ID().String())),
 			":name": stringValue(detail.Name()), ":category": stringValue(detail.Category().String()), ":categorySource": stringValue(detail.CategorySource().String()),
 			":amount": numberValue(detail.Amount().Yen()), ":quantity": numberValue(detail.Quantity().Int64()), ":source": stringValue(detail.Source().String()),
+			":taxMode": stringValue(detail.TaxMode()), ":taxAllocation": stringValue(detail.TaxAllocation()),
 			":store": stringValue(expense.StoreName()), ":date": stringValue(expense.PurchaseDate().String()), ":month": stringValue(expense.PurchaseDate().YearMonth().String()),
 			":edited": boolValue(detail.Edited()), ":updated": stringValue(timestamp),
 		}
@@ -244,11 +250,12 @@ func (r DynamoDBExpenseRepository) Save(ctx context.Context, expense domain.Expe
 			item, err := attributevalue.MarshalMap(map[string]any{
 				"PK": DetailPK(userID, expenseID), "SK": DetailSK(detail.ID().String()),
 				"GSI1PK": UserMonthPK(userID, expense.PurchaseDate().YearMonth().String()),
-				"GSI1SK": DetailMonthSK(detail.Amount().Yen(), expense.PurchaseDate().String(), detail.ID().String()),
+				"GSI1SK": DetailMonthSK(detail.ReportingAmount(), expense.PurchaseDate().String(), detail.ID().String()),
 				"type":   "EXPENSE_DETAIL", "detail_id": detail.ID().String(), "expense_id": expenseID,
 				"analysis_request_id": expense.SourceRequestID().String(), "name": detail.Name(),
 				"category": detail.Category().String(), "category_source": detail.CategorySource().String(),
 				"amount": detail.Amount().Yen(), "quantity": detail.Quantity().Int64(),
+				"tax_included_amount": detail.TaxIncludedAmount(), "tax_rate": detail.TaxRate(), "tax_mode": detail.TaxMode(), "tax_allocation": detail.TaxAllocation(),
 				"source": detail.Source().String(), "store_name": expense.StoreName(),
 				"purchase_date": expense.PurchaseDate().String(), "year_month": expense.PurchaseDate().YearMonth().String(),
 				"is_edited": detail.Edited(), "created_at": timestamp, "updated_at": timestamp,
@@ -262,9 +269,26 @@ func (r DynamoDBExpenseRepository) Save(ctx context.Context, expense domain.Expe
 			}})
 			continue
 		}
+		updateExpression := "SET GSI1PK=:gpk,GSI1SK=:gsk,#name=:name,category=:category,category_source=:categorySource,amount=:amount,quantity=:quantity,#source=:source,store_name=:store,purchase_date=:date,year_month=:month,is_edited=:edited,updated_at=:updated,tax_mode=:taxMode,tax_allocation=:taxAllocation"
+		remove := []string{}
+		if detail.TaxIncludedAmount() != nil {
+			values[":taxIncluded"] = numberValue(*detail.TaxIncludedAmount())
+			updateExpression += ",tax_included_amount=:taxIncluded"
+		} else {
+			remove = append(remove, "tax_included_amount")
+		}
+		if detail.TaxRate() != nil {
+			values[":taxRate"] = numberValue(*detail.TaxRate())
+			updateExpression += ",tax_rate=:taxRate"
+		} else {
+			remove = append(remove, "tax_rate")
+		}
+		if len(remove) > 0 {
+			updateExpression += " REMOVE " + strings.Join(remove, ",")
+		}
 		items = append(items, ddbtypes.TransactWriteItem{Update: &ddbtypes.Update{
 			TableName: aws.String(r.ExpenseDetails.Name()), Key: map[string]ddbtypes.AttributeValue{"PK": stringValue(DetailPK(userID, expenseID)), "SK": stringValue(DetailSK(detail.ID().String()))},
-			UpdateExpression:    aws.String("SET GSI1PK=:gpk,GSI1SK=:gsk,#name=:name,category=:category,category_source=:categorySource,amount=:amount,quantity=:quantity,#source=:source,store_name=:store,purchase_date=:date,year_month=:month,is_edited=:edited,updated_at=:updated"),
+			UpdateExpression:    aws.String(updateExpression),
 			ConditionExpression: aws.String("attribute_exists(PK)"), ExpressionAttributeNames: map[string]string{"#name": "name", "#source": "source"}, ExpressionAttributeValues: values,
 		}})
 	}
@@ -344,7 +368,14 @@ func restoreDetail(item expenseDetailItem) (domain.ExpenseDetail, error) {
 	if err != nil {
 		return domain.ExpenseDetail{}, err
 	}
-	return domain.RestoreExpenseDetail(id, item.Name, amount, quantity, category, source, recordSource, item.IsEdited)
+	detail, err := domain.RestoreExpenseDetail(id, item.Name, amount, quantity, category, source, recordSource, item.IsEdited)
+	if err != nil {
+		return domain.ExpenseDetail{}, err
+	}
+	if err := detail.SetTaxEvidence(item.TaxRate, item.TaxMode, item.TaxIncludedAmount, item.TaxAllocation); err != nil {
+		return domain.ExpenseDetail{}, err
+	}
+	return detail, nil
 }
 
 func stringValue(v string) ddbtypes.AttributeValue { return &ddbtypes.AttributeValueMemberS{Value: v} }

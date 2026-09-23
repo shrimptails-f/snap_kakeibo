@@ -96,7 +96,8 @@ func ValidateReading(r ReceiptReading, now time.Time) (AnalysisResult, *FailureR
 		storeName = truncate(*r.StoreName, maxStoreNameRunes)
 	}
 	details := make([]AnalyzedDetail, 0, len(r.Details))
-	for _, d := range r.Details {
+	retainedTaxes := make([]DetailTax, 0, len(r.Details))
+	for index, d := range r.Details {
 		amount, amountErr := common.NewDetailAmount(d.Amount)
 		quantity, quantityErr := common.NewQuantity(d.Quantity)
 		if amountErr != nil || quantityErr != nil {
@@ -115,7 +116,9 @@ func ValidateReading(r ReceiptReading, now time.Time) (AnalysisResult, *FailureR
 			return AnalysisResult{}, ptr(failure(FailureInvalidAmount, "明細の金額または数量が有効な範囲ではありません"))
 		}
 		details = append(details, detail)
+		retainedTaxes = append(retainedTaxes, evidence.DetailTaxes[index])
 	}
+	evidence.DetailTaxes = retainedTaxes
 	result, err := NewAnalysisResult(storeName, purchaseDate, readAmount, details)
 	if err != nil {
 		return AnalysisResult{}, ptr(failure(FailureInternal, "解析結果を組み立てられませんでした"))

@@ -66,6 +66,10 @@ type expenseDetailRecord struct {
 	CreatedAt         string `dynamodbav:"created_at"`
 	UpdatedAt         string `dynamodbav:"updated_at"`
 	Amount            int64  `dynamodbav:"amount"`
+	TaxIncludedAmount *int64 `dynamodbav:"tax_included_amount,omitempty"`
+	TaxRate           *int64 `dynamodbav:"tax_rate,omitempty"`
+	TaxMode           string `dynamodbav:"tax_mode,omitempty"`
+	TaxAllocation     string `dynamodbav:"tax_allocation,omitempty"`
 	Quantity          int64  `dynamodbav:"quantity"`
 	IsEdited          bool   `dynamodbav:"is_edited"`
 }
@@ -144,9 +148,9 @@ func (r DynamoDBExpenseRegistrar) transactItems(job domain.AnalysisJob, expense 
 		detailID := d.ID().String()
 		detailItem, err := attributevalue.MarshalMap(expenseDetailRecord{
 			PK: DetailPK(userID, expenseID), SK: DetailSK(detailID),
-			GSI1PK: UserMonthPK(userID, month), GSI1SK: DetailMonthSK(d.Amount().Yen(), purchaseDate, detailID),
+			GSI1PK: UserMonthPK(userID, month), GSI1SK: DetailMonthSK(d.ReportingAmount(), purchaseDate, detailID),
 			Type: recordTypeExpenseDetail, DetailID: detailID, ExpenseID: expenseID, AnalysisRequestID: expense.SourceRequestID().String(),
-			Name: d.Name(), Category: d.Category().String(), CategorySource: d.CategorySource().String(), Amount: d.Amount().Yen(), Quantity: d.Quantity().Int64(), Source: sourceAI,
+			Name: d.Name(), Category: d.Category().String(), CategorySource: d.CategorySource().String(), Amount: d.Amount().Yen(), TaxIncludedAmount: d.TaxIncludedAmount(), TaxRate: d.TaxRate(), TaxMode: d.TaxMode(), TaxAllocation: d.TaxAllocation(), Quantity: d.Quantity().Int64(), Source: sourceAI,
 			StoreName: expense.StoreName(), PurchaseDate: purchaseDate, YearMonth: month, CreatedAt: timestamp, UpdatedAt: timestamp,
 		})
 		if err != nil {
@@ -163,15 +167,16 @@ func (r DynamoDBExpenseRegistrar) monthlySummaryItem(expense ledgerdomain.Expens
 	details := expense.Details()
 	names := map[string]string{"#type": "type"}
 	values := map[string]ddbtypes.AttributeValue{
-		":type":  stringValue(recordTypeMonthlySummary),
-		":user":  stringValue(expense.UserID().String()),
-		":month": stringValue(month),
-		":now":   stringValue(timestamp),
-		":total": numberValue(expense.RecordedAmount().Yen()),
-		":one":   numberValue(1),
-		":count": numberValue(int64(len(details))),
+		":type":      stringValue(recordTypeMonthlySummary),
+		":user":      stringValue(expense.UserID().String()),
+		":month":     stringValue(month),
+		":now":       stringValue(timestamp),
+		":total":     numberValue(expense.RecordedAmount().Yen()),
+		":one":       numberValue(1),
+		":count":     numberValue(int64(len(details))),
+		":confirmed": numberValue(confirmedDetailCount(details)),
 	}
-	adds := []string{"total_recorded_amount :total", "expense_count :one", "detail_count :count", "version :one"}
+	adds := []string{"total_recorded_amount :total", "expense_count :one", "detail_count :count", "confirmed_detail_count :confirmed", "version :one"}
 	i := 0
 	for category, total := range categoryTotals(details) {
 		i++
@@ -194,7 +199,17 @@ func (r DynamoDBExpenseRegistrar) monthlySummaryItem(expense ledgerdomain.Expens
 func categoryTotals(details []ledgerdomain.ExpenseDetail) map[string]int64 {
 	totals := map[string]int64{}
 	for _, d := range details {
-		totals[d.Category().String()] += d.Amount().Yen()
+		totals[d.Category().String()] += d.ReportingAmount()
 	}
 	return totals
+}
+
+func confirmedDetailCount(details []ledgerdomain.ExpenseDetail) int64 {
+	var count int64
+	for _, detail := range details {
+		if detail.TaxIncludedAmount() != nil {
+			count++
+		}
+	}
+	return count
 }

@@ -304,7 +304,7 @@ AI由来のカテゴリは参考値として扱い、ユーザーが修正した
 expenses.recorded_amount の合計
 
 カテゴリ別内訳
-expense_details.amount を category ごとに合計
+expense_details.tax_included_amount があればその値、なければ印字額の amount を category ごとに合計
 ```
 
 ### Primary Key
@@ -334,6 +334,7 @@ expense_details.amount を category ごとに合計
   "total_recorded_amount": 128500, // 月の計上額合計。expenses.recorded_amountの合計
   "expense_count": 25, // 月内の支出件数
   "detail_count": 120, // 月内の支出明細件数
+  "confirmed_detail_count": 80, // 税込み明細額を確認できた件数。旧データで属性がなければ0
   "category_total_food": 86000, // 食費カテゴリの合計金額。カテゴリごとにトップレベル属性で持ち、ADD で加算する
   "category_total_daily_goods": 22500, // 日用品カテゴリの合計金額
   "category_total_social": 15000, // 交際・会食カテゴリの合計金額
@@ -511,6 +512,7 @@ expense_details.amount を category ごとに合計
 | GSI1SK | `DETAIL_AMOUNT#{amount_desc_key}#{purchase_date}#{detail_id}` |
 
 `amount_desc_key` は金額降順でQueryするためのソート用キー。
+税込み明細額を確認できた行はその額、未確定行は印字額をキーに使う。金額を編集した場合はキーを更新する。
 
 例:
 
@@ -544,7 +546,11 @@ amount_desc_key = 2147483647 - amount(10 桁ゼロ埋め)
   "name": "牛乳", // 商品名
   "category": "food", // 支出カテゴリ(social を含む定義済みの語彙)
   "category_source": "AI", // カテゴリの決定元。AI / USER
-  "amount": 281, // 明細金額(数量を反映した1行の金額)
+  "amount": 281, // 商品行の印字額(数量を反映した1行の金額)。既存API契約を維持
+  "tax_included_amount": 303, // 根拠を確認できた税込み明細額。未確定では属性なし
+  "tax_rate": 8, // 商品別に確認できた税率。未確定では属性なし
+  "tax_mode": "external", // included / external / mixed / unknown
+  "tax_allocation": "receipt_tax_proportional_v1", // printed_included または印字税額の比例配分。未確定では空
   "quantity": 1, // 数量
   "source": "AI", // データの作成元。AIまたはMANUAL
   "is_edited": false, // ユーザーが後から編集したかどうか
@@ -584,7 +590,8 @@ amount_desc_key = 2147483647 - amount(10 桁ゼロ埋め)
 | 計上額合計 | 1ユーザー + 1月で1値 | `monthly_summaries.total_recorded_amount` | `expenses.recorded_amount` | ダッシュボードの月合計で使う |
 | 支出件数 | 1ユーザー + 1月で1値 | `monthly_summaries.expense_count` | `expenses` | 画像解析成功後に作成された支出数 |
 | 明細件数 | 1ユーザー + 1月で1値 | `monthly_summaries.detail_count` | `expense_details` | AIで読み取れた明細数 |
-| カテゴリ別金額 | 1ユーザー + 1月 + 1カテゴリで1値 | `monthly_summaries.category_total_{category}` | `expense_details.category` + `expense_details.amount` | 円グラフと積み上げ棒グラフの内訳。API は map にして返す |
+| 税込み確定明細件数 | 1ユーザー + 1月で1値 | `monthly_summaries.confirmed_detail_count` | `expense_details.tax_included_amount` がある行 | 未確定件数と構成比の表示判定に使う |
+| カテゴリ別金額 | 1ユーザー + 1月 + 1カテゴリで1値 | `monthly_summaries.category_total_{category}` | `expense_details.category` + 確定した `tax_included_amount`、未確定なら `amount` | 積み上げ棒グラフの内訳。API は map にして返す |
 
 月合計はカテゴリ別金額の合計から作らない。
 
@@ -603,6 +610,14 @@ monthly_summaries.total_recorded_amount = SUM(expense_details.amount)
 カテゴリが推定できない場合は `unknown` に寄せる。
 
 ユーザーがカテゴリを修正した場合は、月次再構築で `category_total_*` を作り直す。
+
+### 既存データの移行
+
+1. 新しいバックエンドを先に配布し、`GET /expenses/{expense_id}` と `GET /months/{yyyy-MM}/expenses` の追加属性を確認する。`amount` は従来の印字額のままで、旧明細に `tax_included_amount` は付けない。税率別税額や支払合計との差額から旧明細を一括換算しない。
+2. 利用者ごとに `GET /monthly-summaries` で対象月を列挙し、認証された利用者の `POST /monthly-summaries/{yyyy-MM}/rebuild` を各月に一度実行する。再構築は支出・明細を正本にして `category_total_*`、`confirmed_detail_count`、`detail_count` を作り直す。各月の `total_recorded_amount` が再構築前後で等しいことを確認する。
+3. 旧データで税率と商品行の対応が確認できないものは未確定のまま表示する。利用者が金額を編集した行の税込み根拠は破棄する。将来、元画像に基づく再解析や利用者確認の機能を設ける場合も、編集済み明細を自動上書きせず、個別の確認後に保存する。
+
+バックエンドとフロントエンドを独立して配布する間、追加 API 属性は省略可能として読む。旧月次集計に `confirmed_detail_count` がない場合は 0 件として扱う。新しい登録・編集処理は対象月の集計を新契約で更新するが、既存の月を完全に揃えるため上記の再構築を実行する。
 
 ---
 
@@ -721,7 +736,8 @@ analysis_requests
    SET total_recorded_amount = SUM(expenses.recorded_amount)
    SET expense_count         = COUNT(expenses)
    SET detail_count          = COUNT(expense_details)
-   SET category_total_{category} = SUM(expense_details.amount) GROUP BY category(全カテゴリ、無ければ 0)
+   SET confirmed_detail_count = COUNT(expense_details.tax_included_amount がある行)
+   SET category_total_{category} = SUM(確定時 tax_included_amount、未確定時 amount) GROUP BY category(全カテゴリ、無ければ 0)
    SET type / user_id / year_month
    SET version               = if_not_exists(version, 0) + 1
 ```

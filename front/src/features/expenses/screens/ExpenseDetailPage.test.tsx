@@ -42,6 +42,15 @@ describe('ExpenseDetailPage', () => {
     expect(screen.getByRole('button', { name: '編集する' })).toBeEnabled()
   })
 
+  it('明細の税込み額と印字額を区別し、未確定を示す', async () => {
+    const withTax = { ...original, details: [{ ...original.details[0], amount: 281, tax_included_amount: 303, tax_rate: 8, tax_mode: 'external' }, original.details[1]] }
+    mockFetch({ '/api/expenses/e1': withTax })
+    renderPage()
+    expect(await screen.findByText('税込み明細額（印字額 ¥281） / 税率 8% / 配分税額 ¥22')).toBeInTheDocument()
+    expect(screen.getByText('印字額・税込み未確定')).toBeInTheDocument()
+    expect(screen.getByText(/税込み額未確定の明細 1件は印字額で含めています/)).toBeInTheDocument()
+  })
+
   it('解析履歴の検索条件と復元情報を保って戻る', async () => {
     mockFetch({ '/api/expenses/e1': original })
     const router = createMemoryRouter([

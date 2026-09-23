@@ -22,12 +22,13 @@ import (
 )
 
 type response struct {
-	YearMonth           string           `json:"year_month"`
-	TotalRecordedAmount int64            `json:"total_recorded_amount"`
-	ExpenseCount        int64            `json:"expense_count"`
-	DetailCount         int64            `json:"detail_count"`
-	CategoryTotals      map[string]int64 `json:"category_totals"`
-	UpdatedAt           string           `json:"updated_at"`
+	YearMonth            string           `json:"year_month"`
+	TotalRecordedAmount  int64            `json:"total_recorded_amount"`
+	ExpenseCount         int64            `json:"expense_count"`
+	DetailCount          int64            `json:"detail_count"`
+	ConfirmedDetailCount int64            `json:"confirmed_detail_count"`
+	CategoryTotals       map[string]int64 `json:"category_totals"`
+	UpdatedAt            string           `json:"updated_at"`
 }
 
 var (
@@ -92,6 +93,6 @@ func toResponse(summary domain.MonthlySummary, updatedAt time.Time) response {
 	for category, amount := range summary.CategoryTotals {
 		totals[category.String()] = amount
 	}
-	return response{YearMonth: summary.YearMonth.String(), TotalRecordedAmount: summary.TotalRecordedAmount, ExpenseCount: summary.ExpenseCount, DetailCount: summary.DetailCount, CategoryTotals: totals, UpdatedAt: updatedAt.UTC().Format(time.RFC3339)}
+	return response{YearMonth: summary.YearMonth.String(), TotalRecordedAmount: summary.TotalRecordedAmount, ExpenseCount: summary.ExpenseCount, DetailCount: summary.DetailCount, ConfirmedDetailCount: summary.ConfirmedDetailCount, CategoryTotals: totals, UpdatedAt: updatedAt.UTC().Format(time.RFC3339)}
 }
 func main() { lambda.Start(lambdawrap.Handle(log, handler)) }

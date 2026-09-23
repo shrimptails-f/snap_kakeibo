@@ -66,7 +66,7 @@ describe('AnalysisRequestsPage', () => {
     expect(await screen.findByText('テストスーパー')).toBeInTheDocument()
     expect(screen.getByText(/2,780/)).toBeInTheDocument()
     await user.click(screen.getAllByRole('button', { name: '店舗・計上額' })[0])
-    expect(screen.getByRole('tooltip')).toHaveTextContent('明細金額の合計とは一致しない場合があります。')
+    expect(screen.getByRole('tooltip')).toHaveTextContent('最終支払合計に利用者調整額を反映した金額')
     await user.keyboard('{Escape}')
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '次へ' }))

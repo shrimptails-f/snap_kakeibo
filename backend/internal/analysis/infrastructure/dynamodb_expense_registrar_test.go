@@ -101,6 +101,16 @@ func TestRegisterBuildsOneTransactionAcrossTables(t *testing.T) {
 		detailSpec{"d1", "a", common.CategoryFood, 100, 1},
 		detailSpec{"d2", "b", common.CategoryFood, 200, 1},
 	)
+	details := expense.Details()
+	rate, inclusive := int64(10), int64(110)
+	if err := details[0].SetTaxEvidence(&rate, "external", &inclusive, "receipt_tax_proportional_v1"); err != nil {
+		t.Fatal(err)
+	}
+	var err error
+	expense, err = ledgerdomain.NewExpense(expense.ID(), expense.UserID(), expense.SourceRequestID(), expense.StoreName(), expense.PurchaseDate(), expense.ReadAmount(), details)
+	if err != nil {
+		t.Fatal(err)
+	}
 	expense.SetAnalysisEvidence(`{"selected":{"amount":300},"status":"strong"}`)
 	if err := newRegistrar(api).Register(context.Background(), domain.AnalysisJob{UserID: "u1", AnalysisRequestID: "req1", Attempt: 1}, expense, "raw.json", testTime); err != nil {
 		t.Fatalf("Register() error = %v", err)
@@ -123,12 +133,22 @@ func TestRegisterBuildsOneTransactionAcrossTables(t *testing.T) {
 	if record.Type != "EXPENSE" || record.ExpenseID != "e1" || record.AnalysisRequestID != "req1" || record.PurchaseDate != "2026-09-18" || record.YearMonth != "2026-09" || record.ReadAmount != 300 || record.AnalysisEvidence != expense.AnalysisEvidence() || record.AdjustmentAmount != 0 || record.RecordedAmount != 300 || record.IsEdited {
 		t.Errorf("expense record = %+v", record)
 	}
+	var savedDetail expenseDetailRecord
+	if err := attributevalue.UnmarshalMap(items[2].Put.Item, &savedDetail); err != nil {
+		t.Fatal(err)
+	}
+	if savedDetail.TaxIncludedAmount == nil || *savedDetail.TaxIncludedAmount != 110 || savedDetail.Amount != 100 || savedDetail.TaxRate == nil || *savedDetail.TaxRate != 10 {
+		t.Errorf("saved detail = %+v", savedDetail)
+	}
 	summary := items[4].Update
 	if aws.ToString(summary.TableName) != "summaries" || summary.ExpressionAttributeNames["#c1"] != "category_total_food" {
 		t.Errorf("summary update = %+v", summary)
 	}
-	if got := summary.ExpressionAttributeValues[":c1"].(*ddbtypes.AttributeValueMemberN).Value; got != "300" {
-		t.Errorf("category total = %s, want 300", got)
+	if got := summary.ExpressionAttributeValues[":c1"].(*ddbtypes.AttributeValueMemberN).Value; got != "310" {
+		t.Errorf("category total = %s, want 310", got)
+	}
+	if got := summary.ExpressionAttributeValues[":confirmed"].(*ddbtypes.AttributeValueMemberN).Value; got != "1" {
+		t.Errorf("confirmed count = %s, want 1", got)
 	}
 	if got := summary.ExpressionAttributeValues[":total"].(*ddbtypes.AttributeValueMemberN).Value; got != "300" {
 		t.Errorf("total recorded amount = %s, want 300", got)
