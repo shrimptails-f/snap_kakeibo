@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createUpload, uploadToPresignedPost } from '../api/uploads.api'
+import { validateReceiptFile } from '../lib/receiptCrop'
+import type { CropRect } from '../lib/receiptCrop'
 import { analysisRequestsQueryPrefix } from './useAnalysisRequests'
 
 export type SelectedReceipt = {
   localId: string
   file: File
+  originalFile: File
+  originalUrl: string
+  crop?: CropRect
   previewUrl: string
   validationError?: string
 }
@@ -17,18 +22,11 @@ export type ReceiptUpload = SelectedReceipt & {
   errorMessage?: string
 }
 
-const ACCEPTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png'])
-// 署名ポリシーの 30 MiB は multipart 全体に適用されるため、フォーム分の余裕を確保する。
-const MAX_FILE_BYTES = 29 << 20
-
 function selectedReceipt(file: File): SelectedReceipt {
+  const previewUrl = URL.createObjectURL(file)
   return {
-    localId: crypto.randomUUID(),
-    file,
-    previewUrl: URL.createObjectURL(file),
-    validationError: !ACCEPTED_IMAGE_TYPES.has(file.type)
-      ? 'JPEG または PNG の画像を選んでください。'
-      : file.size > MAX_FILE_BYTES ? '画像は 29 MiB 以下にしてください。' : undefined,
+    localId: crypto.randomUUID(), file, originalFile: file, originalUrl: previewUrl,
+    previewUrl, validationError: validateReceiptFile(file),
   }
 }
 
@@ -47,15 +45,26 @@ export function useReceiptUploadBatch(yearMonth: string) {
     setSelected((current) => [...current, ...added])
   }
 
+  function releasePreview(url: string) {
+    URL.revokeObjectURL(url)
+    previews.current.delete(url)
+  }
+
   function removeSelected(localId: string) {
-    setSelected((current) => {
-      const removed = current.find((item) => item.localId === localId)
-      if (removed) {
-        URL.revokeObjectURL(removed.previewUrl)
-        previews.current.delete(removed.previewUrl)
-      }
-      return current.filter((item) => item.localId !== localId)
-    })
+    const removed = selected.find((item) => item.localId === localId)
+    if (!removed || isUploading) return
+    new Set([removed.previewUrl, removed.originalUrl]).forEach(releasePreview)
+    setSelected((current) => current.filter((item) => item.localId !== localId))
+  }
+
+  function applyCrop(localId: string, file: File, crop?: CropRect) {
+    const original = selected.find((item) => item.localId === localId)
+    if (!original || isUploading || validateReceiptFile(file)) return
+    const previewUrl = file === original.originalFile ? original.originalUrl : URL.createObjectURL(file)
+    previews.current.add(previewUrl)
+    if (original.previewUrl !== original.originalUrl) releasePreview(original.previewUrl)
+    setSelected((current) => current.map((item) => item.localId === localId
+      ? { ...item, file, previewUrl, crop, validationError: undefined } : item))
   }
 
   function updateUpload(localId: string, update: Partial<ReceiptUpload>) {
@@ -97,7 +106,8 @@ export function useReceiptUploadBatch(yearMonth: string) {
     if (valid.length === 0 || isUploading) return
     setIsUploading(true)
     setSelected((current) => current.filter((item) => item.validationError))
-    setUploads((current) => [...current, ...valid.map((item): ReceiptUpload => ({ ...item, phase: 'creating' }))])
+    valid.forEach((item) => { if (item.originalUrl !== item.previewUrl) releasePreview(item.originalUrl) })
+    setUploads((current) => [...current, ...valid.map((item): ReceiptUpload => ({ ...item, originalFile: item.file, originalUrl: item.previewUrl, phase: 'creating' }))])
     await Promise.allSettled(valid.map(uploadOne))
     await queryClient.invalidateQueries({ queryKey: analysisRequestsQueryPrefix(yearMonth) })
     setIsUploading(false)
@@ -110,6 +120,7 @@ export function useReceiptUploadBatch(yearMonth: string) {
     validCount: selected.filter((item) => !item.validationError).length,
     addFiles,
     removeSelected,
+    applyCrop,
     retryCreating,
     uploadSelected,
   }
