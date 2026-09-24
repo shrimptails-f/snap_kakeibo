@@ -249,6 +249,12 @@ func (u *AnalyzeReceiptUsecase) newExpense(job domain.AnalysisJob, result domain
 				return ledgerdomain.Expense{}, fmt.Errorf("build expense detail tax: %w", err)
 			}
 		}
+		if i < len(evidence.DetailTaxes) {
+			tax := evidence.DetailTaxes[i]
+			if err := detail.SetTaxInference(tax.Status, tax.Reason, tax.SuggestedRate); err != nil {
+				return ledgerdomain.Expense{}, fmt.Errorf("build tax inference: %w", err)
+			}
+		}
 		details = append(details, detail)
 	}
 	expense, err := ledgerdomain.NewExpense(expenseID, userID, requestID, result.StoreName(), result.PurchaseDate(), result.ReadAmount(), details)

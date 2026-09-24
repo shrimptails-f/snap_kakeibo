@@ -153,6 +153,9 @@ classDiagram
         +int64? taxIncludedAmount
         +int64? taxRate
         +string taxMode
+        +string taxStatus
+        +string taxReason
+        +int64? suggestedTaxRate
         +Quantity quantity
         +Category category
         +CategorySource categorySource
@@ -253,3 +256,7 @@ flowchart LR
 - 計上額は返金を表現できるように負数を許容する。
 - 月次集計は集約ではなく、家計簿コンテキストの読み取りモデルとする。
 - DynamoDBの条件式とトランザクションは、集約のルールを並行処理下でも保証するために使用する。
+
+## 商品別税率の補完
+
+`validateReading` は最終合計選択後に商品別税率を補完する。`AmountEvidence` は元の読み取りと補完・推定の根拠を持ち、`ExpenseDetail` には判定状態・理由・推定候補を渡す。推定候補は税込み額の確定には使用しない。詳細は[商品別税率の補完](../receipt-tax-inference.md)。

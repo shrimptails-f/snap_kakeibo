@@ -46,6 +46,9 @@ type detailResponse struct {
 	TaxIncludedAmount *int64 `json:"tax_included_amount,omitempty"`
 	TaxRate           *int64 `json:"tax_rate,omitempty"`
 	TaxMode           string `json:"tax_mode,omitempty"`
+	TaxStatus         string `json:"tax_status,omitempty"`
+	TaxReason         string `json:"tax_reason,omitempty"`
+	SuggestedTaxRate  *int64 `json:"suggested_tax_rate,omitempty"`
 	Quantity          int64  `json:"quantity"`
 	Source            string `json:"source"`
 	IsEdited          bool   `json:"is_edited"`
@@ -127,7 +130,7 @@ func toResponse(e domain.Expense, imageURL string) response {
 	source := e.Details()
 	details := make([]detailResponse, 0, len(source))
 	for _, d := range source {
-		details = append(details, detailResponse{DetailID: d.ID().String(), Name: d.Name(), Category: d.Category().String(), CategorySource: d.CategorySource().String(), Amount: d.Amount().Yen(), TaxIncludedAmount: d.TaxIncludedAmount(), TaxRate: d.TaxRate(), TaxMode: d.TaxMode(), Quantity: d.Quantity().Int64(), Source: d.Source().String(), IsEdited: d.Edited()})
+		details = append(details, detailResponse{DetailID: d.ID().String(), Name: d.Name(), Category: d.Category().String(), CategorySource: d.CategorySource().String(), Amount: d.Amount().Yen(), TaxIncludedAmount: d.TaxIncludedAmount(), TaxRate: d.TaxRate(), TaxMode: d.TaxMode(), TaxStatus: d.TaxStatus(), TaxReason: d.TaxReason(), SuggestedTaxRate: d.SuggestedTaxRate(), Quantity: d.Quantity().Int64(), Source: d.Source().String(), IsEdited: d.Edited()})
 	}
 	return response{
 		Expense: expenseResponse{

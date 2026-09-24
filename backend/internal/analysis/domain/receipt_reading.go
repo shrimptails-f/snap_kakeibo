@@ -16,18 +16,21 @@ type ReceiptReading struct {
 	PurchaseDate     *string
 	ReadAmount       *int64
 	AmountCandidates []AmountCandidate
+	TaxMarks         []TaxMark
 	TaxBreakdown     []TaxBreakdown
 	Details          []ReadDetail
 }
 
 // ReadDetail は読み取った商品行。
 type ReadDetail struct {
-	Name     string
-	Amount   int64
-	Quantity int64
-	Category string
-	TaxRate  *int64
-	TaxMode  string
+	Name           string
+	Amount         int64
+	Quantity       int64
+	Category       string
+	TaxRate        *int64
+	TaxMode        string
+	TaxMark        string
+	DiscountAmount *int64
 }
 
 // analysis_requests.error_code に載せる失敗コード。
@@ -91,6 +94,7 @@ func ValidateReading(r ReceiptReading, now time.Time) (AnalysisResult, *FailureR
 	if len(r.Details) > maxDetails {
 		return AnalysisResult{}, ptr(failure(FailureTooManyDetails, "明細件数が50件を超えています"))
 	}
+	evidence = InferDetailTaxes(r, evidence)
 	storeName := ""
 	if r.StoreName != nil {
 		storeName = truncate(*r.StoreName, maxStoreNameRunes)

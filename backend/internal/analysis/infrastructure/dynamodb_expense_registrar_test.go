@@ -106,6 +106,12 @@ func TestRegisterBuildsOneTransactionAcrossTables(t *testing.T) {
 	if err := details[0].SetTaxEvidence(&rate, "external", &inclusive, "receipt_tax_proportional_v1"); err != nil {
 		t.Fatal(err)
 	}
+	if err := details[0].SetTaxInference("reconciled", "amount_constraints", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := details[1].SetTaxInference("estimated", "product_preference", &rate); err != nil {
+		t.Fatal(err)
+	}
 	var err error
 	expense, err = ledgerdomain.NewExpense(expense.ID(), expense.UserID(), expense.SourceRequestID(), expense.StoreName(), expense.PurchaseDate(), expense.ReadAmount(), details)
 	if err != nil {
@@ -139,6 +145,16 @@ func TestRegisterBuildsOneTransactionAcrossTables(t *testing.T) {
 	}
 	if savedDetail.TaxIncludedAmount == nil || *savedDetail.TaxIncludedAmount != 110 || savedDetail.Amount != 100 || savedDetail.TaxRate == nil || *savedDetail.TaxRate != 10 {
 		t.Errorf("saved detail = %+v", savedDetail)
+	}
+	if savedDetail.TaxStatus != "reconciled" || savedDetail.TaxReason != "amount_constraints" {
+		t.Fatalf("saved inference=%+v", savedDetail)
+	}
+	var estimatedDetail expenseDetailRecord
+	if err := attributevalue.UnmarshalMap(items[3].Put.Item, &estimatedDetail); err != nil {
+		t.Fatal(err)
+	}
+	if estimatedDetail.TaxStatus != "estimated" || estimatedDetail.SuggestedTaxRate == nil || *estimatedDetail.SuggestedTaxRate != 10 || estimatedDetail.TaxIncludedAmount != nil {
+		t.Fatalf("estimated=%+v", estimatedDetail)
 	}
 	summary := items[4].Update
 	if aws.ToString(summary.TableName) != "summaries" || summary.ExpressionAttributeNames["#c1"] != "category_total_food" {
