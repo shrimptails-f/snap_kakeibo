@@ -115,14 +115,6 @@ func InferDetailTaxes(r ReceiptReading, e AmountEvidence) (result AmountEvidence
 	if total-unassignedDiscount != target || gross != e.Selected.Amount {
 		return rejectTaxInference(e, "amount_mismatch")
 	}
-	if unassignedDiscount > 0 && len(groups) > 1 {
-		e.Inference.Reason = "unassigned_discount"
-		return e
-	}
-	// 単一税率なら値引きの所属は自明。商品別への値引き配分は行わない。
-	if len(groups) == 1 {
-		groups[0].target += unassignedDiscount
-	}
 	for i, d := range r.Details {
 		if d.TaxMode != "" && d.TaxMode != "unknown" && d.TaxMode != groups[0].mode {
 			return rejectTaxInference(e, "conflicting_mode")
@@ -137,6 +129,16 @@ func InferDetailTaxes(r ReceiptReading, e AmountEvidence) (result AmountEvidence
 				return rejectTaxInference(e, "conflicting_rate")
 			}
 		}
+	}
+	// 値引きの帰属が不明でも、判明している印字の矛盾は先に除外する。
+	// 矛盾した内税区分を残すと、後続の配分処理が税込み額を確定してしまう。
+	if unassignedDiscount > 0 && len(groups) > 1 {
+		e.Inference.Reason = "unassigned_discount"
+		return e
+	}
+	// 単一税率なら値引きの所属は自明。商品別への値引き配分は行わない。
+	if len(groups) == 1 {
+		groups[0].target += unassignedDiscount
 	}
 	assignments, visited, exhausted := searchTaxAssignments(r.Details, amounts, e.DetailTaxes, groups)
 	e.Inference.States = visited
