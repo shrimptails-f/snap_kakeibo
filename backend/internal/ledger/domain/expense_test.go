@@ -178,3 +178,41 @@ func newTestExpense(t *testing.T, expenseValue, dateValue string, category commo
 	}
 	return expense
 }
+
+func TestTaxSuggestionInvalidation(t *testing.T) {
+	t.Parallel()
+	for _, change := range []string{"name", "amount", "category", "clear", "confirm"} {
+		t.Run(change, func(t *testing.T) {
+			t.Parallel()
+			e := newTestExpense(t, "expense-1", "2026-09-21", common.CategoryFood, 100)
+			d := &e.details[0]
+			rate := int64(8)
+			if err := d.SetTaxInference("estimated", "product_preference", &rate); err != nil {
+				t.Fatal(err)
+			}
+			var err error
+			switch change {
+			case "name":
+				err = e.RenameDetail(d.ID(), "別商品")
+			case "amount":
+				amount, _ := common.NewDetailAmount(120)
+				err = e.ChangeDetailAmount(d.ID(), amount, d.Quantity())
+			case "category":
+				err = e.ChangeDetailCategory(d.ID(), common.CategoryDailyGoods)
+			case "clear":
+				err = e.ClearDetailTax(d.ID())
+			case "confirm":
+				err = e.ConfirmDetailTax(d.ID(), 8, "external", 108)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if d.SuggestedTaxRate() != nil {
+				t.Fatal("stale suggestion")
+			}
+			if change == "confirm" && (d.TaxStatus() != "user_confirmed" || d.ReportingAmount() != 108) {
+				t.Fatalf("confirmed=%+v", d)
+			}
+		})
+	}
+}

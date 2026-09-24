@@ -70,6 +70,9 @@ type expenseDetailRecord struct {
 	TaxRate           *int64 `dynamodbav:"tax_rate,omitempty"`
 	TaxMode           string `dynamodbav:"tax_mode,omitempty"`
 	TaxAllocation     string `dynamodbav:"tax_allocation,omitempty"`
+	TaxStatus         string `dynamodbav:"tax_status,omitempty"`
+	TaxReason         string `dynamodbav:"tax_reason,omitempty"`
+	SuggestedTaxRate  *int64 `dynamodbav:"suggested_tax_rate,omitempty"`
 	Quantity          int64  `dynamodbav:"quantity"`
 	IsEdited          bool   `dynamodbav:"is_edited"`
 }
@@ -150,7 +153,7 @@ func (r DynamoDBExpenseRegistrar) transactItems(job domain.AnalysisJob, expense 
 			PK: DetailPK(userID, expenseID), SK: DetailSK(detailID),
 			GSI1PK: UserMonthPK(userID, month), GSI1SK: DetailMonthSK(d.ReportingAmount(), purchaseDate, detailID),
 			Type: recordTypeExpenseDetail, DetailID: detailID, ExpenseID: expenseID, AnalysisRequestID: expense.SourceRequestID().String(),
-			Name: d.Name(), Category: d.Category().String(), CategorySource: d.CategorySource().String(), Amount: d.Amount().Yen(), TaxIncludedAmount: d.TaxIncludedAmount(), TaxRate: d.TaxRate(), TaxMode: d.TaxMode(), TaxAllocation: d.TaxAllocation(), Quantity: d.Quantity().Int64(), Source: sourceAI,
+			Name: d.Name(), Category: d.Category().String(), CategorySource: d.CategorySource().String(), Amount: d.Amount().Yen(), TaxIncludedAmount: d.TaxIncludedAmount(), TaxRate: d.TaxRate(), TaxMode: d.TaxMode(), TaxAllocation: d.TaxAllocation(), TaxStatus: d.TaxStatus(), TaxReason: d.TaxReason(), SuggestedTaxRate: d.SuggestedTaxRate(), Quantity: d.Quantity().Int64(), Source: sourceAI,
 			StoreName: expense.StoreName(), PurchaseDate: purchaseDate, YearMonth: month, CreatedAt: timestamp, UpdatedAt: timestamp,
 		})
 		if err != nil {

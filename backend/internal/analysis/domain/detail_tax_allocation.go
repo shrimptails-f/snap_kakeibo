@@ -12,6 +12,9 @@ func AllocateDetailTaxes(details []ReadDetail, evidence AmountEvidence) []*int64
 	groups := map[int64][]int{}
 	for i, detail := range details {
 		tax := evidence.DetailTaxes[i]
+		if tax.Status == "estimated" {
+			continue
+		}
 		if tax.Mode == "included" {
 			amount := detail.Amount
 			result[i] = &amount
