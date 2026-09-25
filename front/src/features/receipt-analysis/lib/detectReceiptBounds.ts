@@ -1,6 +1,31 @@
 import type { CropRect } from './receiptCrop'
 
-type Candidate = { rect: CropRect; score: number }
+type Candidate = { rect: CropRect; score: number; preservesHeight: boolean }
+
+// 見切れた候補は内部の文字のエッジではなく、左右の外周が背景から分かれるかを確かめる。
+function hasClearSides(indices: Int32Array, light: Float32Array, width: number, top: number, bottom: number): boolean {
+  const lefts = new Int32Array(bottom - top + 1).fill(width)
+  const rights = new Int32Array(bottom - top + 1).fill(-1)
+  for (const index of indices) {
+    const row = Math.floor(index / width) - top
+    const x = index % width
+    lefts[row] = Math.min(lefts[row], x)
+    rights[row] = Math.max(rights[row], x)
+  }
+  let clearRows = 0
+  for (let row = 0; row < lefts.length; row++) {
+    const left = lefts[row], right = rights[row]
+    if (left < 4 || right > width - 5 || right - left < 8) continue
+    const offset = (row + top) * width
+    let leftContrast = 0, rightContrast = 0
+    for (let distance = 1; distance <= 4; distance++) {
+      leftContrast += light[offset + left + distance] - light[offset + left - distance]
+      rightContrast += light[offset + right - distance] - light[offset + right + distance]
+    }
+    if (leftContrast / 4 >= 22 && rightContrast / 4 >= 22) clearRows++
+  }
+  return clearRows / lefts.length >= 0.7
+}
 
 function overlap(a: CropRect, b: CropRect): number {
   const intersection = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y))
@@ -8,7 +33,7 @@ function overlap(a: CropRect, b: CropRect): number {
 }
 
 // 最大480pxの検出専用画像。明度・色の連続領域を輪郭のコントラスト、充填率、面積で評価する。
-// 縦横比は条件にしない。境界欠け・背景との同化・複数候補では提案を控える。
+// 縦横比は条件にしない。下端の見切れは左右の境界が明瞭な場合だけ高さを維持して提案する。
 export function detectReceiptBounds(data: Uint8ClampedArray, width: number, height: number): CropRect | null {
   const length = width * height
   if (length === 0 || data.length !== length * 4) return null
@@ -43,11 +68,13 @@ export function detectReceiptBounds(data: Uint8ClampedArray, width: number, heig
       }
       const boxArea = (right - left + 1) * (bottom - top + 1)
       const area = boxArea / length, fill = tail / boxArea
-      if (area < 0.06 || area > 0.9 || fill < 0.65 || left < 2 || top < 2 || right > width - 3 || bottom > height - 3) continue
+      if (area < 0.06 || area > 0.9 || fill < 0.65 || left < 2 || top < 2 || right > width - 3) continue
+      const preservesHeight = bottom > height - 3
+      if (preservesHeight && !hasClearSides(queue.subarray(0, tail), light, width, top, bottom)) continue
       const contrast = edge / Math.max(perimeter, 1)
       if (contrast < 22) continue
       const rect = { x: left / width, y: top / height, width: (right - left + 1) / width, height: (bottom - top + 1) / height }
-      const candidate = { rect, score: fill * Math.min(contrast / 70, 1) * Math.sqrt(area) }
+      const candidate = { rect, preservesHeight, score: fill * Math.min(contrast / 70, 1) * Math.sqrt(area) }
       const duplicate = candidates.find((other) => overlap(other.rect, rect) > 0.9)
       if (!duplicate) candidates.push(candidate)
       // 閾値によって影のない部分だけが候補になっても、外側の紙を優先する。
@@ -58,6 +85,7 @@ export function detectReceiptBounds(data: Uint8ClampedArray, width: number, heig
   const best = candidates[0]
   if (!best || best.score < 0.12 || (candidates[1] && candidates[1].score > best.score * 0.65)) return null
   // 店名・日付・合計を落としにくいよう各辺に画像寸法の3%の余白を加える。
-  const x = Math.max(0, best.rect.x - 0.03), y = Math.max(0, best.rect.y - 0.03)
-  return { x, y, width: Math.min(1, best.rect.x + best.rect.width + 0.03) - x, height: Math.min(1, best.rect.y + best.rect.height + 0.03) - y }
+  const x = Math.max(0, best.rect.x - 0.03)
+  const y = best.preservesHeight ? 0 : Math.max(0, best.rect.y - 0.03)
+  return { x, y, width: Math.min(1, best.rect.x + best.rect.width + 0.03) - x, height: best.preservesHeight ? 1 : Math.min(1, best.rect.y + best.rect.height + 0.03) - y }
 }

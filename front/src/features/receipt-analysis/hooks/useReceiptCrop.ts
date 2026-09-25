@@ -45,8 +45,13 @@ export function useReceiptCrop(file: File, originalUrl: string, initialCrop?: Cr
         workerRef.current = worker
         worker.onmessage = (event: MessageEvent<{ rect: CropRect | null }>) => {
           if (generation.current === current && !touched.current) {
-            setRect(event.data.rect ?? FULL_CROP)
-            setMessage(event.data.rect ? '範囲の候補です。店名・商品・日付・合計が入っているか確認してください。' : '範囲を特定できませんでした。画像全体から調整できます。')
+            const proposal = event.data.rect
+            setRect(proposal ?? FULL_CROP)
+            setMessage(!proposal
+              ? '範囲を特定できませんでした。画像全体から調整できます。'
+              : proposal.y === 0 && proposal.height === 1
+                ? '左右の余白を提案しました。上下は画像全体を残しています。商品や金額が入っているか確認してください。'
+                : '範囲の候補です。店名・商品・日付・合計が入っているか確認してください。')
           }
           worker?.terminate()
           clearTimeout(timeout)

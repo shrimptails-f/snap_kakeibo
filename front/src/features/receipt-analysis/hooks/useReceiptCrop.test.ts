@@ -85,3 +85,15 @@ it('Worker未対応でも全体を使え、全体の適用は元Fileを返す', 
   await act(async () => { exported = await result.current.exportCrop() })
   expect(exported).toEqual({ file })
 })
+
+
+it('左右だけの提案は上下を残すことを伝え、出力は利用者の適用を待つ', () => {
+  const encode = vi.spyOn(HTMLCanvasElement.prototype, 'toBlob')
+  const { result } = renderHook(() => useReceiptCrop(file, 'blob:original'))
+  act(() => image.onload?.())
+  const proposal = { x: 0.2, y: 0, width: 0.6, height: 1 }
+  act(() => worker.onmessage?.({ data: { rect: proposal } }))
+  expect(result.current.rect).toEqual(proposal)
+  expect(result.current.message).toMatch(/左右の余白.*上下は画像全体/)
+  expect(encode).not.toHaveBeenCalled()
+})

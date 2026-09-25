@@ -57,7 +57,32 @@ describe('範囲の自動提案', () => {
     expect(rect.x).toBeLessThan(26 / 120)
     expect(rect.x + rect.width).toBeGreaterThan(94 / 120)
   })
-  it('白背景・複数候補・境界欠け・候補なしでは断定しない', () => {
+  it('下端が見切れた紙は上下を全て残し、左右の余白だけを提案する', () => {
+    const rect = fixture(50, [[30, 20, 90, 160]])!
+    expect(rect).not.toBeNull()
+    expect(rect.y).toBe(0)
+    expect(rect.height).toBe(1)
+    expect(rect.x).toBeCloseTo(0.22)
+    expect(rect.x + rect.width).toBeCloseTo(0.78)
+  })
+  it('下端の見切れでも薄い境界・複数候補・左右の見切れは断定しない', () => {
+    expect(fixture(230, [[30, 20, 90, 160]])).toBeNull()
+    expect(fixture(50, [[10, 20, 45, 160], [75, 20, 110, 160]])).toBeNull()
+    expect(fixture(50, [[0, 20, 90, 160]])).toBeNull()
+    expect(fixture(50, [[30, 20, 120, 160]])).toBeNull()
+  })
+  it('内部の文字のコントラストが強くても片側が背景と同化した候補は採用しない', () => {
+    const width = 120, height = 160
+    const data = new Uint8ClampedArray(width * height * 4)
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+      const paper = y >= 20 && x >= 30 && x < 90
+      const ink = paper && y % 12 < 3 && x >= 40 && x < 80
+      const value = ink ? 10 : paper ? 240 : x < 60 ? 230 : 50
+      data.set([value, value, value, 255], (y * width + x) * 4)
+    }
+    expect(detectReceiptBounds(data, width, height)).toBeNull()
+  })
+  it('白背景・複数候補・上端の見切れ・候補なしでは断定しない', () => {
     expect(fixture(240, [[30, 10, 80, 150]])).toBeNull()
     expect(fixture(40, [[10, 10, 45, 150], [75, 10, 110, 150]])).toBeNull()
     expect(fixture(40, [[30, 0, 80, 150]])).toBeNull()
