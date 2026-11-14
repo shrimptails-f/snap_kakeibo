@@ -15,6 +15,8 @@ type TaxBreakdown struct {
 	Rate          *int64 `json:"rate"`
 	TaxableAmount *int64 `json:"taxable_amount"`
 	TaxAmount     *int64 `json:"tax_amount"`
+	GrossAmount   *int64 `json:"gross_amount,omitempty"`
+	OriginalMode  string `json:"original_mode,omitempty"`
 	Mode          string `json:"mode"`
 }
 
@@ -23,6 +25,8 @@ type AmountEvidence struct {
 	Selected    *AmountCandidate  `json:"selected"`
 	Candidates  []AmountCandidate `json:"candidates"`
 	Taxes       []TaxBreakdown    `json:"taxes"`
+	TaxMarks    []TaxMark         `json:"tax_marks,omitempty"`
+	Inference   *TaxInference     `json:"tax_inference,omitempty"`
 	DetailTaxes []DetailTax       `json:"detail_taxes"`
 	TaxMode     string            `json:"tax_mode"`
 	Status      string            `json:"status"`
@@ -31,8 +35,19 @@ type AmountEvidence struct {
 
 // DetailTax は商品行ごとの読取税率と内外税区分。
 type DetailTax struct {
-	Rate *int64 `json:"rate"`
-	Mode string `json:"mode"`
+	Rate             *int64 `json:"rate"`
+	Mode             string `json:"mode"`
+	Status           string `json:"status,omitempty"`
+	Reason           string `json:"reason,omitempty"`
+	SuggestedRate    *int64 `json:"suggested_rate,omitempty"`
+	OriginalRate     *int64 `json:"original_rate,omitempty"`
+	OriginalName     string `json:"original_name,omitempty"`
+	OriginalAmount   *int64 `json:"original_amount,omitempty"`
+	OriginalCategory string `json:"original_category,omitempty"`
+	OriginalQuantity int64  `json:"original_quantity,omitempty"`
+	OriginalMode     string `json:"original_mode,omitempty"`
+	Mark             string `json:"mark,omitempty"`
+	DiscountAmount   *int64 `json:"discount_amount,omitempty"`
 }
 
 // ReconcileAmounts は印字上の役割と金額関係から最終支払額を選ぶ。

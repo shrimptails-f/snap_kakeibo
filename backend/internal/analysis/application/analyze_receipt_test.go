@@ -481,3 +481,46 @@ func assertField(t *testing.T, entry map[string]any, key string, want any) {
 		t.Errorf("%s = %v, want %v", key, got, want)
 	}
 }
+
+func TestAnalyzePersistsReconciledAndEstimatedTaxes(t *testing.T) {
+	t.Parallel()
+	for _, estimated := range []bool{false, true} {
+		t.Run(fmt.Sprintf("estimated=%t", estimated), func(t *testing.T) {
+			t.Parallel()
+			f := newFixture()
+			r := validReading()
+			second := int64(200)
+			total := int64(328)
+			tax := int64(20)
+			if estimated {
+				second, total, tax = 100, 218, 10
+			}
+			r.Details = []domain.ReadDetail{{Name: "パン", Amount: 100, Quantity: 1, Category: "food"}, {Name: "洗剤", Amount: second, Quantity: 1, Category: "daily_goods"}}
+			r.AmountCandidates = []domain.AmountCandidate{{Amount: total, Label: "合計", Role: "final_total"}}
+			r.TaxBreakdown = []domain.TaxBreakdown{{Rate: ptr(int64(8)), TaxableAmount: ptr(int64(100)), TaxAmount: ptr(int64(8)), Mode: "external"}, {Rate: ptr(int64(10)), TaxableAmount: &second, TaxAmount: &tax, Mode: "external"}}
+			f.analyzer.response.Reading = r
+			_, err := f.build().Analyze(context.Background(), application.AnalyzeReceiptInput{Job: testJob})
+			if err != nil {
+				t.Fatal(err)
+			}
+			e := f.expenses.registered
+			var evidence domain.AmountEvidence
+			if err := json.Unmarshal([]byte(e.AnalysisEvidence()), &evidence); err != nil {
+				t.Fatal(err)
+			}
+			if evidence.Inference == nil {
+				t.Fatal("missing persisted inference")
+			}
+			for i, d := range e.Details() {
+				wantRate := int64(8 + i*2)
+				if estimated {
+					if d.TaxStatus() != "estimated" || d.TaxRate() != nil || d.TaxIncludedAmount() != nil || *d.SuggestedTaxRate() != wantRate || d.ReportingAmount() != d.Amount().Yen() {
+						t.Fatalf("estimated detail=%+v", d)
+					}
+				} else if d.TaxStatus() != "reconciled" || *d.TaxRate() != wantRate || d.TaxIncludedAmount() == nil {
+					t.Fatalf("reconciled detail=%+v", d)
+				}
+			}
+		})
+	}
+}

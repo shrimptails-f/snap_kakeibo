@@ -48,6 +48,9 @@ type ExpenseDetail struct {
 	taxRate           *int64
 	taxMode           string
 	taxAllocation     string
+	taxStatus         string
+	taxReason         string
+	suggestedTaxRate  *int64
 	quantity          Quantity
 	category          Category
 	categorySource    CategorySource
@@ -104,6 +107,38 @@ func (d ExpenseDetail) TaxMode() string { return d.taxMode }
 // TaxAllocation は税込み額の算出根拠を返す。
 func (d ExpenseDetail) TaxAllocation() string { return d.taxAllocation }
 
+// TaxStatus は印字・照合・推定・未確定・利用者確認の区別を返す。空は旧データ。
+func (d ExpenseDetail) TaxStatus() string { return d.taxStatus }
+
+// TaxReason は税率の判定根拠を返す。
+func (d ExpenseDetail) TaxReason() string { return d.taxReason }
+
+// SuggestedTaxRate は未確定の推定候補を返す。集計には使わない。
+func (d ExpenseDetail) SuggestedTaxRate() *int64 { return copyInt64(d.suggestedTaxRate) }
+
+// SetTaxInference は解析根拠の概要を設定する。推定候補を確認済み金額と混在させない。
+func (d *ExpenseDetail) SetTaxInference(status, reason string, suggested *int64) error {
+	switch status {
+	case "", "printed", "reconciled", "estimated", "unresolved", "user_confirmed":
+	default:
+		return ErrInvalidExpenseDetail
+	}
+	if suggested != nil && (status != "estimated" || (*suggested != 8 && *suggested != 10)) {
+		return ErrInvalidExpenseDetail
+	}
+	if status == "estimated" && d.taxIncludedAmount != nil {
+		return ErrInvalidExpenseDetail
+	}
+	d.taxStatus, d.taxReason, d.suggestedTaxRate = status, reason, copyInt64(suggested)
+	return nil
+}
+
+func (d *ExpenseDetail) clearTaxSuggestion() {
+	if d.suggestedTaxRate != nil {
+		d.taxStatus, d.taxReason, d.suggestedTaxRate = "unresolved", "product_changed", nil
+	}
+}
+
 // ReportingAmount は内訳に使う金額。未確定なら印字額を返す。
 func (d ExpenseDetail) ReportingAmount() int64 {
 	if d.taxIncludedAmount != nil {
@@ -122,6 +157,10 @@ func (d *ExpenseDetail) SetTaxEvidence(rate *int64, mode string, included *int64
 	}
 	if rate != nil && (*rate <= 0 || *rate > 100) {
 		return ErrInvalidExpenseDetail
+	}
+	d.taxStatus, d.taxReason, d.suggestedTaxRate = "", "", nil
+	if allocation == "user_confirmed" {
+		d.taxStatus, d.taxReason = "user_confirmed", "user_confirmed"
 	}
 	d.taxRate, d.taxMode, d.taxIncludedAmount, d.taxAllocation = copyInt64(rate), mode, copyInt64(included), allocation
 	return nil
@@ -274,6 +313,9 @@ func (e *Expense) RenameDetail(id ExpenseDetailID, name string) error {
 	if err != nil {
 		return err
 	}
+	if detail.name != name {
+		detail.clearTaxSuggestion()
+	}
 	detail.name, detail.source, detail.edited, e.source, e.edited = name, RecordSourceUser, true, RecordSourceUser, true
 	return nil
 }
@@ -289,6 +331,7 @@ func (e *Expense) ChangeDetailAmount(id ExpenseDetailID, amount DetailAmount, qu
 	}
 	if detail.amount != amount {
 		detail.taxIncludedAmount, detail.taxRate, detail.taxMode, detail.taxAllocation = nil, nil, "unknown", ""
+		detail.taxStatus, detail.taxReason, detail.suggestedTaxRate = "unresolved", "amount_changed", nil
 	}
 	detail.amount, detail.quantity, detail.source, detail.edited, e.source, e.edited = amount, quantity, RecordSourceUser, true, RecordSourceUser, true
 	return nil
@@ -302,6 +345,9 @@ func (e *Expense) ChangeDetailCategory(id ExpenseDetailID, category Category) er
 	detail, err := e.detail(id)
 	if err != nil {
 		return err
+	}
+	if detail.category != category {
+		detail.clearTaxSuggestion()
 	}
 	detail.category, detail.categorySource, detail.source, detail.edited, e.source, e.edited = category, CategorySourceUser, RecordSourceUser, true, RecordSourceUser, true
 	return nil
@@ -322,7 +368,7 @@ func (e *Expense) ConfirmDetailTax(id ExpenseDetailID, rate int64, mode string, 
 	if mode == "external" && included > detail.amount.Yen()+(detail.amount.Yen()*rate+99)/100 {
 		return ErrInvalidExpenseDetail
 	}
-	if detail.taxRate != nil && *detail.taxRate == rate && detail.taxMode == mode && detail.taxIncludedAmount != nil && *detail.taxIncludedAmount == included {
+	if detail.taxStatus == "user_confirmed" && detail.taxRate != nil && *detail.taxRate == rate && detail.taxMode == mode && detail.taxIncludedAmount != nil && *detail.taxIncludedAmount == included {
 		return nil
 	}
 	if err := detail.SetTaxEvidence(&rate, mode, &included, "user_confirmed"); err != nil {
@@ -338,7 +384,7 @@ func (e *Expense) ClearDetailTax(id ExpenseDetailID) error {
 	if err != nil {
 		return err
 	}
-	if detail.taxIncludedAmount == nil && detail.taxRate == nil && (detail.taxMode == "" || detail.taxMode == "unknown") {
+	if detail.suggestedTaxRate == nil && detail.taxIncludedAmount == nil && detail.taxRate == nil && (detail.taxMode == "" || detail.taxMode == "unknown") {
 		return nil
 	}
 	if err := detail.SetTaxEvidence(nil, "unknown", nil, ""); err != nil {

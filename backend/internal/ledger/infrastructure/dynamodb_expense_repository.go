@@ -46,6 +46,9 @@ type expenseDetailItem struct {
 	TaxRate           *int64 `dynamodbav:"tax_rate"`
 	TaxMode           string `dynamodbav:"tax_mode"`
 	TaxAllocation     string `dynamodbav:"tax_allocation"`
+	TaxStatus         string `dynamodbav:"tax_status,omitempty"`
+	TaxReason         string `dynamodbav:"tax_reason,omitempty"`
+	SuggestedTaxRate  *int64 `dynamodbav:"suggested_tax_rate,omitempty"`
 	Quantity          int64  `dynamodbav:"quantity"`
 	Source            string `dynamodbav:"source"`
 	IsEdited          bool   `dynamodbav:"is_edited"`
@@ -242,6 +245,7 @@ func (r DynamoDBExpenseRepository) Save(ctx context.Context, expense domain.Expe
 			":gpk": stringValue(UserMonthPK(userID, expense.PurchaseDate().YearMonth().String())), ":gsk": stringValue(DetailMonthSK(detail.ReportingAmount(), expense.PurchaseDate().String(), detail.ID().String())),
 			":name": stringValue(detail.Name()), ":category": stringValue(detail.Category().String()), ":categorySource": stringValue(detail.CategorySource().String()),
 			":amount": numberValue(detail.Amount().Yen()), ":quantity": numberValue(detail.Quantity().Int64()), ":source": stringValue(detail.Source().String()),
+			":taxStatus": stringValue(detail.TaxStatus()), ":taxReason": stringValue(detail.TaxReason()),
 			":taxMode": stringValue(detail.TaxMode()), ":taxAllocation": stringValue(detail.TaxAllocation()),
 			":store": stringValue(expense.StoreName()), ":date": stringValue(expense.PurchaseDate().String()), ":month": stringValue(expense.PurchaseDate().YearMonth().String()),
 			":edited": boolValue(detail.Edited()), ":updated": stringValue(timestamp),
@@ -255,7 +259,7 @@ func (r DynamoDBExpenseRepository) Save(ctx context.Context, expense domain.Expe
 				"analysis_request_id": expense.SourceRequestID().String(), "name": detail.Name(),
 				"category": detail.Category().String(), "category_source": detail.CategorySource().String(),
 				"amount": detail.Amount().Yen(), "quantity": detail.Quantity().Int64(),
-				"tax_included_amount": detail.TaxIncludedAmount(), "tax_rate": detail.TaxRate(), "tax_mode": detail.TaxMode(), "tax_allocation": detail.TaxAllocation(),
+				"tax_included_amount": detail.TaxIncludedAmount(), "tax_rate": detail.TaxRate(), "tax_mode": detail.TaxMode(), "tax_allocation": detail.TaxAllocation(), "tax_status": detail.TaxStatus(), "tax_reason": detail.TaxReason(), "suggested_tax_rate": detail.SuggestedTaxRate(),
 				"source": detail.Source().String(), "store_name": expense.StoreName(),
 				"purchase_date": expense.PurchaseDate().String(), "year_month": expense.PurchaseDate().YearMonth().String(),
 				"is_edited": detail.Edited(), "created_at": timestamp, "updated_at": timestamp,
@@ -269,8 +273,14 @@ func (r DynamoDBExpenseRepository) Save(ctx context.Context, expense domain.Expe
 			}})
 			continue
 		}
-		updateExpression := "SET GSI1PK=:gpk,GSI1SK=:gsk,#name=:name,category=:category,category_source=:categorySource,amount=:amount,quantity=:quantity,#source=:source,store_name=:store,purchase_date=:date,year_month=:month,is_edited=:edited,updated_at=:updated,tax_mode=:taxMode,tax_allocation=:taxAllocation"
+		updateExpression := "SET GSI1PK=:gpk,GSI1SK=:gsk,#name=:name,category=:category,category_source=:categorySource,amount=:amount,quantity=:quantity,#source=:source,store_name=:store,purchase_date=:date,year_month=:month,is_edited=:edited,updated_at=:updated,tax_mode=:taxMode,tax_allocation=:taxAllocation,tax_status=:taxStatus,tax_reason=:taxReason"
 		remove := []string{}
+		if detail.SuggestedTaxRate() != nil {
+			values[":suggestedTaxRate"] = numberValue(*detail.SuggestedTaxRate())
+			updateExpression += ",suggested_tax_rate=:suggestedTaxRate"
+		} else {
+			remove = append(remove, "suggested_tax_rate")
+		}
 		if detail.TaxIncludedAmount() != nil {
 			values[":taxIncluded"] = numberValue(*detail.TaxIncludedAmount())
 			updateExpression += ",tax_included_amount=:taxIncluded"
@@ -373,6 +383,9 @@ func restoreDetail(item expenseDetailItem) (domain.ExpenseDetail, error) {
 		return domain.ExpenseDetail{}, err
 	}
 	if err := detail.SetTaxEvidence(item.TaxRate, item.TaxMode, item.TaxIncludedAmount, item.TaxAllocation); err != nil {
+		return domain.ExpenseDetail{}, err
+	}
+	if err := detail.SetTaxInference(item.TaxStatus, item.TaxReason, item.SuggestedTaxRate); err != nil {
 		return domain.ExpenseDetail{}, err
 	}
 	return detail, nil

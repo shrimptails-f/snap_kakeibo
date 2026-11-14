@@ -299,3 +299,46 @@ func TestFindByIDRejectsBrokenRecordsAgainstDynamoDB(t *testing.T) {
 		t.Errorf("FindByID(bad category) error = %v, want ErrInvalidCategory", err)
 	}
 }
+
+func TestTaxSuggestionSurvivesSaveAndCanBeConfirmed(t *testing.T) {
+	t.Parallel()
+	repo := newRepository(t)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	putRecord(ctx, t, repo.Expenses, expenseRecord("user-1", "expense-1", "request-1", 108, 0, false))
+	record := detailRecord("user-1", "expense-1", "detail-1", "パン", "food", "AI", 100, 1)
+	record["tax_status"], record["tax_reason"], record["suggested_tax_rate"] = "estimated", "product_preference", 8
+	putRecord(ctx, t, repo.ExpenseDetails, record)
+	expense, err := find(ctx, repo, "user-1", "expense-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := expense.Details()
+	expense.ChangeStoreName("変更後")
+	if err := repo.Save(ctx, expense, previous, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	expense, err = find(ctx, repo, "user-1", "expense-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := expense.Details()[0]
+	if d.TaxStatus() != "estimated" || d.SuggestedTaxRate() == nil || *d.SuggestedTaxRate() != 8 || d.TaxIncludedAmount() != nil {
+		t.Fatalf("detail=%+v", d)
+	}
+	previous = expense.Details()
+	if err := expense.ConfirmDetailTax(d.ID(), 8, "external", 108); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Save(ctx, expense, previous, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	expense, err = find(ctx, repo, "user-1", "expense-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d = expense.Details()[0]
+	if d.TaxStatus() != "user_confirmed" || d.SuggestedTaxRate() != nil || d.TaxIncludedAmount() == nil || *d.TaxIncludedAmount() != 108 {
+		t.Fatalf("confirmed=%+v", d)
+	}
+}

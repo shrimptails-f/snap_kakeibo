@@ -140,6 +140,34 @@ describe('ExpenseDetailPage', () => {
     expect(screen.getByText(/税込み明細額（印字額 [¥￥]281） \/ 税率 8%/)).toBeInTheDocument()
   })
 
+  it('補完と推定の根拠を表示し、推定は確認操作を経て確定する', async () => {
+    const inferred = { ...original, details: [
+      { ...original.details[0], tax_status: 'estimated', tax_reason: 'product_preference', suggested_tax_rate: 8 },
+      { ...original.details[1], tax_status: 'reconciled', tax_reason: 'amount_constraints', tax_mode: 'included', tax_rate: 8, tax_included_amount: 2999 },
+    ] }
+    const confirmed = { ...inferred, details: [{ ...inferred.details[0], tax_status: 'user_confirmed', suggested_tax_rate: undefined, tax_mode: 'included', tax_rate: 8, tax_included_amount: 281 }, inferred.details[1]] }
+    let getCount = 0
+    const { calls } = mockFetch({ '/api/expenses/e1': ({ init }) => init.method === 'PATCH'
+      ? jsonResponse({ expense: original.expense })
+      : jsonResponse(++getCount === 1 ? inferred : confirmed) })
+    renderPage(); const user = userEvent.setup()
+    expect(await screen.findByText(/推定税率 8%（未確定）/)).toBeInTheDocument()
+    expect(screen.getByText('税率別合計と一致する組み合わせから税率を補完しました。')).toBeInTheDocument()
+    expect(screen.getByText(/税込み額未確定の明細 1件/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '編集する' }))
+    expect(screen.getAllByLabelText('税区分')[0]).toHaveValue('unknown')
+    expect(screen.getByRole('button', { name: '変更を保存' })).toBeDisabled()
+    expect(screen.getByText(/推定税率 8%（未確定）/)).toBeInTheDocument()
+    await user.selectOptions(screen.getAllByLabelText('税区分')[0], 'included')
+    await user.selectOptions(screen.getAllByLabelText('税率')[0], '8')
+    await user.click(screen.getByRole('button', { name: '変更を保存' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('変更を保存しました。')
+    const body = JSON.parse(String(calls.find((call) => call.init.method === 'PATCH')?.init.body))
+    expect(body.details[0]).toMatchObject({ tax_confirmed: true, tax_mode: 'included', tax_rate: 8, tax_included_amount: 281 })
+    expect(screen.queryByText(/推定税率/)).not.toBeInTheDocument()
+    expect(screen.getByText('税情報は利用者が確認済みです。')).toBeInTheDocument()
+  })
+
   it('外税の明細には税込み額の入力を求める', async () => {
     mockFetch({ '/api/expenses/e1': original })
     renderPage(); const user = userEvent.setup()

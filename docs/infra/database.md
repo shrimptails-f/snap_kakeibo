@@ -550,6 +550,9 @@ amount_desc_key = 2147483647 - amount(10 桁ゼロ埋め)
   "tax_included_amount": 303, // 根拠を確認できた税込み明細額。未確定では属性なし
   "tax_rate": 8, // 商品別に確認できた税率。未確定では属性なし
   "tax_mode": "external", // included / external / mixed / unknown
+  "tax_status": "reconciled", // printed / reconciled / estimated / unresolved / user_confirmed。旧データは未設定
+  "tax_reason": "amount_constraints", // 判定根拠のコード
+  // "suggested_tax_rate": 8, // estimated の候補のみ。tax_rate と区別し集計に使わない
   "tax_allocation": "receipt_tax_proportional_v1", // printed_included、印字税額の比例配分、利用者確認時は user_confirmed。未確定では空
   "quantity": 1, // 数量
   "source": "AI", // データの作成元。AIまたはMANUAL
@@ -779,3 +782,9 @@ AIの読み取り時に自動分類する
 
 ユーザーが支出詳細・編集画面で手動修正する
 ```
+
+## 税率補完の追加属性（#105）
+
+`analysis_evidence` に印・注記の対応、税込対象額、商品別値引き、元の読み取りと補完結果、探索結果を保存する。明細には `tax_status` / `tax_reason` / `suggested_tax_rate` を追加する。推定では `tax_included_amount` を設定せず、集計は印字額を使う。新しい属性がない旧レコードも読める。移行・一括更新は実行しない。
+
+属性の意味と更新条件は[商品別税率の補完](../receipt-tax-inference.md#保存と表示)を参照する。

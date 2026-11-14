@@ -13,6 +13,7 @@ import type { ExpenseDetail, GetExpenseResponse, UpdateExpenseRequest } from '..
 import { formatYen } from '@/shared/lib/formatYen'
 import { Button } from '@/shared/ui/Button'
 import { SourceBadge } from './SourceBadge'
+import { TaxEvidenceNote } from './TaxEvidenceNote'
 import { ReceiptImage } from './ReceiptImage'
 import styles from './ExpenseDetailContent.module.css'
 
@@ -31,7 +32,7 @@ function DetailList({ details }: { details: ExpenseDetail[] }) {
     <section className={styles.detailsSection} aria-labelledby="detail-heading">
       <h2 id="detail-heading">支出明細 <span>{details.length}件</span></h2>
       <ol className={styles.detailList}>
-        {details.map((detail) => <li key={detail.detail_id}><div><strong>{detail.name}</strong><span>{categoryLabel(detail.category)} / 数量 {detail.quantity}</span><span>{detail.tax_included_amount === undefined ? '印字額・税込み未確定' : `税込み明細額（印字額 ${formatYen(detail.amount)}）`}{detail.tax_rate !== undefined ? ` / 税率 ${detail.tax_rate}%` : ''}{detail.tax_mode === 'external' && detail.tax_included_amount !== undefined ? ` / 配分税額 ${formatYen(detail.tax_included_amount - detail.amount)}` : ''}</span><SourceBadge source={detail.source} isEdited={detail.is_edited} /></div><strong className="amount">{formatYen(detail.tax_included_amount ?? detail.amount)}</strong></li>)}
+        {details.map((detail) => <li key={detail.detail_id}><div><strong>{detail.name}</strong><span>{categoryLabel(detail.category)} / 数量 {detail.quantity}</span><span>{detail.tax_included_amount === undefined ? '印字額・税込み未確定' : `税込み明細額（印字額 ${formatYen(detail.amount)}）`}{detail.tax_rate !== undefined ? ` / 税率 ${detail.tax_rate}%` : ''}{detail.tax_mode === 'external' && detail.tax_included_amount !== undefined ? ` / 配分税額 ${formatYen(detail.tax_included_amount - detail.amount)}` : ''}</span><TaxEvidenceNote detail={detail} /><SourceBadge source={detail.source} isEdited={detail.is_edited} /></div><strong className="amount">{formatYen(detail.tax_included_amount ?? detail.amount)}</strong></li>)}
       </ol>
       <div className={styles.detailTotal}><span>明細合計</span><strong className="amount">{formatYen(total)}</strong></div>
       <p className={styles.help}>{unconfirmed > 0 ? `税込み額未確定の明細 ${unconfirmed}件は印字額で含めています。` : ''}明細合計と最終支払合計は、店舗の値引きや読取漏れなどにより異なる場合があります。</p>
@@ -151,6 +152,7 @@ export function ExpenseDetailContent({ expenseId }: Props) {
                       </div>
                       <label>カテゴリ（必須）<select id={`${prefix}-category`} className="field-control" {...form.register(`details.${index}.category`)} aria-invalid={!!error?.category} aria-describedby={error?.category ? `${prefix}-category-error` : undefined}>{CATEGORIES.map((category) => <option key={category} value={category}>{categoryLabel(category)}</option>)}</select>{error?.category && <span id={`${prefix}-category-error`}>{error.category.message}</span>}</label>
                       {saved && <SourceBadge label="カテゴリ" source={saved.category_source} isEdited={saved.category_source === 'USER'} />}
+                      {saved && <p className={styles.help}><TaxEvidenceNote detail={saved} /></p>}
                       <p className={styles.help}>レシートで確認した税区分と税率を指定します。明細金額を変更した後も、外税の税込み明細額を確認してください。</p>
                       <div className={styles.fieldRow}>
                         <label>税区分<select className="field-control" {...form.register(`details.${index}.tax_mode`, { onChange: (event) => { if (event.target.value === 'external') form.setValue(`details.${index}.tax_included_amount`, undefined, { shouldDirty: true }) } })}><option value="unknown">未確定</option><option value="included">内税</option><option value="external">外税</option></select></label>

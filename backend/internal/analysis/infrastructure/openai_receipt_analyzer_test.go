@@ -195,3 +195,44 @@ func TestAnalyzeConvertsAmountEvidence(t *testing.T) {
 		}
 	}
 }
+
+func TestAnalyzePreservesMarksGrossAmountsAndDiscounts(t *testing.T) {
+	t.Parallel()
+	client := &fakeResponses{resp: completedResponse(`{"purchase_date":"2026-09-18","amount_candidates":[{"amount":108,"label":"合計","role":"final_total","position":3},{"amount":20,"label":"値引合計","role":"discount","position":2}],"tax_breakdown":[{"rate":8,"taxable_amount":null,"gross_amount":108,"tax_amount":8,"mode":"included"}],"tax_marks":[{"mark":"軽","rate":8,"note":"軽は8%対象"}],"details":[{"name":"パン","amount":128,"quantity":1,"category":"food","tax_rate":null,"tax_mode":"unknown","tax_mark":"軽","discount_amount":20}]}`)}
+	result, err := (OpenAIReceiptAnalyzer{Client: client}).Analyze(context.Background(), []byte("jpeg"))
+	if err != nil || result.Failure != nil {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	r := result.Reading
+	if r.Details[0].TaxMark != "軽" || *r.Details[0].DiscountAmount != 20 || *r.TaxBreakdown[0].GrossAmount != 108 || r.TaxMarks[0].Note != "軽は8%対象" {
+		t.Fatalf("reading=%+v", r)
+	}
+	e := domain.InferDetailTaxes(r, domain.ReconcileAmounts(r))
+	if e.Inference.Status != "unique" || e.DetailTaxes[0].Reason != "printed_mark" || *e.DetailTaxes[0].Rate != 8 {
+		t.Fatalf("evidence=%+v", e)
+	}
+}
+
+// Structured Outputs の object は全 properties が required で additionalProperties=false。
+func TestReceiptSchemaRequiresEveryProperty(t *testing.T) {
+	t.Parallel()
+	var check func(map[string]any)
+	check = func(schema map[string]any) {
+		if properties, ok := schema["properties"].(map[string]any); ok {
+			required := schema["required"].([]string)
+			if schema["additionalProperties"] != false || len(required) != len(properties) {
+				t.Fatalf("invalid object: %v", schema)
+			}
+			for name, property := range properties {
+				if !slices.Contains(required, name) {
+					t.Errorf("missing required %s", name)
+				}
+				check(property.(map[string]any))
+			}
+		}
+		if items, ok := schema["items"].(map[string]any); ok {
+			check(items)
+		}
+	}
+	check(ReceiptSchema())
+}
