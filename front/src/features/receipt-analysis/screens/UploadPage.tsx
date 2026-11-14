@@ -4,6 +4,7 @@ import { Link, useBeforeUnload, useBlocker, useSearchParams } from 'react-router
 import { toFriendlyMessage } from '@/shared/api/errors'
 import { Button } from '@/shared/ui/Button'
 import { StatusBadge } from '@/shared/ui/StatusBadge'
+import { ReceiptCropDialog } from '../components/ReceiptCropDialog'
 import { ReceiptPreviewDialog } from '../components/ReceiptPreviewDialog'
 import { ReloadButton } from '@/shared/ui/ReloadButton'
 import { RetryAnalysisDialog } from '../components/RetryAnalysisDialog'
@@ -46,6 +47,8 @@ export function UploadPage() {
   const reload = useReloadAnalysisRequests(month, 'all', '')
   const retry = useRetryAnalysis(month)
   const batch = useReceiptUploadBatch(month)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const editingReceipt = batch.selected.find((item) => item.localId === editingId)
   const [preview, setPreview] = useState<Preview | null>(null)
   const [retryTarget, setRetryTarget] = useState<AnalysisRequestItem | null>(null)
   const [retryError, setRetryError] = useState<string | null>(null)
@@ -170,18 +173,23 @@ export function UploadPage() {
                 <div className={styles.fileInfo}>
                   <strong>{item.file.name}</strong>
                   <StatusBadge tone={item.validationError ? 'danger' : 'neutral'}>
-                    {item.validationError ? '× 形式を確認' : '○ 選択済み'}
+                    {item.validationError ? '× 形式を確認' : item.crop ? '○ 切り取り済み' : '○ 選択済み'}
                   </StatusBadge>
                   {item.validationError && <p className={styles.errorText}>{item.validationError}</p>}
                 </div>
-                <Button variant="secondary" onClick={() => batch.removeSelected(item.localId)} disabled={batch.isUploading}>
-                  外す
-                </Button>
+                <div className={styles.rowActions}>
+                  <Button variant="secondary" onClick={() => setEditingId(item.localId)} disabled={batch.isUploading || !!item.validationError} aria-label={`${item.file.name} の余白を切り取る`}>
+                    余白を切り取る
+                  </Button>
+                  <Button variant="secondary" onClick={() => batch.removeSelected(item.localId)} disabled={batch.isUploading}>
+                    外す
+                  </Button>
+                </div>
               </li>
             ))}
           </ul>
           <div className={styles.uploadAction}>
-            <Button variant="primary" onClick={batch.uploadSelected} disabled={batch.validCount === 0 || batch.isUploading}>
+            <Button variant="primary" onClick={batch.uploadSelected} disabled={batch.validCount === 0 || batch.isUploading || !!editingReceipt}>
               {batch.isUploading ? 'アップロード中…' : `${batch.validCount}枚をアップロード`}
             </Button>
             {batch.validCount < batch.selected.length && <p>形式が合わない画像は送信しません。</p>}
@@ -244,6 +252,17 @@ export function UploadPage() {
         </section>
       )}
 
+      {editingReceipt && (
+        <ReceiptCropDialog
+          key={editingReceipt.localId}
+          receipt={editingReceipt}
+          onClose={() => setEditingId(null)}
+          onApply={(file, crop) => {
+            batch.applyCrop(editingReceipt.localId, file, crop)
+            setEditingId(null)
+          }}
+        />
+      )}
       {preview && <ReceiptPreviewDialog {...preview} onClose={() => setPreview(null)} />}
       {retryTarget && (
         <RetryAnalysisDialog

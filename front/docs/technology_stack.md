@@ -33,6 +33,12 @@
 
 Node.js と pnpm の実行環境はリポジトリの Dev Container に合わせる。
 
+### レシート画像の編集
+
+トリミングは標準の Canvas / HTMLImageElement / Pointer Events / HTMLDialogElement を使う。EXIFの向き補正済みの画像から元解像度で切り抜く。自動範囲検出は長辺480px以下の画像を専用Web Workerへ渡し、終了・キャンセル時にWorkerを破棄する。
+
+追加依存・AIモデルは導入しない。OpenCV.jsは、矩形範囲の提案に対して配信・初期化の負担が増えるため現時点では採用しない。精度・配信サイズ・処理時間は [トリミング評価](../../docs/receipt-cropping-evaluation.md) に記録する。
+
 ## 3. 採用方針
 
 現時点で「採用方針」のままの技術はない。新しい技術は、まずここに用途と導入条件を書いてから実装する。
