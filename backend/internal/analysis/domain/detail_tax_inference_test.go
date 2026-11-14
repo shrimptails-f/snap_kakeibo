@@ -90,6 +90,16 @@ func TestInferDetailTaxes(t *testing.T) {
 			r.Details[0].Amount = 120
 			r.AmountCandidates = append(r.AmountCandidates, AmountCandidate{Role: "discount", Amount: 20})
 		}, status: "unresolved", reason: "unassigned_discount"},
+		{name: "値引き帰属不明でも内外税の矛盾を検出", reading: mixedReading, change: func(r *ReceiptReading) {
+			r.Details[0].Amount = 120
+			r.Details[0].TaxMode = "included"
+			r.AmountCandidates = append(r.AmountCandidates, AmountCandidate{Role: "discount", Amount: 20})
+		}, status: "conflict", reason: "conflicting_mode"},
+		{name: "値引き帰属不明でも明示税率の矛盾を検出", reading: mixedReading, change: func(r *ReceiptReading) {
+			r.Details[0].Amount = 120
+			r.Details[0].TaxRate = intPtr(5)
+			r.AmountCandidates = append(r.AmountCandidates, AmountCandidate{Role: "discount", Amount: 20})
+		}, status: "conflict", reason: "conflicting_rate"},
 		{name: "個別と合計の値引きを二重計上しない", reading: familyReading, change: func(r *ReceiptReading) {
 			r.AmountCandidates = append(r.AmountCandidates, AmountCandidate{Role: "discount", Label: "個別値引き", Amount: 20})
 			r.Details[0].DiscountAmount = intPtr(20)
